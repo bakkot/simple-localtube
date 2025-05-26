@@ -1,20 +1,30 @@
-export function extractVideoId(url: string): string {
-  const parsedUrl = new URL(url);
-  if (
-    parsedUrl.hostname === 'www.youtube.com' ||
-    parsedUrl.hostname === 'youtube.com' ||
-    parsedUrl.hostname === 'm.youtube.com'
-  ) {
-    let res = parsedUrl.searchParams.get('v');
-    if (!res) {
-      throw new Error('youtube url does not have a `?v=` part: ' + url);
+export type VideoID = string & { __brand: "video id" };
+export type ChannelID = string & { __brand: "channel id" };
+
+export function toVideoID(url: string): VideoID | null {
+  try {
+    const parsedUrl = new URL(url);
+    if (
+      parsedUrl.hostname === 'www.youtube.com' ||
+      parsedUrl.hostname === 'youtube.com' ||
+      parsedUrl.hostname === 'm.youtube.com'
+    ) {
+      let res = parsedUrl.searchParams.get('v');
+      if (res) return res as VideoID;
+    } else if (parsedUrl.hostname === 'youtu.be') {
+      let res = parsedUrl.pathname.substring(1);
+      if (res.length > 0) return res as VideoID;
     }
-    return res;
-  } else if (parsedUrl.hostname === 'youtu.be') {
-    let pathParts = parsedUrl.pathname.split('/');
-    if (pathParts.length === 2 && pathParts[0] === '') {
-      return pathParts[1];
-    }
+  } catch {
+    // pass
   }
-  throw new Error('did not recognize URL ' + url);
+  return null;
+}
+
+export function nameExt(file: string): { name: string, ext: string } {
+  let split = file.split('.');
+  if (split.length === 1) {
+    throw new Error(`no extension: ${file}`);
+  }
+  return { name: split.slice(0, -1).join('.'), ext: split.at(-1)! };
 }

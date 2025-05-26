@@ -9,7 +9,7 @@ It is intended as an alternative to heavier tools like [TubeArchivist](https://w
 
 ## Setup
 
-Make sure you have node v23.6.0 or later so you have support for executing typescript without transpilation.
+Make sure you have node v24 or later.
 
 Have `yt-dlp` in your PATH, or provide `YT_DLP_PATH` as an environment variable.
 

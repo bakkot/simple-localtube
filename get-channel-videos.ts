@@ -1,7 +1,8 @@
 import { exec as execCb } from 'node:child_process';
 import { promisify } from 'node:util';
-import { extractVideoId } from './util.ts';
+import { toVideoID } from './util.ts';
 import { isVideoInDb } from './db-manager.ts';
+import type { ChannelID, VideoID } from './util.ts';
 
 const execAsync = promisify(execCb);
 
@@ -10,11 +11,11 @@ const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call
 const YT_DLP_PAUSE_MS = 2000; // Pause between yt-dlp calls
 
 
-export async function getLatestVideoUrls(channelId: string): Promise<string[]> {
+export async function getLatestVideoUrls(channelId: ChannelID): Promise<VideoID[]> {
   const channelVideosUrl = `https://www.youtube.com/channel/${channelId}/videos`;
   // console.log(`Fetching latest videos for channel ${channelId} from ${channelVideosUrl}`);
 
-  const newVideoUrls: string[] = [];
+  const newVideoUrls: VideoID[] = [];
   let startIndex = 1;
 
   while (true) {
@@ -45,13 +46,16 @@ export async function getLatestVideoUrls(channelId: string): Promise<string[]> {
 
       // console.log(`Fetched batch (${startIndex}-${endIndex}), ${batchUrls.length} URLs found.`);
       for (const url of batchUrls) {
-        const videoId = extractVideoId(url);
+        const videoId = toVideoID(url);
+        if (videoId == null) {
+          throw new Error('failed to read video ID from url ' + url);
+        }
 
         if (isVideoInDb(videoId)) {
           console.log(`Found known video ${videoId} in DB. Stopping search.`);
           break;
         } else {
-          newVideoUrls.push(url);
+          newVideoUrls.push(videoId);
         }
       }
 

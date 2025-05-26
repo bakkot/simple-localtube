@@ -1,8 +1,12 @@
 import { DatabaseSync } from 'node:sqlite';
+import type { ChannelID, VideoID } from './util.ts';
 
 const DB_PATH = './youtube_data.sqlite';
 
-let db = new DatabaseSync(DB_PATH);
+// TODO transactions!!
+// https://github.com/nodejs/node/blob/a0139e06a0754058ffd891f779be55584665f8a8/test/parallel/test-sqlite-transactions.js
+
+let db: DatabaseSync | undefined = new DatabaseSync(DB_PATH);
 
 let existing = db.prepare('SELECT name FROM sqlite_master WHERE type=\'table\'').all().map(({ name }) => name);
 if (existing.length === 0) {
@@ -17,9 +21,12 @@ if (existing.length === 0) {
         video_id TEXT PRIMARY KEY,
         channel_id TEXT NOT NULL,
         title TEXT NOT NULL,
-        description TEXT,
-        publish_date TEXT NOT NULL, -- TODO better type here
+        description TEXT NOT NULL,
+        extension TEXT NOT NULL,
+        thumb_extension TEXT,
         duration_seconds INTEGER,
+        upload_date TEXT NOT NULL,
+        subtitle_languages TEXT NOT NULL, -- JSON of list of subtitle languages
         FOREIGN KEY (channel_id) REFERENCES channels(channel_id)
     ) STRICT;
 
@@ -35,8 +42,8 @@ let addChannelStmt = db.prepare(`
 `);
 
 let addVideoStmt = db.prepare(`
-    INSERT INTO videos (video_id, channel_id, title, description, publish_date, duration_seconds)
-    VALUES (:video_id, :channel_id, :title, :description, :publish_date, :duration_seconds)
+    INSERT INTO videos (video_id, channel_id, title, description, extension, thumb_extension, duration_seconds, upload_date, subtitle_languages)
+    VALUES (:video_id, :channel_id, :title, :description, :extension, :thumb_extension, :duration_seconds, :upload_date, :subtitle_languages)
 `);
 
 let isVideoInDbStmt = db.prepare(`
@@ -44,25 +51,28 @@ let isVideoInDbStmt = db.prepare(`
 `);
 
 export interface Channel {
-  channel_id: string;
+  channel_id: ChannelID;
   title: string;
-  description?: string | null;
+  description: string | null;
 }
 
 export interface Video {
-  video_id: string;
-  channel_id: string;
+  video_id: VideoID;
+  channel_id: ChannelID;
   title: string;
-  description?: string | null;
-  publish_date: string; // Recommend ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)
-  duration_seconds?: number | null;
+  description: string;
+  extension: string;
+  thumb_extension: string | null;
+  duration_seconds: number;
+  upload_date: string;
+  subtitle_languages: string[];
 }
 
 export function addChannel(channel: Channel): void {
   addChannelStmt.run({
     ':channel_id': channel.channel_id,
     ':title': channel.title,
-    ':description': channel.description ?? null,
+    ':description': channel.description,
   });
 }
 
@@ -71,13 +81,16 @@ export function addVideo(video: Video): void {
     ':video_id': video.video_id,
     ':channel_id': video.channel_id,
     ':title': video.title,
-    ':description': video.description ?? null,
-    ':publish_date': video.publish_date,
-    ':duration_seconds': video.duration_seconds ?? null,
+    ':description': video.description,
+    ':extension': video.extension,
+    ':thumb_extension': video.thumb_extension,
+    ':duration_seconds': video.duration_seconds,
+    ':upload_date': video.upload_date,
+    ':subtitle_languages': JSON.stringify(video.subtitle_languages),
   });
 }
 
-export function isVideoInDb(videoId: string): boolean {
+export function isVideoInDb(videoId: VideoID): boolean {
   return !!isVideoInDbStmt.get(videoId)
 }
 
@@ -85,7 +98,6 @@ export function closeDb(): void {
   if (db) {
     console.log('Closing database connection.');
     db.close();
-    // @ts-ignore // Allow db to be reassigned if needed later
-    db = undefined; // Reset db variable
+    db = undefined;
   }
 }
