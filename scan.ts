@@ -57,3 +57,27 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
   };
 }
 
+// todo this goes elsewhere
+import { parseArgs } from 'util';
+
+let { positionals } = parseArgs({ allowPositionals: true });
+if (positionals.length !== 1) {
+  console.log('Usage: node scan.ts path-to-media-dir');
+  process.exit(1);
+}
+let MEDIA_DIR = positionals[0];
+
+const channels = fs.readdirSync(MEDIA_DIR, { withFileTypes: true });
+
+for (const channelEntry of channels) {
+  if (!channelEntry.isDirectory()) continue;
+
+  const channelPath = path.join(MEDIA_DIR, channelEntry.name);
+
+  const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
+
+  for (const videoEntry of videoEntries) {
+    if (!videoEntry.isDirectory()) continue;
+    videoFromDisk(MEDIA_DIR, channelEntry.name as ChannelID, videoEntry.name as VideoID)
+  }
+}
