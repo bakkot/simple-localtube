@@ -195,6 +195,11 @@ app.get('/login', (req: Request, res: Response): void => {
     const button = document.getElementById('loginButton');
     const message = document.getElementById('message');
 
+    // Get next URL from query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const nextParam = urlParams.get('next');
+    const nextUrl = (nextParam && nextParam.startsWith('/')) ? nextParam : '/';
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -218,7 +223,7 @@ app.get('/login', (req: Request, res: Response): void => {
           document.cookie = 'auth=' + data.token + '; path=/; max-age=' + (365 * 24 * 60 * 60);
           message.textContent = 'Login successful! Redirecting...';
           message.className = 'success';
-          setTimeout(() => { window.location.href = '/'; }, 100);
+          setTimeout(() => { window.location.href = nextUrl; }, 100);
           return;
         } else {
           const error = await response.json();
