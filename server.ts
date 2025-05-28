@@ -160,6 +160,11 @@ function createInfiniteScroll(apiUrl, showChannel) {
 
 const commonCSS = `
   body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+  .header { position: relative; margin-bottom: 20px; }
+  .user-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .username { color: #333; font-weight: bold; }
+  .logout-link { color: #1976d2; text-decoration: none; cursor: pointer; }
+  .logout-link:hover { text-decoration: underline; }
   .video-grid { display: grid; grid-template-columns: repeat(auto-fit, 320px); gap: 20px; justify-content: center; }
   .video-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
   .video-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
@@ -176,7 +181,7 @@ const commonCSS = `
   .loading { text-align: center; padding: 30px 20px; color: #666; }
 `;
 
-function renderVideoGrid(videos: any[], title: string = 'Recent Videos'): string {
+function renderVideoGrid(videos: any[], title: string = 'Recent Videos', username?: string): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -190,13 +195,26 @@ function renderVideoGrid(videos: any[], title: string = 'Recent Videos'): string
   </style>
 </head>
 <body>
-  <h1>${title}</h1>
+  <div class="header">
+    <h1>${title}</h1>
+    ${username ? `
+      <div class="user-info">
+        <span class="username">${username}</span>
+        <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+      </div>
+    ` : ''}
+  </div>
   <div class="video-grid" id="video-grid">
     ${videos.map(video => renderVideoCard(video, true)).join('')}
   </div>
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
     ${videoCardScript}
+    
+    function logout() {
+      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/login';
+    }
 
     createInfiniteScroll('/api/videos', true);
   </script>
@@ -342,7 +360,7 @@ app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => 
 // Homepage
 app.get('/', (req, res) => {
   const videos = getRecentVideos(30);
-  res.send(renderVideoGrid(videos, 'LocalTube'));
+  res.send(renderVideoGrid(videos, 'LocalTube', req.username));
 });
 
 // Video player page
@@ -363,6 +381,11 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
     video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
     .content-section { background: #f5f5f5; padding: 20px; }
+    .header { position: relative; margin-bottom: 20px; }
+    .user-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+    .username { color: #333; font-weight: bold; }
+    .logout-link { color: #1976d2; text-decoration: none; cursor: pointer; }
+    .logout-link:hover { text-decoration: underline; }
     .video-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .video-info { margin-top: 15px; }
     .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #333; }
@@ -383,7 +406,15 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     </video>
   </div>
   <div class="content-section">
-    <a href="/" class="back-link">← Back to Home</a>
+    <div class="header">
+      <a href="/" class="back-link">← Back to Home</a>
+      ${req.username ? `
+        <div class="user-info">
+          <span class="username">${req.username}</span>
+          <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+        </div>
+      ` : ''}
+    </div>
     <div class="video-container">
     <div class="video-info">
       <div class="video-title">${video.title}</div>
@@ -395,6 +426,12 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     </div>
   </div>
   </div>
+  <script>
+    function logout() {
+      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/login';
+    }
+  </script>
 </body>
 </html>`);
 });
@@ -426,7 +463,15 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   </style>
 </head>
 <body>
-  <a href="/" class="back-link">← Back to Home</a>
+  <div class="header">
+    <a href="/" class="back-link">← Back to Home</a>
+    ${req.username ? `
+      <div class="user-info">
+        <span class="username">${req.username}</span>
+        <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+      </div>
+    ` : ''}
+  </div>
   <div class="channel-header">
     <div class="channel-info">
       ${channel.avatar_filename ? `<img class="channel-avatar" src="/media/${channel.channel_id}/${channel.avatar_filename}" alt="${channel.channel}">` : ''}
@@ -442,6 +487,11 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
     ${videoCardScript}
+    
+    function logout() {
+      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/login';
+    }
 
     createInfiniteScroll('/api/channel/${channel.short_id}/videos', false);
   </script>
