@@ -26,7 +26,7 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
   if (typeof title !== 'string' || typeof description !== 'string' || typeof duration !== 'number' || typeof upload_date !== 'string' || upload_date.length !== 8) {
     throw new Error(`malformed data.json for ${channelId}/${videoId}`);
   }
-  upload_date = upload_date.slice(0, 4) + '-' + upload_date.slice(4, 6) + '-' + upload_date.slice(6);
+  const upload_timestamp = Math.floor(new Date(upload_date.slice(0, 4) + '-' + upload_date.slice(4, 6) + '-' + upload_date.slice(6) + 'T00:00:00Z').getTime() / 1000);
 
   let subs = [];
   let thumbExt = null;
@@ -52,22 +52,29 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
     description,
     thumb_extension: thumbExt,
     duration_seconds: duration,
-    upload_date,
+    upload_timestamp,
     subtitle_languages: subs,
   };
 }
 
 export function channelFromDisk(mediaDir: string, channelId: ChannelID): Channel {
   let dir = path.join(mediaDir, channelId);
-  let { channel, description } = JSON.parse(fs.readFileSync(path.join(dir, 'data.json'), 'utf8'));
+  let { channel, description, uploader_id } = JSON.parse(fs.readFileSync(path.join(dir, 'data.json'), 'utf8'));
+  if (typeof channel !== 'string' || description != null && typeof description !== 'string' || typeof uploader_id !== 'string') {
+    throw new Error(`missing data for ${channelId}`);
+  }
+  if (uploader_id[0] === '@') {
+    uploader_id = uploader_id.slice(1);
+  }
   let contents = fs.readdirSync(dir);
   let avatar = contents.find(f => f === 'avatar.png' || 'avatar.jpg') ?? null;
   let banner = contents.find(f => f === 'banner.png' || 'banner.jpg') ?? null;
   let bannerUncropped = contents.find(f => f === 'banner_uncropped.png' || 'banner_uncropped.jpg') ?? null;
   return {
     channel_id: channelId,
-    title: channel,
-    description,
+    short_id: uploader_id,
+    channel,
+    description: description ?? null,
     avatar,
     banner,
     banner_uncropped: bannerUncropped
@@ -92,7 +99,6 @@ export function rescan(mediaDir: string) {
         console.log(`skipping ${channelEntry.name} because of missing data.json; if it is a real channel you will need to fetch its metadata before it is usable: see the readme.`);
         continue;
       }
-      console.log(channelEntry.name);
 
       const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
 
@@ -124,17 +130,3 @@ if (positionals.length !== 1) {
 }
 let mediaDir = positionals[0];
 rescan(mediaDir);
-// const channels = fs.readdirSync(mediaDir, { withFileTypes: true });
-
-// for (const channelEntry of channels) {
-//   if (!channelEntry.isDirectory()) continue;
-
-//   const channelPath = path.join(mediaDir, channelEntry.name);
-
-//   const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
-
-//   for (const videoEntry of videoEntries) {
-//     if (!videoEntry.isDirectory()) continue;
-//     videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID)
-//   }
-// }

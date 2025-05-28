@@ -13,6 +13,7 @@ import { move, type ChannelID } from './util.ts';
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, 'yt-dlp');
 
 // TODO consider whether we actually care about these
+// https://github.com/nodejs/node/issues/58486
 const EXIT_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2'];
 function getTemp(): { [Symbol.dispose]: () => void, name: string } {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localtube-'));
@@ -74,7 +75,7 @@ export async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID
 
   let avatar = contents.thumbnails.find((t: any) => t.id === 'avatar_uncropped');
   let bannerUncropped = contents.thumbnails.find((t: any) => t.id === 'banner_uncropped');
-  let banner = contents.thumbnails.reduce((acc: any, t: any) => t.width == null ? acc : acc == null ? t : t.width < acc.width || t.width / t.height <= 5 ? acc : t, null)
+  let banner = contents.thumbnails.reduce((acc: any, t: any) => t.width == null || t.width / t.height <= 2 ? acc : acc == null ? t : t.width < acc.width ? acc : t, null);
 
   let avatarName = avatar == null ? null : await fetchTo(avatar.url, tempDir.name, 'avatar');
   let bannerUncroppedName = bannerUncropped == null ? null : await fetchTo(bannerUncropped.url, tempDir.name, 'banner_uncropped');

@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import type { ChannelID, VideoID } from './util.ts';
 
-// TODO
+// TODO configurable
 const DB_PATH = path.join(import.meta.dirname, './youtube_data.sqlite');
 
 // TODO transactions!!
@@ -15,7 +15,8 @@ if (existing.length === 0) {
   db.exec(`
     CREATE TABLE channels (
         channel_id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        short_id TEXT NOT NULL,
         description TEXT,
         avatar TEXT,
         banner TEXT,
@@ -30,25 +31,27 @@ if (existing.length === 0) {
         extension TEXT NOT NULL,
         thumb_extension TEXT,
         duration_seconds INTEGER,
-        upload_date TEXT NOT NULL,
+        upload_timestamp INTEGER NOT NULL,
         subtitle_languages TEXT NOT NULL, -- JSON of list of subtitle languages
         FOREIGN KEY (channel_id) REFERENCES channels(channel_id)
     ) STRICT;
 
     CREATE INDEX idx_videos_channel_id ON videos(channel_id);
+    CREATE INDEX idx_videos_upload_timestamp ON videos(upload_timestamp);
+    CREATE INDEX idx_videos_channel_upload ON videos(channel_id, upload_timestamp DESC);
   `);
 } else if (!(new Set(existing)).isSubsetOf(new Set(['channels', 'videos']))) {
   throw new Error(`${DB_PATH} exists but does not contain the data we expect`);
 }
 
 let addChannelStmt = db.prepare(`
-  INSERT INTO channels (channel_id, title, description, avatar, banner, banner_uncropped)
-  VALUES (:channel_id, :title, :description, :avatar, :banner, :banner_uncropped)
+  INSERT INTO channels (channel_id, channel, short_id, description, avatar, banner, banner_uncropped)
+  VALUES (:channel_id, :channel, :short_id, :description, :avatar, :banner, :banner_uncropped)
 `);
 
 let addVideoStmt = db.prepare(`
-  INSERT INTO videos (video_id, channel_id, title, description, extension, thumb_extension, duration_seconds, upload_date, subtitle_languages)
-  VALUES (:video_id, :channel_id, :title, :description, :extension, :thumb_extension, :duration_seconds, :upload_date, :subtitle_languages)
+  INSERT INTO videos (video_id, channel_id, title, description, extension, thumb_extension, duration_seconds, upload_timestamp, subtitle_languages)
+  VALUES (:video_id, :channel_id, :title, :description, :extension, :thumb_extension, :duration_seconds, :upload_timestamp, :subtitle_languages)
 `);
 
 let isVideoInDbStmt = db.prepare(`
@@ -65,7 +68,8 @@ let resetChannels = db.prepare(`
 
 export interface Channel {
   channel_id: ChannelID;
-  title: string;
+  channel: string;
+  short_id: string;
   description: string | null;
   avatar: string | null;
   banner: string | null;
@@ -80,14 +84,15 @@ export interface Video {
   extension: string;
   thumb_extension: string | null;
   duration_seconds: number;
-  upload_date: string;
+  upload_timestamp: number;
   subtitle_languages: string[];
 }
 
 export function addChannel(channel: Channel): void {
   addChannelStmt.run({
     ':channel_id': channel.channel_id,
-    ':title': channel.title,
+    ':channel': channel.channel,
+    ':short_id': channel.short_id,
     ':description': channel.description,
     ':avatar': channel.avatar,
     ':banner': channel.banner,
@@ -104,7 +109,7 @@ export function addVideo(video: Video): void {
     ':extension': video.extension,
     ':thumb_extension': video.thumb_extension,
     ':duration_seconds': video.duration_seconds,
-    ':upload_date': video.upload_date,
+    ':upload_timestamp': video.upload_timestamp,
     ':subtitle_languages': JSON.stringify(video.subtitle_languages),
   });
 }
