@@ -1,8 +1,15 @@
 {
-  "dependencies": {
-    "@types/node": "^22.15.17",
-    "express": "^5.1.0",
-    "typescript": "^5.8.3"
+  "scripts": {
+    "start": "node server.ts",
+    "dev": "node --watch server.ts"
   },
-  "type": "module"
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "@types/express": "^5.0.2",
+    "typescript": "^5.8.3"
+  }
 }

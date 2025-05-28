@@ -39,6 +39,7 @@ if (existing.length === 0) {
     CREATE INDEX idx_videos_channel_id ON videos(channel_id);
     CREATE INDEX idx_videos_upload_timestamp ON videos(upload_timestamp);
     CREATE INDEX idx_videos_channel_upload ON videos(channel_id, upload_timestamp DESC);
+    CREATE INDEX idx_channels_short_id ON channels(short_id);
   `);
 } else if (!(new Set(existing)).isSubsetOf(new Set(['channels', 'videos']))) {
   throw new Error(`${DB_PATH} exists but does not contain the data we expect`);
@@ -66,6 +67,34 @@ let resetChannels = db.prepare(`
   DELETE FROM channels;
 `);
 
+let getRecentVideosStmt = db.prepare(`
+  SELECT v.*, c.channel, c.short_id as channel_short_id
+  FROM videos v
+  JOIN channels c ON v.channel_id = c.channel_id
+  ORDER BY v.upload_timestamp DESC
+  LIMIT ?
+`);
+
+let getVideoByIdStmt = db.prepare(`
+  SELECT v.*, c.channel, c.short_id as channel_short_id, c.avatar
+  FROM videos v
+  JOIN channels c ON v.channel_id = c.channel_id
+  WHERE v.video_id = ?
+`);
+
+let getChannelByShortIdStmt = db.prepare(`
+  SELECT * FROM channels WHERE short_id = ?
+`);
+
+let getVideosByChannelStmt = db.prepare(`
+  SELECT v.*, c.channel, c.short_id as channel_short_id
+  FROM videos v
+  JOIN channels c ON v.channel_id = c.channel_id
+  WHERE v.channel_id = ?
+  ORDER BY v.upload_timestamp DESC
+  LIMIT ?
+`);
+
 export interface Channel {
   channel_id: ChannelID;
   channel: string;
@@ -86,6 +115,12 @@ export interface Video {
   duration_seconds: number;
   upload_timestamp: number;
   subtitle_languages: string[];
+}
+
+export interface VideoWithChannel extends Video {
+  channel: string;
+  channel_short_id: string;
+  avatar?: string;
 }
 
 export function addChannel(channel: Channel): void {
@@ -121,6 +156,35 @@ export function isVideoInDb(videoId: VideoID): boolean {
 export function resetMediaInDb() {
   resetVideos.run();
   resetChannels.run();
+}
+
+export function getRecentVideos(limit: number = 30): VideoWithChannel[] {
+  const rows = getRecentVideosStmt.all(limit) as any[];
+  return rows.map(row => ({
+    ...row,
+    subtitle_languages: JSON.parse(row.subtitle_languages)
+  }));
+}
+
+export function getVideoById(videoId: VideoID): VideoWithChannel | null {
+  const row = getVideoByIdStmt.get(videoId) as any;
+  if (!row) return null;
+  return {
+    ...row,
+    subtitle_languages: JSON.parse(row.subtitle_languages)
+  };
+}
+
+export function getChannelByShortId(shortId: string): Channel | null {
+  return getChannelByShortIdStmt.get(shortId) as unknown as  Channel | null;
+}
+
+export function getVideosByChannel(channelId: ChannelID, limit: number = 30): VideoWithChannel[] {
+  const rows = getVideosByChannelStmt.all(channelId, limit) as any[];
+  return rows.map(row => ({
+    ...row,
+    subtitle_languages: JSON.parse(row.subtitle_languages)
+  }));
 }
 
 export function closeDb(): void {
