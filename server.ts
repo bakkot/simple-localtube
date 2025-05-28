@@ -48,47 +48,22 @@ function renderVideoCard(video: any, showChannel: boolean = true): string {
 }
 
 const videoCardScript = `
-function formatDuration(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  if (hours > 0) {
-    return hours + ':' + minutes.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
-  }
-  return minutes + ':' + secs.toString().padStart(2, '0');
-}
+${formatDuration.toString()}
 
-function formatDate(timestamp) {
-  return new Date(timestamp * 1000).toLocaleDateString();
-}
+${formatDate.toString()}
 
-function renderVideoCard(video, showChannel = true) {
-  return \`
-    <div class="video-card">
-      <a href="/v/\${video.video_id}">
-        <div class="thumb-container">
-          <img class="thumb" src="/media/\${video.channel_id}/\${video.video_id}/\${video.thumb_filename || 'thumb.jpg'}" alt="\${video.title}">
-          <span class="duration">\${formatDuration(video.duration_seconds || 0)}</span>
-        </div>
-      </a>
-      <div class="video-info">
-        <a href="/v/\${video.video_id}" class="video-title">\${video.title}</a>
-        \${showChannel ? \`<div><a href="/c/\${video.channel_short_id}" class="channel-name">\${video.channel}</a></div>\` : ''}
-        <div class="upload-date">\${formatDate(video.upload_timestamp)}</div>
-      </div>
-    </div>\`;
-}
+${renderVideoCard.toString()}
 
 function createInfiniteScroll(apiUrl, showChannel) {
   let offset = document.getElementById('video-grid').children.length;
   let loading = false;
   let exhausted = false;
-  
+
   function loadMoreVideos() {
     if (loading || exhausted) return;
     loading = true;
     document.getElementById('loading').style.display = 'block';
-    
+
     fetch(apiUrl + '?offset=' + offset + '&limit=30')
       .then(response => response.json())
       .then(videos => {
@@ -97,12 +72,12 @@ function createInfiniteScroll(apiUrl, showChannel) {
           document.getElementById('loading').textContent = 'No more videos';
           return;
         }
-        
+
         const grid = document.getElementById('video-grid');
         videos.forEach(video => {
           grid.insertAdjacentHTML('beforeend', renderVideoCard(video, showChannel));
         });
-        
+
         offset += videos.length;
         if (videos.length < 30) {
           exhausted = true;
@@ -119,7 +94,7 @@ function createInfiniteScroll(apiUrl, showChannel) {
         if (!exhausted) document.getElementById('loading').style.display = 'none';
       });
   }
-  
+
   window.addEventListener('scroll', () => {
     if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
       loadMoreVideos();
