@@ -103,6 +103,24 @@ function createInfiniteScroll(apiUrl, showChannel) {
 }
 `;
 
+const commonCSS = `
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+  .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+  .video-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .video-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+  .thumb-container { position: relative; }
+  .thumb { width: 100%; height: 180px; object-fit: cover; }
+  .duration { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+  .video-info { padding: 12px; }
+  .video-title { font-weight: bold; color: #333; text-decoration: none; }
+  .video-title:hover { color: #1976d2; }
+  .channel-name { color: #666; font-size: 14px; text-decoration: none; }
+  .channel-name:hover { color: #1976d2; }
+  .upload-date { color: #999; font-size: 12px; margin-top: 4px; }
+  a { text-decoration: none; }
+  .loading { text-align: center; padding: 30px 20px; color: #666; }
+`;
+
 function renderVideoGrid(videos: any[], title: string = 'Recent Videos'): string {
   return `
 <!DOCTYPE html>
@@ -110,22 +128,10 @@ function renderVideoGrid(videos: any[], title: string = 'Recent Videos'): string
 <head>
   <title>${title}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+    ${commonCSS}
     h1 { color: #333; }
-    .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 20px; }
-    .video-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .video-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
-    .thumb-container { position: relative; }
-    .thumb { width: 100%; height: 180px; object-fit: cover; }
-    .duration { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
-    .video-info { padding: 12px; }
-    .video-title { font-weight: bold; margin-bottom: 8px; color: #333; text-decoration: none; }
-    .video-title:hover { color: #1976d2; }
-    .channel-name { color: #666; font-size: 14px; text-decoration: none; }
-    .channel-name:hover { color: #1976d2; }
-    .upload-date { color: #999; font-size: 12px; margin-top: 4px; }
-    a { text-decoration: none; }
-    .loading { text-align: center; padding: 30px 20px; color: #666; }
+    .video-grid { margin-top: 20px; }
+    .video-title { margin-bottom: 8px; }
   </style>
 </head>
 <body>
@@ -240,7 +246,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
 <head>
   <title>${channel.channel}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+    ${commonCSS}
     .channel-header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
     .channel-info { display: flex; align-items: center; }
     .channel-avatar { width: 80px; height: 80px; border-radius: 50%; margin-right: 20px; }
@@ -248,17 +254,6 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
     .channel-description { color: #666; line-height: 1.5; white-space: pre-wrap; }
     .back-link { display: inline-block; margin-bottom: 20px; color: #1976d2; text-decoration: none; }
     .back-link:hover { text-decoration: underline; }
-    .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-    .video-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .video-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
-    .thumb-container { position: relative; }
-    .thumb { width: 100%; height: 180px; object-fit: cover; }
-    .duration { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
-    .video-info { padding: 12px; }
-    .video-title { font-weight: bold; color: #333; text-decoration: none; }
-    .video-title:hover { color: #1976d2; }
-    a { text-decoration: none; }
-    .loading { text-align: center; padding: 30px 20px; color: #666; }
   </style>
 </head>
 <body>
