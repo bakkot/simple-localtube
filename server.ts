@@ -1,9 +1,19 @@
 import express from 'express';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
+import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
 import { getRecentVideos, getVideoById, getChannelByShortId, getVideosByChannel } from './db-manager.ts';
 import { nameExt, type VideoID } from './util.ts';
-import { checkUsernamePassword } from './user-db.ts';
+import { checkUsernamePassword, decodeBearerToken } from './user-db.ts';
+
+// Extend Request interface to include username
+declare global {
+  namespace Express {
+    interface Request {
+      username?: string;
+    }
+  }
+}
 
 let { positionals } = parseArgs({ allowPositionals: true });
 if (positionals.length !== 1) {
@@ -14,8 +24,51 @@ if (positionals.length !== 1) {
 const app = express();
 const PORT = 3000;
 
-app.use('/media', express.static(positionals[0]));
 app.use(express.json());
+app.use(cookieParser());
+
+// Auth middleware - must be first to protect everything
+app.use('/', (req: Request, res: Response, next: NextFunction): void => {
+  // Skip login routes
+  if (req.path === '/login' || req.path === '/api/login') {
+    return next();
+  }
+
+  // Validate auth cookie
+  const authCookie = req.cookies?.auth;
+  let isAuthenticated = false;
+  let username: string | undefined;
+
+  if (authCookie) {
+    try {
+      const payload = decodeBearerToken(authCookie);
+      username = payload.username;
+      isAuthenticated = true;
+    } catch {
+      isAuthenticated = false;
+    }
+  }
+
+  if (!isAuthenticated) {
+    if (req.path.startsWith('/api') || req.method !== 'GET') {
+      res.status(403).json({ message: 'Authentication required' });
+      return;
+    }
+
+    // GET requests get redirected
+    const redirectUrl = req.path === '/'
+      ? '/login'
+      : `/login?next=${encodeURIComponent(req.originalUrl)}`;
+    res.redirect(redirectUrl);
+    return;
+  }
+
+  // Attach username to request for later use
+  req.username = username;
+  next();
+});
+
+app.use('/media', express.static(positionals[0]));
 
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
