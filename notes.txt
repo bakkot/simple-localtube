@@ -10,3 +10,10 @@ once URL of video is known it goes in a WIP set, in memory and on disk (and mayb
 when checking for new videos, also have to check WIP set; presence there counts
 
 maybe have a "subscribed" JSON?
+
+
+todo consistency for node:foo vs foo
+
+todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
+
+TODO future-compat for non-youtube

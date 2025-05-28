@@ -1,3 +1,5 @@
+import fs from 'fs';
+
 export type VideoID = string & { __brand: "video id" };
 export type ChannelID = string & { __brand: "channel id" };
 
@@ -27,4 +29,17 @@ export function nameExt(file: string): { name: string, ext: string } {
     throw new Error(`no extension: ${file}`);
   }
   return { name: split.slice(0, -1).join('.'), ext: split.at(-1)! };
+}
+
+// TODO this probably actually _should_ be async...
+export function move(source: string, destination: string) {
+  try {
+    fs.renameSync(source, destination);
+  } catch (err: any) {
+    if (err?.code !== 'EXDEV') {
+      throw err;
+    }
+    fs.copyFileSync(source, destination);
+    fs.unlinkSync(source);
+  }
 }

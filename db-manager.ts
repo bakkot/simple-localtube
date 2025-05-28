@@ -1,7 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
+import path from 'path';
 import type { ChannelID, VideoID } from './util.ts';
 
-const DB_PATH = './youtube_data.sqlite';
+// TODO
+const DB_PATH = path.join(import.meta.dirname, './youtube_data.sqlite');
 
 // TODO transactions!!
 // https://github.com/nodejs/node/blob/a0139e06a0754058ffd891f779be55584665f8a8/test/parallel/test-sqlite-transactions.js
@@ -14,7 +16,10 @@ if (existing.length === 0) {
     CREATE TABLE channels (
         channel_id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
-        description TEXT
+        description TEXT,
+        avatar TEXT,
+        banner TEXT,
+        banner_uncropped TEXT
     ) STRICT;
 
     CREATE TABLE videos (
@@ -37,23 +42,34 @@ if (existing.length === 0) {
 }
 
 let addChannelStmt = db.prepare(`
-    INSERT INTO channels (channel_id, title, description)
-    VALUES (:channel_id, :title, :description)
+  INSERT INTO channels (channel_id, title, description, avatar, banner, banner_uncropped)
+  VALUES (:channel_id, :title, :description, :avatar, :banner, :banner_uncropped)
 `);
 
 let addVideoStmt = db.prepare(`
-    INSERT INTO videos (video_id, channel_id, title, description, extension, thumb_extension, duration_seconds, upload_date, subtitle_languages)
-    VALUES (:video_id, :channel_id, :title, :description, :extension, :thumb_extension, :duration_seconds, :upload_date, :subtitle_languages)
+  INSERT INTO videos (video_id, channel_id, title, description, extension, thumb_extension, duration_seconds, upload_date, subtitle_languages)
+  VALUES (:video_id, :channel_id, :title, :description, :extension, :thumb_extension, :duration_seconds, :upload_date, :subtitle_languages)
 `);
 
 let isVideoInDbStmt = db.prepare(`
-    SELECT 1 FROM videos WHERE video_id = ? LIMIT 1
+  SELECT 1 FROM videos WHERE video_id = ? LIMIT 1
+`);
+
+let resetVideos = db.prepare(`
+  DELETE FROM videos;
+`);
+
+let resetChannels = db.prepare(`
+  DELETE FROM channels;
 `);
 
 export interface Channel {
   channel_id: ChannelID;
   title: string;
   description: string | null;
+  avatar: string | null;
+  banner: string | null;
+  banner_uncropped: string | null;
 }
 
 export interface Video {
@@ -73,6 +89,9 @@ export function addChannel(channel: Channel): void {
     ':channel_id': channel.channel_id,
     ':title': channel.title,
     ':description': channel.description,
+    ':avatar': channel.avatar,
+    ':banner': channel.banner,
+    ':banner_uncropped': channel.banner_uncropped,
   });
 }
 
@@ -92,6 +111,11 @@ export function addVideo(video: Video): void {
 
 export function isVideoInDb(videoId: VideoID): boolean {
   return !!isVideoInDbStmt.get(videoId)
+}
+
+export function resetMediaInDb() {
+  resetVideos.run();
+  resetChannels.run();
 }
 
 export function closeDb(): void {

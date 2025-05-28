@@ -8,6 +8,7 @@ import os from 'os';
 
 import { spawnSync } from 'child_process';
 import { parseArgs } from 'util';
+import { move } from '../util.ts';
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, '..', 'yt-dlp');
 
@@ -151,10 +152,8 @@ let skipset = new Set([
 ]);
 
 for await (const entry of openedDir) {
-  // Build the full path for the current entry
   const fullPath = path.join(entry.parentPath, entry.name);
 
-  // Check if it's a file with .mp4 extension
   let ext = path.extname(entry.name);
   if (entry.isFile() && ext === '.mp4') {
     let videoID = path.basename(fullPath, ext);
@@ -208,17 +207,5 @@ for await (const entry of openedDir) {
     move(path.join(tempDir, json[0]), jsonPath);
     console.log(jsonPath);
     await sleep(1000);
-  }
-}
-
-function move(source: string, destination: string) {
-  try {
-    fs.renameSync(source, destination);
-  } catch (err: any) {
-    if (err?.code !== 'EXDEV') {
-      throw err;
-    }
-    fs.copyFileSync(source, destination);
-    fs.unlinkSync(source);
   }
 }

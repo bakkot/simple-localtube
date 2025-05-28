@@ -1,9 +1,10 @@
-import type { Video } from './db-manager.ts';
+import { addChannel, addVideo, resetMediaInDb, type Channel, type Video } from './db-manager.ts';
 import { nameExt, type ChannelID, type VideoID } from './util.ts';
 
 import fs from 'fs';
 import path from 'path';
 
+// TODO async
 export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: VideoID): Video | null {
   let dir = path.join(mediaDir, channelId, videoId);
   let contents = fs.readdirSync(dir);
@@ -16,13 +17,12 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
     console.error(`skipping ${channelId}/${videoId} because of missing data.json`);
     return null;
   }
-  let data = JSON.parse(fs.readFileSync(path.join(dir, 'data.json'), 'utf8'));
   let {
     fulltitle: title,
     description,
     duration,
     upload_date
-  } = data;
+  } = JSON.parse(fs.readFileSync(path.join(dir, 'data.json'), 'utf8'));
   if (typeof title !== 'string' || typeof description !== 'string' || typeof duration !== 'number' || typeof upload_date !== 'string' || upload_date.length !== 8) {
     throw new Error(`malformed data.json for ${channelId}/${videoId}`);
   }
@@ -57,6 +57,63 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
   };
 }
 
+export function channelFromDisk(mediaDir: string, channelId: ChannelID): Channel {
+  let dir = path.join(mediaDir, channelId);
+  let { channel, description } = JSON.parse(fs.readFileSync(path.join(dir, 'data.json'), 'utf8'));
+  let contents = fs.readdirSync(dir);
+  let avatar = contents.find(f => f === 'avatar.png' || 'avatar.jpg') ?? null;
+  let banner = contents.find(f => f === 'banner.png' || 'banner.jpg') ?? null;
+  let bannerUncropped = contents.find(f => f === 'banner_uncropped.png' || 'banner_uncropped.jpg') ?? null;
+  return {
+    channel_id: channelId,
+    title: channel,
+    description,
+    avatar,
+    banner,
+    banner_uncropped: bannerUncropped
+  };
+}
+
+export function rescan(mediaDir: string) {
+  const channels = fs.readdirSync(mediaDir, { withFileTypes: true });
+
+  resetMediaInDb();
+
+  try {
+    for (const channelEntry of channels) {
+      if (!channelEntry.isDirectory()) continue;
+      console.log(channelEntry.name);
+      let hasAddedThisChannel = false;
+
+      const channelPath = path.join(mediaDir, channelEntry.name);
+      const channelJson = path.join(channelPath, 'data.json');
+      if (!fs.existsSync(channelJson)) {
+        // TODO ensure this is in the readme
+        console.log(`skipping ${channelEntry.name} because of missing data.json; if it is a real channel you will need to fetch its metadata before it is usable: see the readme.`);
+        continue;
+      }
+      console.log(channelEntry.name);
+
+      const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
+
+      for (const videoEntry of videoEntries) {
+        if (!videoEntry.isDirectory()) continue;
+        let vid = videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID);
+        if (vid != null) {
+          if (!hasAddedThisChannel) {
+            addChannel(channelFromDisk(mediaDir, channelEntry.name as ChannelID));
+            hasAddedThisChannel = true;
+          }
+          addVideo(vid);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error while rescanning; DB is probably in a partial state. You should correct the error and rerun.');
+    throw e;
+  }
+}
+
 // todo this goes elsewhere
 import { parseArgs } from 'util';
 
@@ -65,19 +122,19 @@ if (positionals.length !== 1) {
   console.log('Usage: node scan.ts path-to-media-dir');
   process.exit(1);
 }
-let MEDIA_DIR = positionals[0];
+let mediaDir = positionals[0];
+rescan(mediaDir);
+// const channels = fs.readdirSync(mediaDir, { withFileTypes: true });
 
-const channels = fs.readdirSync(MEDIA_DIR, { withFileTypes: true });
+// for (const channelEntry of channels) {
+//   if (!channelEntry.isDirectory()) continue;
 
-for (const channelEntry of channels) {
-  if (!channelEntry.isDirectory()) continue;
+//   const channelPath = path.join(mediaDir, channelEntry.name);
 
-  const channelPath = path.join(MEDIA_DIR, channelEntry.name);
+//   const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
 
-  const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
-
-  for (const videoEntry of videoEntries) {
-    if (!videoEntry.isDirectory()) continue;
-    videoFromDisk(MEDIA_DIR, channelEntry.name as ChannelID, videoEntry.name as VideoID)
-  }
-}
+//   for (const videoEntry of videoEntries) {
+//     if (!videoEntry.isDirectory()) continue;
+//     videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID)
+//   }
+// }
