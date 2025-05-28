@@ -26,6 +26,10 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${secs.toString().padStart(2, '0')}`;
 }
 
+function formatDate(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleDateString();
+}
+
 function renderVideoGrid(videos: any[], title: string = 'Recent Videos'): string {
   return `
 <!DOCTYPE html>
@@ -46,6 +50,7 @@ function renderVideoGrid(videos: any[], title: string = 'Recent Videos'): string
     .video-title:hover { color: #1976d2; }
     .channel-name { color: #666; font-size: 14px; text-decoration: none; }
     .channel-name:hover { color: #1976d2; }
+    .upload-date { color: #999; font-size: 12px; margin-top: 4px; }
     a { text-decoration: none; }
   </style>
 </head>
@@ -63,6 +68,7 @@ function renderVideoGrid(videos: any[], title: string = 'Recent Videos'): string
         <div class="video-info">
           <a href="/v/${video.video_id}" class="video-title">${video.title}</a>
           <div><a href="/c/${video.channel_short_id}" class="channel-name">${video.channel}</a></div>
+          <div class="upload-date">${formatDate(video.upload_timestamp)}</div>
         </div>
       </div>
     `).join('')}
@@ -91,9 +97,11 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
 <head>
   <title>${video.title}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+    body { font-family: Arial, sans-serif; margin: 0; background: #000; }
+    .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+    video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
+    .content-section { background: #f5f5f5; padding: 20px; }
     .video-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    video { width: 100%; max-width: 800px; height: auto; }
     .video-info { margin-top: 15px; }
     .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #333; }
     .channel-info { display: flex; align-items: center; margin-bottom: 15px; }
@@ -106,12 +114,15 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
   </style>
 </head>
 <body>
-  <a href="/" class="back-link">← Back to Home</a>
-  <div class="video-container">
-    <video controls>
+  <div class="video-section">
+    <video controls autoplay>
       <source src="/media/${video.channel_id}/${video.video_id}/${video.video_filename}" type="video/${nameExt(video.video_filename).ext === 'mp4' ? 'mp4' : 'webm'}">
       Your browser does not support the video tag.
     </video>
+  </div>
+  <div class="content-section">
+    <a href="/" class="back-link">← Back to Home</a>
+    <div class="video-container">
     <div class="video-info">
       <div class="video-title">${video.title}</div>
       <div class="channel-info">
@@ -120,6 +131,7 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
       </div>
       <div class="description">${video.description}</div>
     </div>
+  </div>
   </div>
 </body>
 </html>`);
@@ -146,7 +158,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
     .channel-info { display: flex; align-items: center; }
     .channel-avatar { width: 80px; height: 80px; border-radius: 50%; margin-right: 20px; }
     .channel-details h1 { margin: 0 0 10px 0; color: #333; }
-    .channel-description { color: #666; line-height: 1.5; }
+    .channel-description { color: #666; line-height: 1.5; white-space: pre-wrap; }
     .back-link { display: inline-block; margin-bottom: 20px; color: #1976d2; text-decoration: none; }
     .back-link:hover { text-decoration: underline; }
     .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
@@ -183,6 +195,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
         </a>
         <div class="video-info">
           <a href="/v/${video.video_id}" class="video-title">${video.title}</a>
+          <div class="upload-date">${formatDate(video.upload_timestamp)}</div>
         </div>
       </div>
     `).join('')}
