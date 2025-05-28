@@ -159,12 +159,19 @@ function createInfiniteScroll(apiUrl, showChannel) {
 `;
 
 const commonCSS = `
-  body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+  body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; }
   .header { position: relative; }
   .user-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
   .username { color: #333; font-weight: bold; }
   .logout-link { color: #1976d2; text-decoration: none; cursor: pointer; }
   .logout-link:hover { text-decoration: underline; }
+  .back-link { display: inline-block; color: #1976d2; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+  .content-section { background: #f5f5f5; padding: 20px; }
+  .video-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .channel-name { color: #1976d2; text-decoration: none; font-weight: bold; }
+  .channel-name:hover { text-decoration: underline; }
+  .description { color: #666; line-height: 1.5; white-space: pre-wrap; }
   .video-grid { display: grid; grid-template-columns: repeat(auto-fit, 320px); gap: 20px; justify-content: center; }
   .video-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
   .video-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
@@ -174,53 +181,10 @@ const commonCSS = `
   .video-info { padding: 12px; }
   .video-title { font-weight: bold; color: #333; text-decoration: none; }
   .video-title:hover { color: #1976d2; }
-  .channel-name { color: #666; font-size: 14px; text-decoration: none; }
-  .channel-name:hover { color: #1976d2; }
   .upload-date { color: #999; font-size: 12px; margin-top: 4px; }
   a { text-decoration: none; }
   .loading { text-align: center; padding: 30px 20px; color: #666; }
 `;
-
-function renderVideoGrid(videos: any[], title: string = 'Recent Videos', username?: string): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>${title}</title>
-  <style>
-    ${commonCSS}
-    h1 { color: #333; }
-    .video-grid { margin-top: 20px; }
-    .video-title { margin-bottom: 8px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>${title}</h1>
-    ${username ? `
-      <div class="user-info">
-        <span class="username">${username}</span>
-        <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-      </div>
-    ` : ''}
-  </div>
-  <div class="video-grid" id="video-grid">
-    ${videos.map(video => renderVideoCard(video, true)).join('')}
-  </div>
-  <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
-  <script>
-    ${videoCardScript}
-
-    function logout() {
-      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
-    }
-
-    createInfiniteScroll('/api/videos', true);
-  </script>
-</body>
-</html>`;
-}
 
 app.get('/login', (req: Request, res: Response): void => {
   res.send(`
@@ -314,53 +278,46 @@ app.get('/login', (req: Request, res: Response): void => {
 </html>`);
 });
 
-app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      res.status(400).json({ message: 'Username and password required' });
-      return;
-    }
-
-    const token = await checkUsernamePassword(username, password);
-
-    if (token) {
-      res.json({ token });
-    } else {
-      res.status(401).json({ message: 'Invalid username or password' });
-    }
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// API endpoints
-app.get('/api/videos', (req: Request, res: Response): void => {
-  const offset = parseInt(req.query.offset as string) || 0;
-  const limit = parseInt(req.query.limit as string) || 30;
-  const videos = getRecentVideos(limit, offset);
-  res.json(videos);
-});
-
-app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => {
-  const channel = getChannelByShortId(req.params.short_id);
-  if (!channel) {
-    res.status(404).json({ error: 'Channel not found' });
-    return;
-  }
-
-  const offset = parseInt(req.query.offset as string) || 0;
-  const limit = parseInt(req.query.limit as string) || 30;
-  const videos = getVideosByChannel(channel.channel_id, limit, offset);
-  res.json(videos);
-});
-
 // Homepage
 app.get('/', (req, res) => {
   const videos = getRecentVideos(30);
-  res.send(renderVideoGrid(videos, 'LocalTube', req.username));
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LocalTube</title>
+  <style>
+    ${commonCSS}
+    body { margin: 20px; }
+    h1 { color: #333; margin: 0px; }
+    .video-grid { margin-top: 20px; }
+    .video-title { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>LocalTube</h1>
+    <div class="user-info">
+      <span class="username">${req.username}</span>
+      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+    </div>
+  </div>
+  <div class="video-grid" id="video-grid">
+    ${videos.map(video => renderVideoCard(video, true)).join('')}
+  </div>
+  <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
+  <script>
+    ${videoCardScript}
+
+    function logout() {
+      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/login';
+    }
+
+    createInfiniteScroll('/api/videos', true);
+  </script>
+</body>
+</html>`);
 });
 
 // Video player page
@@ -377,25 +334,14 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
 <head>
   <title>${video.title}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #000; }
-    .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+    ${commonCSS}
+    body { margin: 0;  }
+    .video-section { background: #000; background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
     video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
-    .content-section { background: #f5f5f5; padding: 20px; }
-    .header { position: relative; }
-    .user-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
-    .username { color: #333; font-weight: bold; }
-    .logout-link { color: #1976d2; text-decoration: none; cursor: pointer; }
-    .logout-link:hover { text-decoration: underline; }
-    .video-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .video-info { margin-top: 15px; }
-    .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #333; }
+    .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
     .channel-info { display: flex; align-items: center; margin-bottom: 15px; }
     .channel-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; }
-    .channel-name { color: #1976d2; text-decoration: none; font-weight: bold; }
-    .channel-name:hover { text-decoration: underline; }
-    .description { color: #666; line-height: 1.5; white-space: pre-wrap; }
-    .back-link { display: inline-block; color: #1976d2; text-decoration: none; }
-    .back-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -455,26 +401,23 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   <title>${channel.channel}</title>
   <style>
     ${commonCSS}
-    .channel-header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    body { margin: 20px; }
+    .channel-header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 20px; margin-bottom: 20px; }
     .channel-info { display: flex; align-items: center; }
     .channel-avatar { width: 80px; height: 80px; border-radius: 50%; margin-right: 20px; }
     .channel-details h1 { margin: 0 0 10px 0; color: #333; }
     .channel-description { color: #666; line-height: 1.5; white-space: pre-wrap; }
-    .back-link { display: inline-block; color: #1976d2; text-decoration: none; }
-    .back-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="content-section">
-    <div class="header">
-      <a href="/" class="back-link">← Back to Home</a>
-      ${req.username ? `
-        <div class="user-info">
-          <span class="username">${req.username}</span>
-          <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-        </div>
-      ` : ''}
-    </div>
+  <div class="header">
+    <a href="/" class="back-link">← Back to Home</a>
+    ${req.username ? `
+      <div class="user-info">
+        <span class="username">${req.username}</span>
+        <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+      </div>
+    ` : ''}
   </div>
   <div class="channel-header">
     <div class="channel-info">
@@ -502,6 +445,50 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
 </body>
 </html>`);
 });
+
+
+app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      res.status(400).json({ message: 'Username and password required' });
+      return;
+    }
+
+    const token = await checkUsernamePassword(username, password);
+
+    if (token) {
+      res.json({ token });
+    } else {
+      res.status(401).json({ message: 'Invalid username or password' });
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.get('/api/videos', (req: Request, res: Response): void => {
+  const offset = parseInt(req.query.offset as string) || 0;
+  const limit = parseInt(req.query.limit as string) || 30;
+  const videos = getRecentVideos(limit, offset);
+  res.json(videos);
+});
+
+app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => {
+  const channel = getChannelByShortId(req.params.short_id);
+  if (!channel) {
+    res.status(404).json({ error: 'Channel not found' });
+    return;
+  }
+
+  const offset = parseInt(req.query.offset as string) || 0;
+  const limit = parseInt(req.query.limit as string) || 30;
+  const videos = getVideosByChannel(channel.channel_id, limit, offset);
+  res.json(videos);
+});
+
 
 app.listen(PORT, () => {
   console.log(`LocalTube server running on http://localhost:${PORT}`);
