@@ -72,7 +72,7 @@ let getRecentVideosStmt = db.prepare(`
   FROM videos v
   JOIN channels c ON v.channel_id = c.channel_id
   ORDER BY v.upload_timestamp DESC
-  LIMIT ?
+  LIMIT ? OFFSET ?
 `);
 
 let getVideoByIdStmt = db.prepare(`
@@ -92,7 +92,7 @@ let getVideosByChannelStmt = db.prepare(`
   JOIN channels c ON v.channel_id = c.channel_id
   WHERE v.channel_id = ?
   ORDER BY v.upload_timestamp DESC
-  LIMIT ?
+  LIMIT ? OFFSET ?
 `);
 
 export interface Channel {
@@ -158,8 +158,8 @@ export function resetMediaInDb() {
   resetChannels.run();
 }
 
-export function getRecentVideos(limit: number = 30): VideoWithChannel[] {
-  const rows = getRecentVideosStmt.all(limit) as any[];
+export function getRecentVideos(limit: number = 30, offset: number = 0): VideoWithChannel[] {
+  const rows = getRecentVideosStmt.all(limit, offset) as any[];
   return rows.map(row => ({
     ...row,
     subtitle_languages: JSON.parse(row.subtitle_languages)
@@ -179,8 +179,8 @@ export function getChannelByShortId(shortId: string): Channel | null {
   return getChannelByShortIdStmt.get(shortId) as unknown as  Channel | null;
 }
 
-export function getVideosByChannel(channelId: ChannelID, limit: number = 30): VideoWithChannel[] {
-  const rows = getVideosByChannelStmt.all(channelId, limit) as any[];
+export function getVideosByChannel(channelId: ChannelID, limit: number = 30, offset: number = 0): VideoWithChannel[] {
+  const rows = getVideosByChannelStmt.all(channelId, limit, offset) as any[];
   return rows.map(row => ({
     ...row,
     subtitle_languages: JSON.parse(row.subtitle_languages)
