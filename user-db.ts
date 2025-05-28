@@ -1,0 +1,210 @@
+import { DatabaseSync } from 'node:sqlite';
+import { scrypt, randomBytes, createHmac } from 'node:crypto';
+import { promisify } from 'node:util';
+import path from 'path';
+import fs from 'fs';
+import { channelExists } from './db-manager.ts';
+import type { ChannelID } from './util.ts';
+
+const scryptAsync = promisify(scrypt);
+
+// TODO configurable
+const USER_DB_PATH = path.join(import.meta.dirname, './user_data.sqlite');
+const KEYS_PATH = path.join(import.meta.dirname, './keys.json');
+
+interface Keys {
+  pepper: Buffer;
+  hmacKey: Buffer;
+}
+
+interface User {
+  username: string;
+  hashed_password: Buffer;
+  salt: Buffer;
+  user_kind: 'full' | 'restricted';
+  allowed_channels: string | null; // JSON array of channel IDs or null
+}
+
+let db: DatabaseSync | undefined = new DatabaseSync(USER_DB_PATH);
+let keys: Keys;
+
+// Initialize keys file
+function initializeKeys(): void {
+  if (!fs.existsSync(KEYS_PATH)) {
+    const pepper = randomBytes(32);
+    const hmacKey = randomBytes(32);
+
+    const keysData = {
+      pepper: pepper.toString('base64'),
+      hmacKey: hmacKey.toString('base64')
+    };
+
+    fs.writeFileSync(KEYS_PATH, JSON.stringify(keysData, null, 2));
+    console.log('Generated new keys.json file');
+  }
+}
+
+// Load keys from file
+function loadKeys(): Keys {
+  const keysData = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8'));
+  return {
+    pepper: Buffer.from(keysData.pepper, 'base64'),
+    hmacKey: Buffer.from(keysData.hmacKey, 'base64')
+  };
+}
+
+// Initialize database and keys
+initializeKeys();
+keys = loadKeys();
+
+let existing = db.prepare('SELECT name FROM sqlite_master WHERE type=\'table\'').all().map(({ name }) => name);
+if (existing.length === 0) {
+  db.exec(`
+    CREATE TABLE users (
+        username TEXT PRIMARY KEY,
+        hashed_password BLOB NOT NULL,
+        salt BLOB NOT NULL,
+        user_kind TEXT NOT NULL,
+        allowed_channels TEXT
+    ) STRICT;
+  `);
+} else if (!(new Set(existing)).isSubsetOf(new Set(['users']))) {
+  throw new Error(`${USER_DB_PATH} exists but does not contain the data we expect`);
+}
+
+let getUserByUsernameStmt = db.prepare(`
+  SELECT * FROM users WHERE username = ?
+`);
+
+let addUserStmt = db.prepare(`
+  INSERT INTO users (username, hashed_password, salt, user_kind, allowed_channels)
+  VALUES (?, ?, ?, ?, ?)
+`);
+
+// Hash password with salt and pepper
+async function hashPassword(password: string, salt: Buffer, pepper: Buffer): Promise<Buffer> {
+  const normalizedPassword = password.normalize('NFC');
+  const passwordWithPepper = normalizedPassword + pepper.toString('base64');
+  const hash = await scryptAsync(passwordWithPepper, salt, 64) as Buffer;
+  return hash;
+}
+
+// Verify password against stored hash
+async function verifyPassword(password: string, storedHash: Buffer, salt: Buffer, pepper: Buffer): Promise<boolean> {
+  const computedHash = await hashPassword(password, salt, pepper);
+  return computedHash.equals(storedHash);
+}
+
+// Generate bearer token
+function generateBearerToken(username: string): string {
+  const payload = {
+    username,
+    timestamp: Date.now()
+  };
+
+  const payloadStr = JSON.stringify(payload);
+  const signature = createHmac('sha256', keys.hmacKey)
+    .update(payloadStr)
+    .digest('base64');
+
+  const token = {
+    payloadStr,
+    signature
+  };
+
+  return Buffer.from(JSON.stringify(token)).toString('base64');
+}
+
+// Decode and verify bearer token
+export function decodeBearerToken(tokenStr: string): { username: string; timestamp: number } {
+  let tokenData;
+  try {
+    const tokenJson = Buffer.from(tokenStr, 'base64').toString('utf8');
+    tokenData = JSON.parse(tokenJson);
+  } catch (error) {
+    throw new Error('Invalid token format');
+  }
+
+  if (!tokenData.payloadStr || !tokenData.signature) {
+    throw new Error('Missing token payload or signature');
+  }
+
+  // Verify HMAC signature first
+  const expectedSignature = createHmac('sha256', keys.hmacKey)
+    .update(tokenData.payloadStr)
+    .digest('base64');
+
+  if (tokenData.signature !== expectedSignature) {
+    throw new Error('Invalid token signature');
+  }
+
+  // Parse and validate payload structure
+  let payload;
+  try {
+    payload = JSON.parse(tokenData.payloadStr);
+  } catch (error) {
+    throw new Error('Invalid payload JSON');
+  }
+
+  if (typeof payload.username !== 'string' || typeof payload.timestamp !== 'number') {
+    throw new Error('Invalid token payload structure');
+  }
+
+  return payload;
+}
+
+// Add a new user
+export async function addUser(
+  username: string,
+  password: string,
+  userKind: 'full' | 'restricted',
+  allowedChannels?: string[]
+): Promise<void> {
+  // Check if user already exists
+  const existingUser = getUserByUsernameStmt.get(username);
+  if (existingUser) {
+    throw new Error('User already exists');
+  }
+
+  // Validate allowed channels exist in the database
+  if (allowedChannels) {
+    for (const channelId of allowedChannels) {
+      if (!channelExists(channelId as ChannelID)) {
+        throw new Error(`Channel '${channelId}' does not exist`);
+      }
+    }
+  }
+
+  // Generate salt and hash password
+  const salt = randomBytes(32);
+  const hashedPassword = await hashPassword(password, salt, keys.pepper);
+
+  // Prepare allowed_channels JSON
+  const allowedChannelsJson = allowedChannels ? JSON.stringify(allowedChannels) : null;
+
+  addUserStmt.run(username, hashedPassword, salt, userKind, allowedChannelsJson);
+}
+
+// Main authentication function
+export async function checkUsernamePassword(username: string, password: string): Promise<string | null> {
+  const user = getUserByUsernameStmt.get(username) as User | undefined;
+  if (!user) {
+    return null;
+  }
+
+  const isValid = await verifyPassword(password, user.hashed_password, user.salt, keys.pepper);
+
+  if (isValid) {
+    return generateBearerToken(username);
+  }
+
+  return null;
+}
+
+export function closeUserDb(): void {
+  if (db) {
+    console.log('Closing user database connection.');
+    db.close();
+    db = undefined;
+  }
+}

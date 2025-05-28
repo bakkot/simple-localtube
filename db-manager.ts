@@ -95,6 +95,10 @@ let getVideosByChannelStmt = db.prepare(`
   LIMIT ? OFFSET ?
 `);
 
+let channelExistsStmt = db.prepare(`
+  SELECT 1 FROM channels WHERE channel_id = ? LIMIT 1
+`);
+
 export interface Channel {
   channel_id: ChannelID;
   channel: string;
@@ -185,6 +189,10 @@ export function getVideosByChannel(channelId: ChannelID, limit: number = 30, off
     ...row,
     subtitle_languages: JSON.parse(row.subtitle_languages)
   }));
+}
+
+export function channelExists(channelId: ChannelID): boolean {
+  return !!channelExistsStmt.get(channelId);
 }
 
 export function closeDb(): void {

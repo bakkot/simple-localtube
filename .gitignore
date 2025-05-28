@@ -1,4 +1,5 @@
 node_modules/
-youtube_data.sqlite
+*.sqlite
+keys.json
 yt-dlp
 CLAUDE.md
