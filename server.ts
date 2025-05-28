@@ -160,7 +160,7 @@ function createInfiniteScroll(apiUrl, showChannel) {
 
 const commonCSS = `
   body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-  .header { position: relative; margin-bottom: 20px; }
+  .header { position: relative; }
   .user-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
   .username { color: #333; font-weight: bold; }
   .logout-link { color: #1976d2; text-decoration: none; cursor: pointer; }
@@ -210,7 +210,7 @@ function renderVideoGrid(videos: any[], title: string = 'Recent Videos', usernam
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
     ${videoCardScript}
-    
+
     function logout() {
       document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       window.location.href = '/login';
@@ -381,7 +381,7 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
     video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
     .content-section { background: #f5f5f5; padding: 20px; }
-    .header { position: relative; margin-bottom: 20px; }
+    .header { position: relative; }
     .user-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
     .username { color: #333; font-weight: bold; }
     .logout-link { color: #1976d2; text-decoration: none; cursor: pointer; }
@@ -394,17 +394,11 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     .channel-name { color: #1976d2; text-decoration: none; font-weight: bold; }
     .channel-name:hover { text-decoration: underline; }
     .description { color: #666; line-height: 1.5; white-space: pre-wrap; }
-    .back-link { display: inline-block; margin-bottom: 20px; color: #1976d2; text-decoration: none; }
+    .back-link { display: inline-block; color: #1976d2; text-decoration: none; }
     .back-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="video-section">
-    <video controls autoplay>
-      <source src="/media/${video.channel_id}/${video.video_id}/${video.video_filename}" type="video/${nameExt(video.video_filename).ext === 'mp4' ? 'mp4' : 'webm'}">
-      Your browser does not support the video tag.
-    </video>
-  </div>
   <div class="content-section">
     <div class="header">
       <a href="/" class="back-link">← Back to Home</a>
@@ -415,6 +409,14 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
         </div>
       ` : ''}
     </div>
+  </div>
+  <div class="video-section">
+    <video controls autoplay>
+      <source src="/media/${video.channel_id}/${video.video_id}/${video.video_filename}" type="video/${nameExt(video.video_filename).ext === 'mp4' ? 'mp4' : 'webm'}">
+      Your browser does not support the video tag.
+    </video>
+  </div>
+  <div class="content-section">
     <div class="video-container">
     <div class="video-info">
       <div class="video-title">${video.title}</div>
@@ -458,19 +460,21 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
     .channel-avatar { width: 80px; height: 80px; border-radius: 50%; margin-right: 20px; }
     .channel-details h1 { margin: 0 0 10px 0; color: #333; }
     .channel-description { color: #666; line-height: 1.5; white-space: pre-wrap; }
-    .back-link { display: inline-block; margin-bottom: 20px; color: #1976d2; text-decoration: none; }
+    .back-link { display: inline-block; color: #1976d2; text-decoration: none; }
     .back-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <a href="/" class="back-link">← Back to Home</a>
-    ${req.username ? `
-      <div class="user-info">
-        <span class="username">${req.username}</span>
-        <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-      </div>
-    ` : ''}
+  <div class="content-section">
+    <div class="header">
+      <a href="/" class="back-link">← Back to Home</a>
+      ${req.username ? `
+        <div class="user-info">
+          <span class="username">${req.username}</span>
+          <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+        </div>
+      ` : ''}
+    </div>
   </div>
   <div class="channel-header">
     <div class="channel-info">
@@ -487,7 +491,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
     ${videoCardScript}
-    
+
     function logout() {
       document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       window.location.href = '/login';
