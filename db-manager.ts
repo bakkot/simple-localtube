@@ -18,9 +18,9 @@ if (existing.length === 0) {
         channel TEXT NOT NULL,
         short_id TEXT NOT NULL,
         description TEXT,
-        avatar TEXT,
-        banner TEXT,
-        banner_uncropped TEXT
+        avatar_filename TEXT,
+        banner_filename TEXT,
+        banner_uncropped_filename TEXT
     ) STRICT;
 
     CREATE TABLE videos (
@@ -28,8 +28,8 @@ if (existing.length === 0) {
         channel_id TEXT NOT NULL,
         title TEXT NOT NULL,
         description TEXT NOT NULL,
-        extension TEXT NOT NULL,
-        thumb_extension TEXT,
+        video_filename TEXT NOT NULL,
+        thumb_filename TEXT,
         duration_seconds INTEGER,
         upload_timestamp INTEGER NOT NULL,
         subtitle_languages TEXT NOT NULL, -- JSON of list of subtitle languages
@@ -46,13 +46,13 @@ if (existing.length === 0) {
 }
 
 let addChannelStmt = db.prepare(`
-  INSERT INTO channels (channel_id, channel, short_id, description, avatar, banner, banner_uncropped)
-  VALUES (:channel_id, :channel, :short_id, :description, :avatar, :banner, :banner_uncropped)
+  INSERT INTO channels (channel_id, channel, short_id, description, avatar_filename, banner_filename, banner_uncropped_filename)
+  VALUES (:channel_id, :channel, :short_id, :description, :avatar_filename, :banner_filename, :banner_uncropped_filename)
 `);
 
 let addVideoStmt = db.prepare(`
-  INSERT INTO videos (video_id, channel_id, title, description, extension, thumb_extension, duration_seconds, upload_timestamp, subtitle_languages)
-  VALUES (:video_id, :channel_id, :title, :description, :extension, :thumb_extension, :duration_seconds, :upload_timestamp, :subtitle_languages)
+  INSERT INTO videos (video_id, channel_id, title, description, video_filename, thumb_filename, duration_seconds, upload_timestamp, subtitle_languages)
+  VALUES (:video_id, :channel_id, :title, :description, :video_filename, :thumb_filename, :duration_seconds, :upload_timestamp, :subtitle_languages)
 `);
 
 let isVideoInDbStmt = db.prepare(`
@@ -76,7 +76,7 @@ let getRecentVideosStmt = db.prepare(`
 `);
 
 let getVideoByIdStmt = db.prepare(`
-  SELECT v.*, c.channel, c.short_id as channel_short_id, c.avatar
+  SELECT v.*, c.channel, c.short_id as channel_short_id, c.avatar_filename
   FROM videos v
   JOIN channels c ON v.channel_id = c.channel_id
   WHERE v.video_id = ?
@@ -100,9 +100,9 @@ export interface Channel {
   channel: string;
   short_id: string;
   description: string | null;
-  avatar: string | null;
-  banner: string | null;
-  banner_uncropped: string | null;
+  avatar_filename: string | null;
+  banner_filename: string | null;
+  banner_uncropped_filename: string | null;
 }
 
 export interface Video {
@@ -110,8 +110,8 @@ export interface Video {
   channel_id: ChannelID;
   title: string;
   description: string;
-  extension: string;
-  thumb_extension: string | null;
+  video_filename: string;
+  thumb_filename: string | null;
   duration_seconds: number;
   upload_timestamp: number;
   subtitle_languages: string[];
@@ -120,7 +120,7 @@ export interface Video {
 export interface VideoWithChannel extends Video {
   channel: string;
   channel_short_id: string;
-  avatar?: string;
+  avatar_filename?: string;
 }
 
 export function addChannel(channel: Channel): void {
@@ -129,9 +129,9 @@ export function addChannel(channel: Channel): void {
     ':channel': channel.channel,
     ':short_id': channel.short_id,
     ':description': channel.description,
-    ':avatar': channel.avatar,
-    ':banner': channel.banner,
-    ':banner_uncropped': channel.banner_uncropped,
+    ':avatar_filename': channel.avatar_filename,
+    ':banner_filename': channel.banner_filename,
+    ':banner_uncropped_filename': channel.banner_uncropped_filename,
   });
 }
 
@@ -141,8 +141,8 @@ export function addVideo(video: Video): void {
     ':channel_id': video.channel_id,
     ':title': video.title,
     ':description': video.description,
-    ':extension': video.extension,
-    ':thumb_extension': video.thumb_extension,
+    ':video_filename': video.video_filename,
+    ':thumb_filename': video.thumb_filename,
     ':duration_seconds': video.duration_seconds,
     ':upload_timestamp': video.upload_timestamp,
     ':subtitle_languages': JSON.stringify(video.subtitle_languages),

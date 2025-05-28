@@ -2,7 +2,7 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import { parseArgs } from 'util';
 import { getRecentVideos, getVideoById, getChannelByShortId, getVideosByChannel } from './db-manager.ts';
-import type { VideoID } from './util.ts';
+import { nameExt, type VideoID } from './util.ts';
 
 let { positionals } = parseArgs({ allowPositionals: true });
 if (positionals.length !== 1) {
@@ -109,13 +109,13 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
   <a href="/" class="back-link">← Back to Home</a>
   <div class="video-container">
     <video controls>
-      <source src="/media/${video.channel_id}/${video.video_id}/video.${video.extension}" type="video/${video.extension === 'mp4' ? 'mp4' : 'webm'}">
+      <source src="/media/${video.channel_id}/${video.video_id}/${video.video_filename}" type="video/${nameExt(video.video_filename).ext === 'mp4' ? 'mp4' : 'webm'}">
       Your browser does not support the video tag.
     </video>
     <div class="video-info">
       <div class="video-title">${video.title}</div>
       <div class="channel-info">
-        ${video.avatar ? `<img class="channel-avatar" src="/media/${video.channel_id}/avatar.png" alt="${video.channel}">` : ''}
+        ${video.avatar_filename ? `<img class="channel-avatar" src="/media/${video.channel_id}/${video.avatar_filename}" alt="${video.channel}">` : ''}
         <a href="/c/${video.channel_short_id}" class="channel-name">${video.channel}</a>
       </div>
       <div class="description">${video.description}</div>
@@ -165,7 +165,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   <a href="/" class="back-link">← Back to Home</a>
   <div class="channel-header">
     <div class="channel-info">
-      ${channel.avatar ? `<img class="channel-avatar" src="/media/${channel.channel_id}/avatar.png" alt="${channel.channel}">` : ''}
+      ${channel.avatar_filename ? `<img class="channel-avatar" src="/media/${channel.channel_id}/${channel.avatar_filename}" alt="${channel.channel}">` : ''}
       <div class="channel-details">
         <h1>${channel.channel}</h1>
         ${channel.description ? `<div class="channel-description">${channel.description}</div>` : ''}
@@ -177,7 +177,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
       <div class="video-card">
         <a href="/v/${video.video_id}">
           <div class="thumb-container">
-            <img class="thumb" src="/media/${video.channel_id}/${video.video_id}/thumb.${video.thumb_extension || 'jpg'}" alt="${video.title}">
+            <img class="thumb" src="/media/${video.channel_id}/${video.video_id}/${video.thumb_filename}" alt="${video.title}">
             <span class="duration">${formatDuration(video.duration_seconds || 0)}</span>
           </div>
         </a>

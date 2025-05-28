@@ -29,15 +29,15 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
   const upload_timestamp = Math.floor(new Date(upload_date.slice(0, 4) + '-' + upload_date.slice(4, 6) + '-' + upload_date.slice(6) + 'T00:00:00Z').getTime() / 1000);
 
   let subs = [];
-  let thumbExt = null;
+  let thumb_filename = null;
   for (let file of contents) {
     if (file.startsWith('.')) continue;
     let { name, ext } = nameExt(file);
     if (name === 'thumb') {
-      if (thumbExt != null) {
+      if (thumb_filename != null) {
         throw new Error('multiple thumbs');
       }
-      thumbExt = ext;
+      thumb_filename = file;
     } else if (ext === 'vtt' && name.startsWith('subs.')) {
       let split = name.split('.');
       subs.push(split.slice(1).join('.'));
@@ -48,9 +48,9 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
     video_id: videoId,
     channel_id: channelId,
     title,
-    extension: nameExt(vids[0]).ext,
     description,
-    thumb_extension: thumbExt,
+    video_filename: vids[0],
+    thumb_filename,
     duration_seconds: duration,
     upload_timestamp,
     subtitle_languages: subs,
@@ -67,17 +67,17 @@ export function channelFromDisk(mediaDir: string, channelId: ChannelID): Channel
     uploader_id = uploader_id.slice(1);
   }
   let contents = fs.readdirSync(dir);
-  let avatar = contents.find(f => f === 'avatar.png' || 'avatar.jpg') ?? null;
-  let banner = contents.find(f => f === 'banner.png' || 'banner.jpg') ?? null;
+  let avatar = contents.find(f => f === 'avatar.png' || f === 'avatar.jpg') ?? null;
+  let banner = contents.find(f => f === 'banner.png' || f === 'banner.jpg') ?? null;
   let bannerUncropped = contents.find(f => f === 'banner_uncropped.png' || 'banner_uncropped.jpg') ?? null;
   return {
     channel_id: channelId,
     short_id: uploader_id,
     channel,
     description: description ?? null,
-    avatar,
-    banner,
-    banner_uncropped: bannerUncropped
+    avatar_filename: avatar,
+    banner_filename: banner,
+    banner_uncropped_filename: bannerUncropped,
   };
 }
 
