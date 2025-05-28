@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { channelExists } from './db-manager.ts';
 import type { ChannelID } from './util.ts';
+import { LRUCache } from './util.ts';
 
 const scryptAsync = promisify(scrypt);
 
@@ -27,6 +28,10 @@ interface User {
 
 let db: DatabaseSync | undefined = new DatabaseSync(USER_DB_PATH);
 let keys: Keys;
+
+type Permissions =  { userKind: 'full' } | { userKind: 'restricted'; allowedChannels: Set<ChannelID> };
+
+const userPermissionsCache = new LRUCache<string, Permissions>(100);
 
 // Initialize keys file
 function initializeKeys(): void {
@@ -183,6 +188,47 @@ export async function addUser(
   const allowedChannelsJson = allowedChannels ? JSON.stringify(allowedChannels) : null;
 
   addUserStmt.run(username, hashedPassword, salt, userKind, allowedChannelsJson);
+
+  // Clear cache entry for this user since permissions may have changed
+  userPermissionsCache.delete(username);
+}
+
+function getUserPermissions(username: string): Permissions {
+  const cached = userPermissionsCache.get(username);
+  if (cached) {
+    return cached;
+  }
+
+  const user = getUserByUsernameStmt.get(username) as User | undefined;
+  if (!user) {
+    throw new Error(`unrecognized user ${username}`);
+  }
+
+  let permissions: Permissions;
+  if (user.user_kind === 'full') {
+    permissions = { userKind: 'full' };
+  } else {
+    const channelList = user.allowed_channels ? JSON.parse(user.allowed_channels) as ChannelID[] : [];
+    permissions = { userKind: 'restricted', allowedChannels: new Set(channelList) };
+  }
+
+  userPermissionsCache.set(username, permissions);
+
+  return permissions;
+}
+
+// Check if user can view a specific channel
+export function canUserViewChannel(username: string, channelId: ChannelID): boolean {
+  const permissions = getUserPermissions(username);
+  if (permissions === null) {
+    throw new Error(`unrecognized user ${username}`);
+  }
+
+  if (permissions.userKind === 'full') {
+    return true;
+  } else {
+    return permissions.allowedChannels.has(channelId);
+  }
 }
 
 // Main authentication function
