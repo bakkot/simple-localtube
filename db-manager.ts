@@ -32,7 +32,7 @@ if (existing.length === 0) {
         thumb_filename TEXT,
         duration_seconds INTEGER,
         upload_timestamp INTEGER NOT NULL,
-        subtitle_languages TEXT NOT NULL, -- JSON of list of subtitle languages
+        subtitle_languages TEXT NOT NULL, -- JSON of list of subtitle languages; TODO use native json support?
         FOREIGN KEY (channel_id) REFERENCES channels(channel_id)
     ) STRICT;
 

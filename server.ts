@@ -105,11 +105,11 @@ function createInfiniteScroll(apiUrl, showChannel) {
 
 const commonCSS = `
   body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-  .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+  .video-grid { display: grid; grid-template-columns: repeat(auto-fit, 320px); gap: 20px; justify-content: center; }
   .video-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
   .video-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
-  .thumb-container { position: relative; }
-  .thumb { width: 100%; height: 180px; object-fit: cover; }
+  .thumb-container { position: relative; height: 180px; }
+  .thumb { width: 100%; height: 100%; object-fit: cover; object-position: center; }
   .duration { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
   .video-info { padding: 12px; }
   .video-title { font-weight: bold; color: #333; text-decoration: none; }
