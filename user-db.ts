@@ -27,40 +27,10 @@ interface User {
 }
 
 let db: DatabaseSync | undefined = new DatabaseSync(USER_DB_PATH);
-let keys: Keys;
 
 type Permissions =  { userKind: 'full' } | { userKind: 'restricted'; allowedChannels: Set<ChannelID> };
 
 const userPermissionsCache = new LRUCache<string, Permissions>(100);
-
-// Initialize keys file
-function initializeKeys(): void {
-  if (!fs.existsSync(KEYS_PATH)) {
-    const pepper = randomBytes(32);
-    const hmacKey = randomBytes(32);
-
-    const keysData = {
-      pepper: pepper.toString('base64'),
-      hmacKey: hmacKey.toString('base64')
-    };
-
-    fs.writeFileSync(KEYS_PATH, JSON.stringify(keysData, null, 2));
-    console.log('Generated new keys.json file');
-  }
-}
-
-// Load keys from file
-function loadKeys(): Keys {
-  const keysData = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8'));
-  return {
-    pepper: Buffer.from(keysData.pepper, 'base64'),
-    hmacKey: Buffer.from(keysData.hmacKey, 'base64')
-  };
-}
-
-// Initialize database and keys
-initializeKeys();
-keys = loadKeys();
 
 let existing = db.prepare('SELECT name FROM sqlite_master WHERE type=\'table\'').all().map(({ name }) => name);
 if (existing.length === 0) {
@@ -77,6 +47,26 @@ if (existing.length === 0) {
   throw new Error(`${USER_DB_PATH} exists but does not contain the data we expect`);
 }
 
+if (!fs.existsSync(KEYS_PATH)) {
+  const pepper = randomBytes(32);
+  const hmacKey = randomBytes(32);
+
+  const keysData = {
+    pepper: pepper.toString('base64'),
+    hmacKey: hmacKey.toString('base64')
+  };
+
+  fs.writeFileSync(KEYS_PATH, JSON.stringify(keysData, null, 2));
+  console.log('Generated new keys.json file');
+}
+
+const keysData = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8'));
+let keys: Keys = {
+  pepper: Buffer.from(keysData.pepper, 'base64'),
+  hmacKey: Buffer.from(keysData.hmacKey, 'base64')
+};
+
+
 let getUserByUsernameStmt = db.prepare(`
   SELECT * FROM users WHERE username = ?
 `);
@@ -86,7 +76,6 @@ let addUserStmt = db.prepare(`
   VALUES (?, ?, ?, ?, ?)
 `);
 
-// Hash password with salt and pepper
 async function hashPassword(password: string, salt: Buffer, pepper: Buffer): Promise<Buffer> {
   const normalizedPassword = password.normalize('NFC');
   const passwordWithPepper = normalizedPassword + pepper.toString('base64');
@@ -94,13 +83,11 @@ async function hashPassword(password: string, salt: Buffer, pepper: Buffer): Pro
   return hash;
 }
 
-// Verify password against stored hash
 async function verifyPassword(password: string, storedHash: Buffer, salt: Buffer, pepper: Buffer): Promise<boolean> {
   const computedHash = await hashPassword(password, salt, pepper);
   return computedHash.equals(storedHash);
 }
 
-// Generate bearer token
 function generateBearerToken(username: string): string {
   const payload = {
     username,
@@ -120,7 +107,6 @@ function generateBearerToken(username: string): string {
   return Buffer.from(JSON.stringify(token)).toString('base64');
 }
 
-// Decode and verify bearer token
 export function decodeBearerToken(tokenStr: string): { username: string; timestamp: number } {
   let tokenData;
   try {
@@ -134,7 +120,6 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
     throw new Error('Missing token payload or signature');
   }
 
-  // Verify HMAC signature first
   const expectedSignature = createHmac('sha256', keys.hmacKey)
     .update(tokenData.payloadStr)
     .digest('base64');
@@ -143,7 +128,6 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
     throw new Error('Invalid token signature');
   }
 
-  // Parse and validate payload structure
   let payload;
   try {
     payload = JSON.parse(tokenData.payloadStr);
@@ -158,20 +142,17 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
   return payload;
 }
 
-// Add a new user
 export async function addUser(
   username: string,
   password: string,
   userKind: 'full' | 'restricted',
   allowedChannels?: string[]
 ): Promise<void> {
-  // Check if user already exists
   const existingUser = getUserByUsernameStmt.get(username);
   if (existingUser) {
     throw new Error('User already exists');
   }
 
-  // Validate allowed channels exist in the database
   if (allowedChannels) {
     for (const channelId of allowedChannels) {
       if (!channelExists(channelId as ChannelID)) {
@@ -180,16 +161,13 @@ export async function addUser(
     }
   }
 
-  // Generate salt and hash password
   const salt = randomBytes(32);
   const hashedPassword = await hashPassword(password, salt, keys.pepper);
 
-  // Prepare allowed_channels JSON
   const allowedChannelsJson = allowedChannels ? JSON.stringify(allowedChannels) : null;
 
   addUserStmt.run(username, hashedPassword, salt, userKind, allowedChannelsJson);
 
-  // Clear cache entry for this user since permissions may have changed
   userPermissionsCache.delete(username);
 }
 
@@ -217,7 +195,6 @@ function getUserPermissions(username: string): Permissions {
   return permissions;
 }
 
-// Check if user can view a specific channel
 export function canUserViewChannel(username: string, channelId: ChannelID): boolean {
   const permissions = getUserPermissions(username);
   if (permissions === null) {
@@ -231,7 +208,6 @@ export function canUserViewChannel(username: string, channelId: ChannelID): bool
   }
 }
 
-// Main authentication function
 export async function checkUsernamePassword(username: string, password: string): Promise<string | null> {
   const user = getUserByUsernameStmt.get(username) as User | undefined;
   if (!user) {
