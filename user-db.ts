@@ -171,7 +171,7 @@ export async function addUser(
   userPermissionsCache.delete(username);
 }
 
-function getUserPermissions(username: string): Permissions {
+export function getUserPermissions(username: string): Permissions {
   const cached = userPermissionsCache.get(username);
   if (cached) {
     return cached;

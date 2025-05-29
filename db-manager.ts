@@ -162,8 +162,27 @@ export function resetMediaInDb() {
   resetChannels.run();
 }
 
-export function getRecentVideos(limit: number = 30, offset: number = 0): VideoWithChannel[] {
-  const rows = getRecentVideosStmt.all(limit, offset) as any[];
+export function getRecentVideosForChannels(channelIds: ChannelID[] | null, limit: number = 30, offset: number = 0): VideoWithChannel[] {
+  if (channelIds == null) {
+    const rows = getRecentVideosStmt.all(limit, offset) as any[];
+    return rows.map(row => ({
+      ...row,
+      subtitle_languages: JSON.parse(row.subtitle_languages)
+    }));
+  }
+  if (channelIds.length === 0) return [];
+
+  const placeholders = channelIds.map(() => '?').join(',');
+  const stmt = db!.prepare(`
+    SELECT v.*, c.channel, c.short_id as channel_short_id
+    FROM videos v
+    JOIN channels c ON v.channel_id = c.channel_id
+    WHERE v.channel_id IN (${placeholders})
+    ORDER BY v.upload_timestamp DESC
+    LIMIT ? OFFSET ?
+  `);
+
+  const rows = stmt.all(...channelIds, limit, offset) as any[];
   return rows.map(row => ({
     ...row,
     subtitle_languages: JSON.parse(row.subtitle_languages)

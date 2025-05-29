@@ -2,9 +2,9 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
-import { getRecentVideos, getVideoById, getChannelByShortId, getVideosByChannel } from './db-manager.ts';
-import { nameExt, type VideoID } from './util.ts';
-import { checkUsernamePassword, decodeBearerToken } from './user-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel } from './db-manager.ts';
+import { nameExt, type VideoID, type ChannelID } from './util.ts';
+import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions } from './user-db.ts';
 
 // Extend Request interface to include username
 declare global {
@@ -83,6 +83,53 @@ function formatDuration(seconds: number): string {
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString();
+}
+
+function renderNotAllowed(username: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Not Allowed - LocalTube</title>
+  <style>
+    ${commonCSS}
+    body { margin: 20px; }
+    .not-allowed-container { max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+    .not-allowed-title { color: #d32f2f; font-size: 24px; margin-bottom: 20px; }
+    .not-allowed-message { color: #666; line-height: 1.5; margin-bottom: 30px; }
+    .home-button { display: inline-block; background: #1976d2; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; }
+    .home-button:hover { background: #1565c0; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="user-info">
+      <span class="username">${username}</span>
+      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+    </div>
+  </div>
+  <div class="not-allowed-container">
+    <div class="not-allowed-title">Access Not Allowed</div>
+    <div class="not-allowed-message">
+      You don't have permission to view this content.<br>
+      Your account has restricted access to specific channels only.
+    </div>
+    <a href="/" class="home-button">Return Home</a>
+  </div>
+  <script>
+    function logout() {
+      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/login';
+    }
+  </script>
+</body>
+</html>`;
+}
+
+function getUserAllowedChannels(username: string): ChannelID[] | null {
+  const permissions = getUserPermissions(username);
+  if (permissions.userKind === 'full') return null;
+  return Array.from(permissions.allowedChannels);
 }
 
 function renderVideoCard(video: any, showChannel: boolean = true): string {
@@ -280,7 +327,9 @@ app.get('/login', (req: Request, res: Response): void => {
 
 // Homepage
 app.get('/', (req, res) => {
-  const videos = getRecentVideos(30);
+  const allowedChannels = getUserAllowedChannels(req.username!);
+  const videos = getRecentVideosForChannels(allowedChannels, 30);
+
   res.send(`
 <!DOCTYPE html>
 <html>
@@ -328,6 +377,11 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     return;
   }
 
+  if (!canUserViewChannel(req.username!, video.channel_id)) {
+    res.send(renderNotAllowed(req.username!));
+    return;
+  }
+
   res.send(`
 <!DOCTYPE html>
 <html>
@@ -338,10 +392,9 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     body { margin: 0;  }
     .video-section { background: #000; background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
     video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
-    .video-info { margin-top: 15px; }
     .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
     .channel-info { display: flex; align-items: center; margin-bottom: 15px; }
-    .channel-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; }
+    .channel-avatar { border-radius: 50%; margin-right: 10px; }
   </style>
 </head>
 <body>
@@ -367,7 +420,7 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     <div class="video-info">
       <div class="video-title">${video.title}</div>
       <div class="channel-info">
-        ${video.avatar_filename ? `<img class="channel-avatar" src="/media/${video.channel_id}/${video.avatar_filename}" alt="${video.channel}">` : ''}
+        ${video.avatar_filename ? `<img class="channel-avatar" width=40 height=40 src="/media/${video.channel_id}/${video.avatar_filename}" alt="${video.channel}">` : ''}
         <a href="/c/${video.channel_short_id}" class="channel-name">${video.channel}</a>
       </div>
       <div class="description">${video.description}</div>
@@ -389,6 +442,11 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   const channel = getChannelByShortId(req.params.short_id);
   if (!channel) {
     res.status(404).send('Channel not found');
+    return;
+  }
+
+  if (!canUserViewChannel(req.username!, channel.channel_id)) {
+    res.send(renderNotAllowed(req.username!));
     return;
   }
 
@@ -421,7 +479,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   </div>
   <div class="channel-header">
     <div class="channel-info">
-      ${channel.avatar_filename ? `<img class="channel-avatar" src="/media/${channel.channel_id}/${channel.avatar_filename}" alt="${channel.channel}">` : ''}
+      ${channel.avatar_filename ? `<img class="channel-avatar" width=80 height=80 src="/media/${channel.channel_id}/${channel.avatar_filename}" alt="${channel.channel}">` : ''}
       <div class="channel-details">
         <h1>${channel.channel}</h1>
         ${channel.description ? `<div class="channel-description">${channel.description}</div>` : ''}
@@ -472,7 +530,10 @@ app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
 app.get('/api/videos', (req: Request, res: Response): void => {
   const offset = parseInt(req.query.offset as string) || 0;
   const limit = parseInt(req.query.limit as string) || 30;
-  const videos = getRecentVideos(limit, offset);
+
+  const allowedChannels = getUserAllowedChannels(req.username!);
+  const videos = getRecentVideosForChannels(allowedChannels, limit, offset);
+
   res.json(videos);
 });
 
@@ -480,6 +541,11 @@ app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => 
   const channel = getChannelByShortId(req.params.short_id);
   if (!channel) {
     res.status(404).json({ error: 'Channel not found' });
+    return;
+  }
+
+  if (!canUserViewChannel(req.username!, channel.channel_id)) {
+    res.status(403).json({ error: 'Access denied' });
     return;
   }
 
