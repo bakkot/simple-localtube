@@ -28,7 +28,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Auth middleware - must be first to protect everything
-app.use('/', (req: Request, res: Response, next: NextFunction): void => {
+app.use((req: Request, res: Response, next: NextFunction): void => {
   // Skip login routes
   if (req.path === '/login' || req.path === '/api/login') {
     return next();

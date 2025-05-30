@@ -17,3 +17,17 @@ todo consistency for node:foo vs foo
 todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
 
 TODO future-compat for non-youtube
+
+
+- /public-api
+- notify-video endpoint
+- notify-channel endpoint
+- db should store full paths to various files (relative to media dir)
+- rescan should be a seperate script and should hit the notify-video endpoint
+  - have a healthcheck too
+- pull out the yt-dlp stuff
+- test w/ pinchflat, have sample lifecycle script
+- placeholder avatar
+
+- create user page
+- change permissions to a JSON blob
