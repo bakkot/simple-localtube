@@ -115,8 +115,7 @@ function renderNotAllowed(username: string): string {
   <div class="not-allowed-container">
     <div class="not-allowed-title">Access Not Allowed</div>
     <div class="not-allowed-message">
-      You don't have permission to view this content.<br>
-      Your account has restricted access to specific channels only.
+      You don't have permission to view this content.
     </div>
     <a href="/" class="home-button">Return Home</a>
   </div>
@@ -588,13 +587,12 @@ app.get('/add-user', (req: Request, res: Response): void => {
 
       <div class="permission-section">
         <h3>Channel Permissions</h3>
+        ${userPermissions.allowedChannels === 'all' ? `
         <div class="radio-group">
-          ${userPermissions.allowedChannels === 'all' ? `
           <div class="radio-option">
             <input type="radio" id="perm-all" name="permissions" value="all" required>
             <label for="perm-all">Access to all channels</label>
           </div>
-          ` : ''}
           <div class="radio-option">
             <input type="radio" id="perm-allowlist" name="permissions" value="allowlist" required>
             <label for="perm-allowlist">Access to selected channels only</label>
@@ -615,6 +613,24 @@ app.get('/add-user', (req: Request, res: Response): void => {
             `).join('')}
           </div>
         </div>
+        ` : `
+        <input type="hidden" name="permissions" value="allowlist">
+        <p>Select channels to grant access to:</p>
+        <div class="channels-section visible">
+          <div class="channel-controls">
+            <button type="button" onclick="selectAllChannels()">Enable All</button>
+            <button type="button" onclick="deselectAllChannels()">Disable All</button>
+          </div>
+          <div class="channels-list">
+            ${availableChannels.map(channel => `
+              <div class="channel-option">
+                <input type="checkbox" id="channel-${channel.channel_id}" name="channels" value="${channel.channel_id}">
+                <label for="channel-${channel.channel_id}">${channel.channel}</label>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        `}
       </div>
 
       <button type="submit" class="create-button" id="createButton">Create User</button>
@@ -630,6 +646,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
     const message = document.getElementById('message');
 
     function updateChannelsVisibility() {
+      if (!channelsSection) return; // it is always visible for restricted users
       const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
       if (selectedPermission === 'allowlist') {
         channelsSection.classList.add('visible');
@@ -664,7 +681,8 @@ app.get('/add-user', (req: Request, res: Response): void => {
 
       const username = document.getElementById('username').value;
       const password = document.getElementById('password').value;
-      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
+      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value ||
+                                document.querySelector('input[name="permissions"][type="hidden"]')?.value;
       const createUser = document.querySelector('input[name="createUser"]:checked')?.value === 'true';
 
       if (!selectedPermission) {
