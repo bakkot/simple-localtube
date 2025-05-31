@@ -79,6 +79,10 @@ let addUserStmt = db.prepare(`
   VALUES (:username, :hashed_password, :salt, :permissions)
 `);
 
+let hasAnyUsersStmt = db.prepare(`
+  SELECT 1 FROM users LIMIT 1
+`);
+
 async function hashPassword(password: string, salt: Buffer, pepper: Buffer): Promise<Buffer> {
   const normalizedPassword = password.normalize('NFC');
   const passwordWithPepper = normalizedPassword + pepper.toString('base64');
@@ -211,6 +215,10 @@ export function getUserPermissions(username: string): Permissions {
 export function canUserViewChannel(username: string, channelId: ChannelID): boolean {
   const permissions = getUserPermissions(username);
   return permissions.allowedChannels === 'all' || permissions.allowedChannels.has(channelId);
+}
+
+export function hasAnyUsers(): boolean {
+  return !!hasAnyUsersStmt.get();
 }
 
 export async function checkUsernamePassword(username: string, password: string): Promise<string | null> {

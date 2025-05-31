@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
-import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser } from './user-db.ts';
+import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers } from './user-db.ts';
 
 // Extend Request interface to include username
 declare global {
@@ -29,9 +29,19 @@ app.use(cookieParser());
 
 // Auth middleware - must be first to protect everything
 app.use((req: Request, res: Response, next: NextFunction): void => {
-  // Skip login routes
-  if (req.path === '/login' || req.path === '/api/login') {
+  // Skip login and setup routes
+  if (req.path === '/login' || req.path === '/api/login' || req.path === '/setup' || req.path === '/api/setup') {
     return next();
+  }
+
+  // Check if any users exist - if not, redirect to setup
+  if (!hasAnyUsers()) {
+    if (req.path.startsWith('/api') || req.method !== 'GET') {
+      res.status(403).json({ message: 'Setup required' });
+      return;
+    }
+    res.redirect('/setup');
+    return;
   }
 
   // Validate auth cookie
@@ -234,6 +244,101 @@ const commonCSS = `
   a { text-decoration: none; }
   .loading { text-align: center; padding: 30px 20px; color: #666; }
 `;
+
+app.get('/setup', (req: Request, res: Response): void => {
+  // If users already exist, redirect to login
+  if (hasAnyUsers()) {
+    res.redirect('/login');
+    return;
+  }
+
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Setup - LocalTube</title>
+  <style>
+    ${commonCSS}
+    .setup-container { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .setup-form { display: flex; flex-direction: column; gap: 15px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    label { font-weight: bold; color: #333; }
+    input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+    input[type="text"]:focus, input[type="password"]:focus { outline: none; border-color: #1976d2; }
+    .setup-button { background: #1976d2; color: white; padding: 12px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+    .setup-button:hover { background: #1565c0; }
+    .setup-button:disabled { background: #ccc; cursor: not-allowed; }
+    .error { color: #d32f2f; font-size: 14px; margin-top: 10px; }
+    .success { color: #388e3c; font-size: 14px; margin-top: 10px; }
+    h1 { text-align: center; color: #333; margin-bottom: 10px; }
+    .setup-info { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <div class="setup-container">
+    <h1>Welcome to LocalTube</h1>
+    <div class="setup-info">
+      No users have been configured yet. Please create the first account to get started.
+    </div>
+    <form class="setup-form" id="setupForm">
+      <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button type="submit" class="setup-button" id="setupButton">Create Account</button>
+      <div id="message"></div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('setupForm');
+    const button = document.getElementById('setupButton');
+    const message = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      button.disabled = true;
+      button.textContent = 'Creating Account...';
+      message.textContent = '';
+      message.className = '';
+
+      try {
+        const response = await fetch('/api/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+          message.textContent = 'Account created successfully! Redirecting to login...';
+          message.className = 'success';
+          setTimeout(() => { window.location.href = '/login'; }, 1500);
+          return;
+        } else {
+          const error = await response.json();
+          message.textContent = error.message || 'Setup failed';
+          message.className = 'error';
+        }
+      } catch (err) {
+        message.textContent = 'Network error. Please try again.';
+        message.className = 'error';
+      }
+
+      button.disabled = false;
+      button.textContent = 'Create Administrator Account';
+    });
+  </script>
+</body>
+</html>`);
+});
 
 app.get('/login', (req: Request, res: Response): void => {
   res.send(`
@@ -768,6 +873,43 @@ app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.post('/api/setup', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Security check: ensure no users exist
+    if (hasAnyUsers()) {
+      res.status(403).json({ message: 'Setup has already been completed' });
+      return;
+    }
+
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      res.status(400).json({ message: 'Username and password are required' });
+      return;
+    }
+
+    if (typeof username !== 'string' || typeof password !== 'string') {
+      res.status(400).json({ message: 'Username and password must be strings' });
+      return;
+    }
+
+    // Create first user with full admin permissions
+    await addUser(username, password, {
+      allowedChannels: 'all',
+      createUser: true
+    });
+
+    res.json({ message: 'Administrator account created successfully' });
+  } catch (error: any) {
+    console.error('Setup error:', error);
+    if (error.message === 'User already exists') {
+      res.status(409).json({ message: 'Username already exists' });
+    } else {
+      res.status(500).json({ message: 'Internal server error' });
+    }
   }
 });
 
