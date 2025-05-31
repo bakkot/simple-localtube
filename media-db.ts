@@ -223,6 +223,23 @@ export function getAllChannels(): { channel_id: ChannelID; channel: string }[] {
   return getAllChannelsStmt.all() as { channel_id: ChannelID; channel: string }[];
 }
 
+export function getChannelsForUser(allowedChannels: Set<ChannelID> | 'all'): { channel_id: ChannelID; channel: string }[] {
+  if (allowedChannels === 'all') {
+    return getAllChannelsStmt.all() as { channel_id: ChannelID; channel: string }[];
+  }
+
+  if (allowedChannels.size === 0) return [];
+
+  const placeholders = [...allowedChannels].map(() => '?').join(',');
+  const stmt = db!.prepare(`
+    SELECT channel_id, channel FROM channels
+    WHERE channel_id IN (${placeholders})
+    ORDER BY channel
+  `);
+
+  return stmt.all(...allowedChannels) as { channel_id: ChannelID; channel: string }[];
+}
+
 export function closeDb(): void {
   if (db) {
     console.log('Closing database connection.');

@@ -2,7 +2,7 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser } from './user-db.ts';
 
@@ -46,7 +46,12 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
 
       // valid token but can't get permissions = user has been deleted
       // getUserPermissions throws on unrecognized users
-      getUserPermissions(username);
+      try {
+        getUserPermissions(username);
+      } catch (e) {
+        console.error(`user does not exist: ${username}`);
+        throw e;
+      }
       isAuthenticated = true;
     } catch {
       isAuthenticated = false;
@@ -510,12 +515,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
     return;
   }
 
-  const allChannels = getAllChannels();
-  const currentUserChannels = userPermissions.allowedChannels;
-
-  const availableChannels = currentUserChannels === 'all'
-    ? allChannels
-    : allChannels.filter(channel => currentUserChannels.has(channel.channel_id));
+  const availableChannels = getChannelsForUser(userPermissions.allowedChannels);
 
   res.send(`
 <!DOCTYPE html>

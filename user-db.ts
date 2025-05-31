@@ -151,7 +151,7 @@ function parsePermissions(permissionsString: string): Permissions {
     throw new Error('malformed permissions');
   }
   return {
-    allowedChannels: new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && channelExists(c as ChannelID))),
+    allowedChannels: allowedChannels === 'all' ? 'all' : new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && channelExists(c as ChannelID))),
     createUser,
   };
 }
