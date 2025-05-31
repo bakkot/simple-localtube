@@ -245,6 +245,22 @@ const commonCSS = `
   .loading { text-align: center; padding: 30px 20px; color: #666; }
 `;
 
+const formPageCSS = `
+  .form-container { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .form-container h1 { text-align: center; color: #333; margin-bottom: 30px; }
+  .page-form { display: flex; flex-direction: column; gap: 15px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  label { font-weight: bold; color: #333; }
+  input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+  input[type="text"]:focus, input[type="password"]:focus { outline: none; border-color: #1976d2; }
+  .form-button { background: #1976d2; color: white; padding: 12px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+  .form-button:hover { background: #1565c0; }
+  .form-button:disabled { background: #ccc; cursor: not-allowed; }
+  .error { color: #d32f2f; font-size: 14px; margin-top: 10px; }
+  .success { color: #388e3c; font-size: 14px; margin-top: 10px; }
+  .form-info { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; line-height: 1.4; }
+`;
+
 app.get('/setup', (req: Request, res: Response): void => {
   // If users already exist, redirect to login
   if (hasAnyUsers()) {
@@ -259,28 +275,16 @@ app.get('/setup', (req: Request, res: Response): void => {
   <title>Setup - LocalTube</title>
   <style>
     ${commonCSS}
-    .setup-container { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .setup-form { display: flex; flex-direction: column; gap: 15px; }
-    .form-group { display: flex; flex-direction: column; gap: 5px; }
-    label { font-weight: bold; color: #333; }
-    input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
-    input[type="text"]:focus, input[type="password"]:focus { outline: none; border-color: #1976d2; }
-    .setup-button { background: #1976d2; color: white; padding: 12px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
-    .setup-button:hover { background: #1565c0; }
-    .setup-button:disabled { background: #ccc; cursor: not-allowed; }
-    .error { color: #d32f2f; font-size: 14px; margin-top: 10px; }
-    .success { color: #388e3c; font-size: 14px; margin-top: 10px; }
-    h1 { text-align: center; color: #333; margin-bottom: 10px; }
-    .setup-info { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; line-height: 1.4; }
+    ${formPageCSS}
   </style>
 </head>
 <body>
-  <div class="setup-container">
+  <div class="form-container">
     <h1>Welcome to LocalTube</h1>
-    <div class="setup-info">
+    <div class="form-info">
       No users have been configured yet. Please create the first account to get started.
     </div>
-    <form class="setup-form" id="setupForm">
+    <form class="page-form" id="setupForm">
       <div class="form-group">
         <label for="username">Username:</label>
         <input type="text" id="username" name="username" required>
@@ -289,7 +293,7 @@ app.get('/setup', (req: Request, res: Response): void => {
         <label for="password">Password:</label>
         <input type="password" id="password" name="password" required>
       </div>
-      <button type="submit" class="setup-button" id="setupButton">Create Account</button>
+      <button type="submit" class="form-button" id="setupButton">Create Account</button>
       <div id="message"></div>
     </form>
   </div>
@@ -333,7 +337,7 @@ app.get('/setup', (req: Request, res: Response): void => {
       }
 
       button.disabled = false;
-      button.textContent = 'Create Administrator Account';
+      button.textContent = 'Create Account';
     });
   </script>
 </body>
@@ -362,24 +366,13 @@ app.get('/login', (req: Request, res: Response): void => {
   <title>Login - LocalTube</title>
   <style>
     ${commonCSS}
-    .login-container { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .login-form { display: flex; flex-direction: column; gap: 15px; }
-    .form-group { display: flex; flex-direction: column; gap: 5px; }
-    label { font-weight: bold; color: #333; }
-    input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
-    input[type="text"]:focus, input[type="password"]:focus { outline: none; border-color: #1976d2; }
-    .login-button { background: #1976d2; color: white; padding: 12px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
-    .login-button:hover { background: #1565c0; }
-    .login-button:disabled { background: #ccc; cursor: not-allowed; }
-    .error { color: #d32f2f; font-size: 14px; margin-top: 10px; }
-    .success { color: #388e3c; font-size: 14px; margin-top: 10px; }
-    h1 { text-align: center; color: #333; margin-bottom: 30px; }
+    ${formPageCSS}
   </style>
 </head>
 <body>
-  <div class="login-container">
+  <div class="form-container">
     <h1>Login to LocalTube</h1>
-    <form class="login-form" id="loginForm">
+    <form class="page-form" id="loginForm">
       <div class="form-group">
         <label for="username">Username:</label>
         <input type="text" id="username" name="username" required>
@@ -388,7 +381,7 @@ app.get('/login', (req: Request, res: Response): void => {
         <label for="password">Password:</label>
         <input type="password" id="password" name="password" required>
       </div>
-      <button type="submit" class="login-button" id="loginButton">Login</button>
+      <button type="submit" class="form-button" id="loginButton">Login</button>
       <div id="message"></div>
     </form>
   </div>
@@ -643,14 +636,11 @@ app.get('/add-user', (req: Request, res: Response): void => {
   <title>Add User - LocalTube</title>
   <style>
     ${commonCSS}
+    ${formPageCSS}
     body { margin: 20px; }
-    .add-user-container { max-width: 600px; margin: 20px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; }
-    label { font-weight: bold; color: #333; }
-    input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
-    input[type="text"]:focus, input[type="password"]:focus { outline: none; border-color: #1976d2; }
-    .permission-section { margin-bottom: 20px; }
-    .permission-section h3 { color: #333; margin-bottom: 15px; }
+    .form-container { max-width: 600px; margin: 20px auto; }
+    .form-group { margin-bottom: 20px; }
+    .permission-section h3 { color: #333; margin-bottom: 15px; margin-top: 0px; }
     .radio-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
     .radio-option { display: flex; align-items: center; gap: 8px; }
     .radio-option input[type="radio"] { margin: 0; }
@@ -662,12 +652,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
     .channels-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
     .channel-option { display: flex; align-items: center; gap: 8px; }
     .channel-option input[type="checkbox"] { margin: 0; }
-    .create-button { background: #1976d2; color: white; padding: 12px 24px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; width: 100%; }
-    .create-button:hover { background: #1565c0; }
-    .create-button:disabled { background: #ccc; cursor: not-allowed; }
-    .error { color: #d32f2f; font-size: 14px; margin-top: 10px; }
-    .success { color: #388e3c; font-size: 14px; margin-top: 10px; }
-    h1 { color: #333; margin-bottom: 30px; }
+    .form-button { width: 100%; }
   </style>
 </head>
 <body>
@@ -678,9 +663,9 @@ app.get('/add-user', (req: Request, res: Response): void => {
       <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
     </div>
   </div>
-  <div class="add-user-container">
+  <div class="form-container">
     <h1>Add New User</h1>
-    <form id="addUserForm">
+    <form class="page-form" id="addUserForm">
       <div class="form-group">
         <label for="username">Username:</label>
         <input type="text" id="username" name="username" required>
@@ -752,7 +737,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
         `}
       </div>
 
-      <button type="submit" class="create-button" id="createButton">Create User</button>
+      <button type="submit" class="form-button" id="createButton">Create User</button>
       <div id="message"></div>
     </form>
   </div>
