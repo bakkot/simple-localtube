@@ -28,7 +28,3 @@ TODO future-compat for non-youtube
 - pull out the yt-dlp stuff
 - test w/ pinchflat, have sample lifecycle script
 - placeholder avatar
-- login page should redirect to home when logged in
-
-- create user page
-- change permissions to a JSON blob

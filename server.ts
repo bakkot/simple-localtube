@@ -341,6 +341,20 @@ app.get('/setup', (req: Request, res: Response): void => {
 });
 
 app.get('/login', (req: Request, res: Response): void => {
+  // Check if user is already authenticated
+  const authCookie = req.cookies?.auth;
+  if (authCookie) {
+    try {
+      const payload = decodeBearerToken(authCookie);
+      getUserPermissions(payload.username); // This will throw if user doesn't exist
+      // User is authenticated, redirect to home
+      res.redirect('/');
+      return;
+    } catch {
+      // Invalid or expired token, continue to login page
+    }
+  }
+
   res.send(`
 <!DOCTYPE html>
 <html>
