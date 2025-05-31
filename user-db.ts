@@ -13,22 +13,26 @@ const scryptAsync = promisify(scrypt);
 const USER_DB_PATH = path.join(import.meta.dirname, './user_data.sqlite');
 const KEYS_PATH = path.join(import.meta.dirname, './keys.json');
 
-interface Keys {
+type Keys = {
   pepper: Buffer;
   hmacKey: Buffer;
 }
 
-interface User {
+type User = {
   username: string;
   hashed_password: Buffer;
   salt: Buffer;
-  user_kind: 'full' | 'restricted';
-  allowed_channels: string | null; // JSON array of channel IDs or null
+  permissions: Permissions;
 }
+
+type Permissions = {
+  allowedChannels: Set<ChannelID> | 'all';
+  createUser: boolean;
+};
+
 
 let db: DatabaseSync | undefined = new DatabaseSync(USER_DB_PATH);
 
-type Permissions =  { userKind: 'full' } | { userKind: 'restricted'; allowedChannels: Set<ChannelID> };
 
 const userPermissionsCache = new LRUCache<string, Permissions>(100);
 
@@ -39,8 +43,7 @@ if (existing.length === 0) {
         username TEXT PRIMARY KEY,
         hashed_password BLOB NOT NULL,
         salt BLOB NOT NULL,
-        user_kind TEXT NOT NULL,
-        allowed_channels TEXT
+        permissions TEXT NOT NULL -- stored as JSON for future compat; we cache on user load anyway
     ) STRICT;
   `);
 } else if (!(new Set(existing)).isSubsetOf(new Set(['users']))) {
@@ -72,8 +75,8 @@ let getUserByUsernameStmt = db.prepare(`
 `);
 
 let addUserStmt = db.prepare(`
-  INSERT INTO users (username, hashed_password, salt, user_kind, allowed_channels)
-  VALUES (?, ?, ?, ?, ?)
+  INSERT INTO users (username, hashed_password, salt, permissions)
+  VALUES (:username, :hashed_password, :salt, :permissions)
 `);
 
 async function hashPassword(password: string, salt: Buffer, pepper: Buffer): Promise<Buffer> {
@@ -142,19 +145,36 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
   return payload;
 }
 
+function parsePermissions(permissionsString: string): Permissions {
+  let { allowedChannels, createUser } = JSON.parse(permissionsString);
+  if (allowedChannels !== 'all' && !Array.isArray(allowedChannels) || typeof createUser != 'boolean') {
+    throw new Error('malformed permissions');
+  }
+  return {
+    allowedChannels,
+    createUser,
+  };
+}
+
+function serializePermissions(permissions: Permissions): string {
+  return JSON.stringify({
+    allowedChannels: permissions.allowedChannels === 'all' ? 'all' : [...permissions.allowedChannels],
+    createUser: permissions.createUser,
+  });
+}
+
 export async function addUser(
   username: string,
   password: string,
-  userKind: 'full' | 'restricted',
-  allowedChannels?: string[]
+  permissions: Permissions,
 ): Promise<void> {
   const existingUser = getUserByUsernameStmt.get(username);
   if (existingUser) {
     throw new Error('User already exists');
   }
 
-  if (allowedChannels) {
-    for (const channelId of allowedChannels) {
+  if (permissions.allowedChannels !== 'all') {
+    for (const channelId of permissions.allowedChannels) {
       if (!channelExists(channelId as ChannelID)) {
         throw new Error(`Channel '${channelId}' does not exist`);
       }
@@ -164,11 +184,12 @@ export async function addUser(
   const salt = randomBytes(32);
   const hashedPassword = await hashPassword(password, salt, keys.pepper);
 
-  const allowedChannelsJson = allowedChannels ? JSON.stringify(allowedChannels) : null;
-
-  addUserStmt.run(username, hashedPassword, salt, userKind, allowedChannelsJson);
-
-  userPermissionsCache.delete(username);
+  addUserStmt.run({
+    ':username': username,
+    ':hashed_password': hashedPassword,
+    ':salt': salt,
+    'permissions': serializePermissions(permissions),
+  });
 }
 
 export function getUserPermissions(username: string): Permissions {
@@ -177,35 +198,19 @@ export function getUserPermissions(username: string): Permissions {
     return cached;
   }
 
-  const user = getUserByUsernameStmt.get(username) as User | undefined;
+  const user = getUserByUsernameStmt.get(username) as { permissions: string } | undefined;
   if (!user) {
     throw new Error(`unrecognized user ${username}`);
   }
 
-  let permissions: Permissions;
-  if (user.user_kind === 'full') {
-    permissions = { userKind: 'full' };
-  } else {
-    const channelList = user.allowed_channels ? JSON.parse(user.allowed_channels) as ChannelID[] : [];
-    permissions = { userKind: 'restricted', allowedChannels: new Set(channelList) };
-  }
-
+  let permissions = parsePermissions(user.permissions);
   userPermissionsCache.set(username, permissions);
-
   return permissions;
 }
 
 export function canUserViewChannel(username: string, channelId: ChannelID): boolean {
   const permissions = getUserPermissions(username);
-  if (permissions === null) {
-    throw new Error(`unrecognized user ${username}`);
-  }
-
-  if (permissions.userKind === 'full') {
-    return true;
-  } else {
-    return permissions.allowedChannels.has(channelId);
-  }
+  return permissions.allowedChannels === 'all' || permissions.allowedChannels.has(channelId);
 }
 
 export async function checkUsernamePassword(username: string, password: string): Promise<string | null> {

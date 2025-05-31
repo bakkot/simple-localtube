@@ -43,6 +43,10 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
     try {
       const payload = decodeBearerToken(authCookie);
       username = payload.username;
+
+      // valid token but can't get permissions = user has been deleted
+      // getUserPermissions throws on unrecognized users
+      getUserPermissions(username);
       isAuthenticated = true;
     } catch {
       isAuthenticated = false;
@@ -124,12 +128,6 @@ function renderNotAllowed(username: string): string {
   </script>
 </body>
 </html>`;
-}
-
-function getUserAllowedChannels(username: string): ChannelID[] | null {
-  const permissions = getUserPermissions(username);
-  if (permissions.userKind === 'full') return null;
-  return Array.from(permissions.allowedChannels);
 }
 
 function renderVideoCard(video: any, showChannel: boolean = true): string {
@@ -327,7 +325,7 @@ app.get('/login', (req: Request, res: Response): void => {
 
 // Homepage
 app.get('/', (req, res) => {
-  const allowedChannels = getUserAllowedChannels(req.username!);
+  const allowedChannels = getUserPermissions(req.username!).allowedChannels;
   const videos = getRecentVideosForChannels(allowedChannels, 30);
 
   res.send(`
@@ -531,7 +529,7 @@ app.get('/api/videos', (req: Request, res: Response): void => {
   const offset = parseInt(req.query.offset as string) || 0;
   const limit = parseInt(req.query.limit as string) || 30;
 
-  const allowedChannels = getUserAllowedChannels(req.username!);
+  const allowedChannels = getUserPermissions(req.username!).allowedChannels;
   const videos = getRecentVideosForChannels(allowedChannels, limit, offset);
 
   res.json(videos);

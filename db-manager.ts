@@ -162,17 +162,18 @@ export function resetMediaInDb() {
   resetChannels.run();
 }
 
-export function getRecentVideosForChannels(channelIds: ChannelID[] | null, limit: number = 30, offset: number = 0): VideoWithChannel[] {
-  if (channelIds == null) {
+export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', limit: number = 30, offset: number = 0): VideoWithChannel[] {
+  if (channelIds === 'all') {
     const rows = getRecentVideosStmt.all(limit, offset) as any[];
     return rows.map(row => ({
       ...row,
       subtitle_languages: JSON.parse(row.subtitle_languages)
     }));
   }
-  if (channelIds.length === 0) return [];
+  if (channelIds.size === 0) return [];
 
-  const placeholders = channelIds.map(() => '?').join(',');
+  // TODO someday we should probably cache this
+  const placeholders = [...channelIds].map(() => '?').join(',');
   const stmt = db!.prepare(`
     SELECT v.*, c.channel, c.short_id as channel_short_id
     FROM videos v
