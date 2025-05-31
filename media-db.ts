@@ -99,6 +99,10 @@ let channelExistsStmt = db.prepare(`
   SELECT 1 FROM channels WHERE channel_id = ? LIMIT 1
 `);
 
+let getAllChannelsStmt = db.prepare(`
+  SELECT channel_id, channel FROM channels ORDER BY channel
+`);
+
 export interface Channel {
   channel_id: ChannelID;
   channel: string;
@@ -213,6 +217,10 @@ export function getVideosByChannel(channelId: ChannelID, limit: number = 30, off
 
 export function channelExists(channelId: ChannelID): boolean {
   return !!channelExistsStmt.get(channelId);
+}
+
+export function getAllChannels(): { channel_id: ChannelID; channel: string }[] {
+  return getAllChannelsStmt.all() as { channel_id: ChannelID; channel: string }[];
 }
 
 export function closeDb(): void {

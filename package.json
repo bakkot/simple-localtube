@@ -1,7 +1,8 @@
 {
   "scripts": {
     "start": "node server.ts",
-    "dev": "node --watch server.ts"
+    "dev": "node --watch server.ts",
+    "typecheck": "tsc"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

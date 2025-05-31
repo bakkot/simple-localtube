@@ -2,9 +2,9 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
-import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions } from './user-db.ts';
+import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser } from './user-db.ts';
 
 // Extend Request interface to include username
 declare global {
@@ -502,6 +502,205 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
 </html>`);
 });
 
+// Add user page
+app.get('/add-user', (req: Request, res: Response): void => {
+  const userPermissions = getUserPermissions(req.username!);
+  
+  if (!userPermissions.createUser) {
+    res.send(renderNotAllowed(req.username!));
+    return;
+  }
+
+  const allChannels = getAllChannels();
+  const currentUserChannels = userPermissions.allowedChannels;
+  const availableChannels = currentUserChannels === 'all' 
+    ? allChannels 
+    : allChannels.filter(channel => currentUserChannels.has(channel.channel_id));
+
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Add User - LocalTube</title>
+  <style>
+    ${commonCSS}
+    body { margin: 20px; }
+    .add-user-container { max-width: 600px; margin: 20px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; }
+    label { font-weight: bold; color: #333; }
+    input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+    input[type="text"]:focus, input[type="password"]:focus { outline: none; border-color: #1976d2; }
+    .permission-section { margin-bottom: 20px; }
+    .permission-section h3 { color: #333; margin-bottom: 15px; }
+    .radio-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+    .radio-option { display: flex; align-items: center; gap: 8px; }
+    .radio-option input[type="radio"] { margin: 0; }
+    .channels-section { display: none; }
+    .channels-section.visible { display: block; }
+    .channel-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+    .channel-controls button { padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
+    .channel-controls button:hover { background: #f5f5f5; }
+    .channels-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
+    .channel-option { display: flex; align-items: center; gap: 8px; }
+    .channel-option input[type="checkbox"] { margin: 0; }
+    .create-button { background: #1976d2; color: white; padding: 12px 24px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; width: 100%; }
+    .create-button:hover { background: #1565c0; }
+    .create-button:disabled { background: #ccc; cursor: not-allowed; }
+    .error { color: #d32f2f; font-size: 14px; margin-top: 10px; }
+    .success { color: #388e3c; font-size: 14px; margin-top: 10px; }
+    h1 { color: #333; margin-bottom: 30px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a href="/" class="back-link">← Back to Home</a>
+    <div class="user-info">
+      <span class="username">${req.username}</span>
+      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+    </div>
+  </div>
+  <div class="add-user-container">
+    <h1>Add New User</h1>
+    <form id="addUserForm">
+      <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      
+      <div class="permission-section">
+        <h3>Channel Permissions</h3>
+        <div class="radio-group">
+          ${userPermissions.allowedChannels === 'all' ? `
+          <div class="radio-option">
+            <input type="radio" id="perm-all" name="permissions" value="all">
+            <label for="perm-all">Access to all channels</label>
+          </div>
+          ` : ''}
+          <div class="radio-option">
+            <input type="radio" id="perm-allowlist" name="permissions" value="allowlist" ${userPermissions.allowedChannels === 'all' ? '' : 'checked'}>
+            <label for="perm-allowlist">Access to selected channels only</label>
+          </div>
+        </div>
+        
+        <div class="channels-section" id="channelsSection">
+          <div class="channel-controls">
+            <button type="button" onclick="selectAllChannels()">Enable All</button>
+            <button type="button" onclick="deselectAllChannels()">Disable All</button>
+          </div>
+          <div class="channels-list">
+            ${availableChannels.map(channel => `
+              <div class="channel-option">
+                <input type="checkbox" id="channel-${channel.channel_id}" name="channels" value="${channel.channel_id}">
+                <label for="channel-${channel.channel_id}">${channel.channel}</label>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+      
+      <button type="submit" class="create-button" id="createButton">Create User</button>
+      <div id="message"></div>
+    </form>
+  </div>
+
+  <script>
+    const permissionRadios = document.querySelectorAll('input[name="permissions"]');
+    const channelsSection = document.getElementById('channelsSection');
+    const form = document.getElementById('addUserForm');
+    const button = document.getElementById('createButton');
+    const message = document.getElementById('message');
+
+    function updateChannelsVisibility() {
+      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
+      if (selectedPermission === 'allowlist') {
+        channelsSection.classList.add('visible');
+      } else {
+        channelsSection.classList.remove('visible');
+      }
+    }
+
+    permissionRadios.forEach(radio => {
+      radio.addEventListener('change', updateChannelsVisibility);
+    });
+
+    function selectAllChannels() {
+      document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
+        checkbox.checked = true;
+      });
+    }
+
+    function deselectAllChannels() {
+      document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
+        checkbox.checked = false;
+      });
+    }
+
+    function logout() {
+      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/login';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
+      
+      let allowedChannels;
+      if (selectedPermission === 'all') {
+        allowedChannels = 'all';
+      } else {
+        allowedChannels = Array.from(document.querySelectorAll('input[name="channels"]:checked'))
+          .map(checkbox => checkbox.value);
+      }
+
+      button.disabled = true;
+      button.textContent = 'Creating User...';
+      message.textContent = '';
+      message.className = '';
+
+      try {
+        const response = await fetch('/api/add-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            username, 
+            password, 
+            allowedChannels 
+          })
+        });
+
+        if (response.ok) {
+          message.textContent = 'User created successfully!';
+          message.className = 'success';
+          form.reset();
+          updateChannelsVisibility();
+        } else {
+          const error = await response.json();
+          message.textContent = error.message || 'Failed to create user';
+          message.className = 'error';
+        }
+      } catch (err) {
+        message.textContent = 'Network error. Please try again.';
+        message.className = 'error';
+      }
+
+      button.disabled = false;
+      button.textContent = 'Create User';
+    });
+
+    // Initialize visibility
+    updateChannelsVisibility();
+  </script>
+</body>
+</html>`);
+});
+
 
 app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -522,6 +721,73 @@ app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userPermissions = getUserPermissions(req.username!);
+    
+    if (!userPermissions.createUser) {
+      res.status(403).json({ message: 'Not authorized to create users' });
+      return;
+    }
+
+    const { username, password, allowedChannels } = req.body;
+
+    if (!username || !password || !allowedChannels) {
+      res.status(400).json({ message: 'Username, password, and allowedChannels are required' });
+      return;
+    }
+
+    if (typeof username !== 'string' || typeof password !== 'string') {
+      res.status(400).json({ message: 'Username and password must be strings' });
+      return;
+    }
+
+    let channelPermissions: Set<ChannelID> | 'all';
+    if (allowedChannels === 'all') {
+      if (userPermissions.allowedChannels !== 'all') {
+        res.status(403).json({ message: 'Only users with all-channel access can grant all-channel access' });
+        return;
+      }
+      channelPermissions = 'all';
+    } else {
+      if (!Array.isArray(allowedChannels)) {
+        res.status(400).json({ message: 'allowedChannels must be "all" or an array of channel IDs' });
+        return;
+      }
+      
+      const requestedChannelSet = new Set(allowedChannels);
+      const currentUserChannels = userPermissions.allowedChannels;
+      
+      if (currentUserChannels !== 'all') {
+        for (const channelId of requestedChannelSet) {
+          if (!currentUserChannels.has(channelId as ChannelID)) {
+            res.status(403).json({ message: `You don't have permission to grant access to channel: ${channelId}` });
+            return;
+          }
+        }
+      }
+      
+      channelPermissions = requestedChannelSet as Set<ChannelID>;
+    }
+
+    await addUser(username, password, {
+      allowedChannels: channelPermissions,
+      createUser: false
+    });
+
+    res.json({ message: 'User created successfully' });
+  } catch (error: any) {
+    console.error('Add user error:', error);
+    if (error.message === 'User already exists') {
+      res.status(409).json({ message: 'Username already exists' });
+    } else if (error.message.includes('Channel') && error.message.includes('does not exist')) {
+      res.status(400).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: 'Internal server error' });
+    }
   }
 });
 
