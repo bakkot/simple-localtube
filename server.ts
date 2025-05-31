@@ -505,7 +505,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
 // Add user page
 app.get('/add-user', (req: Request, res: Response): void => {
   const userPermissions = getUserPermissions(req.username!);
-  
+
   if (!userPermissions.createUser) {
     res.send(renderNotAllowed(req.username!));
     return;
@@ -513,8 +513,8 @@ app.get('/add-user', (req: Request, res: Response): void => {
 
   const allChannels = getAllChannels();
   const currentUserChannels = userPermissions.allowedChannels;
-  const availableChannels = currentUserChannels === 'all' 
-    ? allChannels 
+  const availableChannels = currentUserChannels === 'all'
+    ? allChannels
     : allChannels.filter(channel => currentUserChannels.has(channel.channel_id));
 
   res.send(`
@@ -540,7 +540,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
     .channel-controls { display: flex; gap: 10px; margin-bottom: 15px; }
     .channel-controls button { padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
     .channel-controls button:hover { background: #f5f5f5; }
-    .channels-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
+    .channels-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
     .channel-option { display: flex; align-items: center; gap: 8px; }
     .channel-option input[type="checkbox"] { margin: 0; }
     .create-button { background: #1976d2; color: white; padding: 12px 24px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; width: 100%; }
@@ -570,7 +570,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
         <label for="password">Password:</label>
         <input type="password" id="password" name="password" required>
       </div>
-      
+
       <div class="permission-section">
         <h3>Channel Permissions</h3>
         <div class="radio-group">
@@ -585,7 +585,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
             <label for="perm-allowlist">Access to selected channels only</label>
           </div>
         </div>
-        
+
         <div class="channels-section" id="channelsSection">
           <div class="channel-controls">
             <button type="button" onclick="selectAllChannels()">Enable All</button>
@@ -601,7 +601,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
           </div>
         </div>
       </div>
-      
+
       <button type="submit" class="create-button" id="createButton">Create User</button>
       <div id="message"></div>
     </form>
@@ -650,7 +650,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
       const username = document.getElementById('username').value;
       const password = document.getElementById('password').value;
       const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
-      
+
       let allowedChannels;
       if (selectedPermission === 'all') {
         allowedChannels = 'all';
@@ -668,10 +668,10 @@ app.get('/add-user', (req: Request, res: Response): void => {
         const response = await fetch('/api/add-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            username, 
-            password, 
-            allowedChannels 
+          body: JSON.stringify({
+            username,
+            password,
+            allowedChannels
           })
         });
 
@@ -727,7 +727,7 @@ app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
 app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => {
   try {
     const userPermissions = getUserPermissions(req.username!);
-    
+
     if (!userPermissions.createUser) {
       res.status(403).json({ message: 'Not authorized to create users' });
       return;
@@ -757,10 +757,10 @@ app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => 
         res.status(400).json({ message: 'allowedChannels must be "all" or an array of channel IDs' });
         return;
       }
-      
+
       const requestedChannelSet = new Set(allowedChannels);
       const currentUserChannels = userPermissions.allowedChannels;
-      
+
       if (currentUserChannels !== 'all') {
         for (const channelId of requestedChannelSet) {
           if (!currentUserChannels.has(channelId as ChannelID)) {
@@ -769,7 +769,7 @@ app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => 
           }
         }
       }
-      
+
       channelPermissions = requestedChannelSet as Set<ChannelID>;
     }
 
