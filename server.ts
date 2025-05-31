@@ -513,6 +513,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
 
   const allChannels = getAllChannels();
   const currentUserChannels = userPermissions.allowedChannels;
+
   const availableChannels = currentUserChannels === 'all'
     ? allChannels
     : allChannels.filter(channel => currentUserChannels.has(channel.channel_id));
@@ -572,16 +573,30 @@ app.get('/add-user', (req: Request, res: Response): void => {
       </div>
 
       <div class="permission-section">
+        <h3>User Permissions</h3>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="create-user-yes" name="createUser" value="true">
+            <label for="create-user-yes">Can create users</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="create-user-no" name="createUser" value="false" checked>
+            <label for="create-user-no">Cannot create users</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="permission-section">
         <h3>Channel Permissions</h3>
         <div class="radio-group">
           ${userPermissions.allowedChannels === 'all' ? `
           <div class="radio-option">
-            <input type="radio" id="perm-all" name="permissions" value="all">
+            <input type="radio" id="perm-all" name="permissions" value="all" required>
             <label for="perm-all">Access to all channels</label>
           </div>
           ` : ''}
           <div class="radio-option">
-            <input type="radio" id="perm-allowlist" name="permissions" value="allowlist" ${userPermissions.allowedChannels === 'all' ? '' : 'checked'}>
+            <input type="radio" id="perm-allowlist" name="permissions" value="allowlist" required>
             <label for="perm-allowlist">Access to selected channels only</label>
           </div>
         </div>
@@ -650,6 +665,13 @@ app.get('/add-user', (req: Request, res: Response): void => {
       const username = document.getElementById('username').value;
       const password = document.getElementById('password').value;
       const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
+      const createUser = document.querySelector('input[name="createUser"]:checked')?.value === 'true';
+
+      if (!selectedPermission) {
+        message.textContent = 'Please select channel permissions';
+        message.className = 'error';
+        return;
+      }
 
       let allowedChannels;
       if (selectedPermission === 'all') {
@@ -657,6 +679,12 @@ app.get('/add-user', (req: Request, res: Response): void => {
       } else {
         allowedChannels = Array.from(document.querySelectorAll('input[name="channels"]:checked'))
           .map(checkbox => checkbox.value);
+
+        if (allowedChannels.length === 0) {
+          message.textContent = 'Please select at least one channel for allowlist access';
+          message.className = 'error';
+          return;
+        }
       }
 
       button.disabled = true;
@@ -671,7 +699,8 @@ app.get('/add-user', (req: Request, res: Response): void => {
           body: JSON.stringify({
             username,
             password,
-            allowedChannels
+            allowedChannels,
+            createUser
           })
         });
 
@@ -733,15 +762,15 @@ app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const { username, password, allowedChannels } = req.body;
+    const { username, password, allowedChannels, createUser } = req.body;
 
-    if (!username || !password || !allowedChannels) {
-      res.status(400).json({ message: 'Username, password, and allowedChannels are required' });
+    if (!username || !password || !allowedChannels || createUser === undefined) {
+      res.status(400).json({ message: 'Username, password, allowedChannels, and createUser are required' });
       return;
     }
 
-    if (typeof username !== 'string' || typeof password !== 'string') {
-      res.status(400).json({ message: 'Username and password must be strings' });
+    if (typeof username !== 'string' || typeof password !== 'string' || typeof createUser !== 'boolean') {
+      res.status(400).json({ message: 'Username and password must be strings, createUser must be boolean' });
       return;
     }
 
@@ -775,7 +804,7 @@ app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => 
 
     await addUser(username, password, {
       allowedChannels: channelPermissions,
-      createUser: false
+      createUser,
     });
 
     res.json({ message: 'User created successfully' });
