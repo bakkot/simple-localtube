@@ -2,7 +2,7 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel } from './db-manager.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions } from './user-db.ts';
 

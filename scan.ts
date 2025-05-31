@@ -1,4 +1,4 @@
-import { addChannel, addVideo, resetMediaInDb, type Channel, type Video } from './db-manager.ts';
+import { addChannel, addVideo, resetMediaInDb, type Channel, type Video } from './media-db.ts';
 import { nameExt, type ChannelID, type VideoID } from './util.ts';
 
 import fs from 'fs';

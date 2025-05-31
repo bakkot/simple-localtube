@@ -1,7 +1,7 @@
 import { exec as execCb } from 'node:child_process';
 import { promisify } from 'node:util';
 import { toVideoID } from './util.ts';
-import { isVideoInDb } from './db-manager.ts';
+import { isVideoInDb } from './media-db.ts';
 import type { ChannelID, VideoID } from './util.ts';
 
 const execAsync = promisify(execCb);
