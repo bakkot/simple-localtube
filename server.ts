@@ -29,19 +29,20 @@ app.use(cookieParser());
 
 // Auth middleware - must be first to protect everything
 app.use((req: Request, res: Response, next: NextFunction): void => {
-  // Skip login and setup routes
-  if (req.path === '/login' || req.path === '/api/login' || req.path === '/setup' || req.path === '/api/setup') {
-    return next();
-  }
-
+  let isSetup = req.path === '/setup' || req.path === '/api/setup';
   // Check if any users exist - if not, redirect to setup
-  if (!hasAnyUsers()) {
+  if (!hasAnyUsers() && !isSetup) {
     if (req.path.startsWith('/api') || req.method !== 'GET') {
       res.status(403).json({ message: 'Setup required' });
       return;
     }
     res.redirect('/setup');
     return;
+  }
+
+  // Skip login and setup routes
+  if (req.path === '/login' || req.path === '/api/login' || isSetup) {
+    return next();
   }
 
   // Validate auth cookie
