@@ -32,7 +32,7 @@ if (existing.length === 0) {
         thumb_filename TEXT,
         duration_seconds INTEGER,
         upload_timestamp INTEGER NOT NULL,
-        subtitle_languages TEXT NOT NULL, -- JSON of list of subtitle languages; TODO use native json support?
+        subtitles TEXT NOT NULL, -- JSON of { lang: file }; TODO use native json support?
         FOREIGN KEY (channel_id) REFERENCES channels(channel_id)
     ) STRICT;
 
@@ -51,8 +51,8 @@ let addChannelStmt = db.prepare(`
 `);
 
 let addVideoStmt = db.prepare(`
-  INSERT INTO videos (video_id, channel_id, title, description, video_filename, thumb_filename, duration_seconds, upload_timestamp, subtitle_languages)
-  VALUES (:video_id, :channel_id, :title, :description, :video_filename, :thumb_filename, :duration_seconds, :upload_timestamp, :subtitle_languages)
+  INSERT INTO videos (video_id, channel_id, title, description, video_filename, thumb_filename, duration_seconds, upload_timestamp, subtitles)
+  VALUES (:video_id, :channel_id, :title, :description, :video_filename, :thumb_filename, :duration_seconds, :upload_timestamp, :subtitles)
 `);
 
 let isVideoInDbStmt = db.prepare(`
@@ -122,7 +122,7 @@ export interface Video {
   thumb_filename: string | null;
   duration_seconds: number;
   upload_timestamp: number;
-  subtitle_languages: string[];
+  subtitles: Record<string, string>;
 }
 
 export interface VideoWithChannel extends Video {
@@ -153,7 +153,7 @@ export function addVideo(video: Video): void {
     ':thumb_filename': video.thumb_filename,
     ':duration_seconds': video.duration_seconds,
     ':upload_timestamp': video.upload_timestamp,
-    ':subtitle_languages': JSON.stringify(video.subtitle_languages),
+    ':subtitles': JSON.stringify(video.subtitles),
   });
 }
 
@@ -171,7 +171,7 @@ export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', l
     const rows = getRecentVideosStmt.all(limit, offset) as any[];
     return rows.map(row => ({
       ...row,
-      subtitle_languages: JSON.parse(row.subtitle_languages)
+      subtitles: JSON.parse(row.subtitles)
     }));
   }
   if (channelIds.size === 0) return [];
@@ -190,7 +190,7 @@ export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', l
   const rows = stmt.all(...channelIds, limit, offset) as any[];
   return rows.map(row => ({
     ...row,
-    subtitle_languages: JSON.parse(row.subtitle_languages)
+    subtitles: JSON.parse(row.subtitles)
   }));
 }
 
@@ -199,7 +199,7 @@ export function getVideoById(videoId: VideoID): VideoWithChannel | null {
   if (!row) return null;
   return {
     ...row,
-    subtitle_languages: JSON.parse(row.subtitle_languages)
+    subtitles: JSON.parse(row.subtitles)
   };
 }
 
@@ -211,7 +211,7 @@ export function getVideosByChannel(channelId: ChannelID, limit: number = 30, off
   const rows = getVideosByChannelStmt.all(channelId, limit, offset) as any[];
   return rows.map(row => ({
     ...row,
-    subtitle_languages: JSON.parse(row.subtitle_languages)
+    subtitles: JSON.parse(row.subtitles)
   }));
 }
 

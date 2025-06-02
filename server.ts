@@ -863,29 +863,28 @@ app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<
     res.status(404).send('Video not found');
     return;
   }
-  res.sendFile(positionals[0] + '/' + video.channel_id + '/' + videoId + '/' + video.video_filename);
+  res.sendFile(video.video_filename);
 });
 
 app.get('/media/thumbs/:video_id', async (req: Request, res: Response): Promise<void> => {
   const videoId = nameExt(req.params.video_id).name;
   const video = getVideoById(videoId as VideoID);
-  if (!video) {
-    res.status(404).send('Video not found');
+  if (video?.thumb_filename == null) {
+    res.status(404).send('not found');
     return;
   }
-  res.sendFile(positionals[0] + '/' + video.channel_id + '/' + videoId + '/' + video.thumb_filename);
+  res.sendFile(video.thumb_filename);
 });
 
 app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise<void> => {
   const channelShortId = nameExt(req.params.short_id).name;
   const channel = getChannelByShortId(channelShortId);
-  if (!channel) {
-    res.status(404).send('Channel not found');
+  if (channel?.avatar_filename == null) {
+    res.status(404).send('not found');
     return;
   }
-  res.sendFile(positionals[0] + '/' + channel.channel_id + '/' + channel.avatar_filename);
+  res.sendFile(channel.avatar_filename);
 });
-
 
 app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
   try {

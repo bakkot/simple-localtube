@@ -28,7 +28,10 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
   }
   const upload_timestamp = Math.floor(new Date(upload_date.slice(0, 4) + '-' + upload_date.slice(4, 6) + '-' + upload_date.slice(6) + 'T00:00:00Z').getTime() / 1000);
 
-  let subs = [];
+  let subtitles: Record<string, string> = {
+    // @ts-expect-error
+    __proto__: null,
+  };
   let thumb_filename = null;
   for (let file of contents) {
     if (file.startsWith('.')) continue;
@@ -40,7 +43,7 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
       thumb_filename = file;
     } else if (ext === 'vtt' && name.startsWith('subs.')) {
       let split = name.split('.');
-      subs.push(split.slice(1).join('.'));
+      subtitles[split.slice(1).join('.')] = path.join(dir, file);
     }
   }
 
@@ -49,11 +52,11 @@ export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: V
     channel_id: channelId,
     title,
     description,
-    video_filename: vids[0],
-    thumb_filename,
+    video_filename: path.join(dir, vids[0]),
+    thumb_filename: thumb_filename == null ? null :path.join(dir, thumb_filename),
     duration_seconds: duration,
     upload_timestamp,
-    subtitle_languages: subs,
+    subtitles,
   };
 }
 
@@ -75,9 +78,9 @@ export function channelFromDisk(mediaDir: string, channelId: ChannelID): Channel
     short_id: uploader_id,
     channel,
     description: description ?? null,
-    avatar_filename: avatar,
-    banner_filename: banner,
-    banner_uncropped_filename: bannerUncropped,
+    avatar_filename: avatar == null ? null : path.join(dir, avatar),
+    banner_filename: banner == null ? null : path.join(dir, banner),
+    banner_uncropped_filename: bannerUncropped == null ? null : path.join(dir, bannerUncropped),
   };
 }
 
