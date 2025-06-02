@@ -18,7 +18,9 @@ todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
 
 TODO future-compat for non-youtube
 
+handle missing avatars etc
 
+- favicon
 - /public-api
 - notify-video endpoint
 - notify-channel endpoint

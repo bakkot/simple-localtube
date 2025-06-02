@@ -2,7 +2,7 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, type VideoWithChannel } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers } from './user-db.ts';
 
@@ -88,8 +88,6 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
   next();
 });
 
-app.use('/media', express.static(positionals[0]));
-
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -145,12 +143,13 @@ function renderNotAllowed(username: string): string {
 </html>`;
 }
 
-function renderVideoCard(video: any, showChannel: boolean = true): string {
+function renderVideoCard(video: VideoWithChannel, showChannel: boolean = true): string {
+  const ext = nameExt(video.video_filename).ext;
   return `
     <div class="video-card">
       <a href="/v/${video.video_id}">
         <div class="thumb-container">
-          <img class="thumb" src="/media/${video.channel_id}/${video.video_id}/${video.thumb_filename || 'thumb.jpg'}" alt="${video.title}">
+          <img class="thumb" src="/media/thumbs/${video.video_id}.${ext}" alt="${video.title}">
           <span class="duration">${formatDuration(video.duration_seconds || 0)}</span>
         </div>
       </a>
@@ -497,6 +496,9 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     return;
   }
 
+  const videoExt = nameExt(video.video_filename).ext;
+  const avatarExt = video.avatar_filename == null ? null : nameExt(video.avatar_filename).ext;
+
   res.send(`
 <!DOCTYPE html>
 <html>
@@ -526,7 +528,7 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
   </div>
   <div class="video-section">
     <video controls autoplay>
-      <source src="/media/${video.channel_id}/${video.video_id}/${video.video_filename}" type="video/${nameExt(video.video_filename).ext === 'mp4' ? 'mp4' : 'webm'}">
+      <source src="/media/videos/${video.video_id}.${videoExt}" type="video/${videoExt === 'mp4' ? 'mp4' : 'webm'}">
       Your browser does not support the video tag.
     </video>
   </div>
@@ -535,7 +537,7 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     <div class="video-info">
       <div class="video-title">${video.title}</div>
       <div class="channel-info">
-        ${video.avatar_filename ? `<img class="channel-avatar" width=40 height=40 src="/media/${video.channel_id}/${video.avatar_filename}" alt="${video.channel}">` : ''}
+        ${video.avatar_filename ? `<img class="channel-avatar" width=40 height=40 src="/media/avatars/${video.channel_short_id}.${avatarExt}" alt="${video.channel}">` : ''}
         <a href="/c/${video.channel_short_id}" class="channel-name">${video.channel}</a>
       </div>
       <div class="description">${video.description}</div>
@@ -566,6 +568,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   }
 
   const videos = getVideosByChannel(channel.channel_id, 30);
+  const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
 
   res.send(`
 <!DOCTYPE html>
@@ -594,7 +597,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   </div>
   <div class="channel-header">
     <div class="channel-info">
-      ${channel.avatar_filename ? `<img class="channel-avatar" width=80 height=80 src="/media/${channel.channel_id}/${channel.avatar_filename}" alt="${channel.channel}">` : ''}
+      ${channel.avatar_filename ? `<img class="channel-avatar" width=80 height=80 src="/media/avatars/${channel.short_id}.${avatarExt}" alt="${channel.channel}">` : ''}
       <div class="channel-details">
         <h1>${channel.channel}</h1>
         ${channel.description ? `<div class="channel-description">${channel.description}</div>` : ''}
@@ -851,6 +854,36 @@ app.get('/add-user', (req: Request, res: Response): void => {
   </script>
 </body>
 </html>`);
+});
+
+app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<void> => {
+  const videoId = nameExt(req.params.video_id).name;
+  const video = getVideoById(videoId as VideoID);
+  if (!video) {
+    res.status(404).send('Video not found');
+    return;
+  }
+  res.sendFile(positionals[0] + '/' + video.channel_id + '/' + videoId + '/' + video.video_filename);
+});
+
+app.get('/media/thumbs/:video_id', async (req: Request, res: Response): Promise<void> => {
+  const videoId = nameExt(req.params.video_id).name;
+  const video = getVideoById(videoId as VideoID);
+  if (!video) {
+    res.status(404).send('Video not found');
+    return;
+  }
+  res.sendFile(positionals[0] + '/' + video.channel_id + '/' + videoId + '/' + video.thumb_filename);
+});
+
+app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise<void> => {
+  const channelShortId = nameExt(req.params.short_id).name;
+  const channel = getChannelByShortId(channelShortId);
+  if (!channel) {
+    res.status(404).send('Channel not found');
+    return;
+  }
+  res.sendFile(positionals[0] + '/' + channel.channel_id + '/' + channel.avatar_filename);
 });
 
 
