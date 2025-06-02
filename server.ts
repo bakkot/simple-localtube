@@ -1,7 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, channelExists, type Video, type Channel } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed } from './frontend.ts';
@@ -34,8 +34,8 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
     return;
   }
 
-  // Skip login and setup routes
-  if (req.path === '/login' || req.path === '/api/login' || isSetup) {
+  // Skip login, setup, and add-video routes
+  if (req.path === '/login' || req.path === '/api/login' || req.path === '/api/add-video' || isSetup) {
     return next();
   }
 
@@ -346,6 +346,77 @@ app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => 
   res.json(videos);
 });
 
+app.post('/api/add-video', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { video, channel } = req.body;
+
+    if (!video || !channel) {
+      res.status(400).json({ message: 'Both video and channel data are required' });
+      return;
+    }
+
+    const requiredVideoFields = ['video_id', 'title', 'description', 'video_filename', 'upload_timestamp'];
+    const requiredChannelFields = ['channel_id', 'channel', 'short_id'];
+
+    for (const field of requiredVideoFields) {
+      if (!video[field]) {
+        res.status(400).json({ message: `Video field '${field}' is required` });
+        return;
+      }
+    }
+
+    for (const field of requiredChannelFields) {
+      if (!channel[field]) {
+        res.status(400).json({ message: `Channel field '${field}' is required` });
+        return;
+      }
+    }
+
+    if (!channelExists(video.channel_id as ChannelID)) {
+      const channelData: Channel = {
+        channel_id: channel.channel_id,
+        channel: channel.channel,
+        short_id: channel.short_id,
+        description: channel.description || null,
+        avatar_filename: channel.avatar_filename || null,
+        banner_filename: channel.banner_filename || null,
+        banner_uncropped_filename: channel.banner_uncropped_filename || null,
+      };
+      addChannel(channelData);
+    }
+
+    const videoData: Video = {
+      video_id: video.video_id,
+      channel_id: video.channel_id,
+      title: video.title,
+      description: video.description,
+      video_filename: video.video_filename,
+      thumb_filename: video.thumb_filename || null,
+      duration_seconds: video.duration_seconds || 0,
+      upload_timestamp: video.upload_timestamp,
+      subtitles: video.subtitles || {},
+    };
+
+    addVideo(videoData);
+
+    res.json({ message: 'Video added successfully' });
+  } catch (error: any) {
+    console.error('Add video error:', error);
+    if (error.message.includes('UNIQUE constraint failed')) {
+      if (error.message.includes('videos.video_id')) {
+        res.status(409).json({ message: 'Video with this ID already exists' });
+      } else if (error.message.includes('channels.channel_id')) {
+        res.status(409).json({ message: 'Channel with this ID already exists' });
+      } else if (error.message.includes('channels.short_id')) {
+        res.status(409).json({ message: 'Channel with this short ID already exists' });
+      } else {
+        res.status(409).json({ message: 'Duplicate entry detected' });
+      }
+    } else {
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`LocalTube server running on http://localhost:${PORT}`);
