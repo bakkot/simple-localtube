@@ -48,6 +48,31 @@ if (existing.length === 0) {
 let addChannelStmt = db.prepare(`
   INSERT INTO channels (channel_id, channel, short_id, description, avatar_filename, banner_filename, banner_uncropped_filename)
   VALUES (:channel_id, :channel, :short_id, :description, :avatar_filename, :banner_filename, :banner_uncropped_filename)
+  ON CONFLICT(channel_id) DO UPDATE SET
+    channel = CASE
+      WHEN :channel IS NOT NULL AND :channel != '' THEN :channel
+      ELSE channels.channel
+    END,
+    short_id = CASE
+      WHEN :short_id IS NOT NULL AND :short_id != '' THEN :short_id
+      ELSE channels.short_id
+    END,
+    description = CASE
+      WHEN :description IS NOT NULL AND :description != '' THEN :description
+      ELSE channels.description
+    END,
+    avatar_filename = CASE
+      WHEN :avatar_filename IS NOT NULL AND :avatar_filename != '' THEN :avatar_filename
+      ELSE channels.avatar_filename
+    END,
+    banner_filename = CASE
+      WHEN :banner_filename IS NOT NULL AND :banner_filename != '' THEN :banner_filename
+      ELSE channels.banner_filename
+    END,
+    banner_uncropped_filename = CASE
+      WHEN :banner_uncropped_filename IS NOT NULL AND :banner_uncropped_filename != '' THEN :banner_uncropped_filename
+      ELSE channels.banner_uncropped_filename
+    END
 `);
 
 let addVideoStmt = db.prepare(`

@@ -1,7 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, channelExists, type Video, type Channel } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed } from './frontend.ts';
@@ -359,24 +359,23 @@ app.post('/api/add-video', async (req: Request, res: Response): Promise<void> =>
     const requiredChannelFields = ['channel_id', 'channel', 'short_id'] as const;
 
     for (const field of requiredVideoFields) {
-      if (!video[field]) {
+      if (video[field] == null) {
         res.status(400).json({ message: `Video field '${field}' is required` });
         return;
       }
     }
 
     for (const field of requiredChannelFields) {
-      if (!channel[field]) {
+      if (channel[field] == null) {
         res.status(400).json({ message: `Channel field '${field}' is required` });
         return;
       }
     }
 
-    if (!channelExists(video.channel_id as ChannelID)) {
-      addChannel(channel);
-    }
+    addChannel(channel);
 
     addVideo(video);
+    console.log(`added ${JSON.stringify(video.title)} from API`);
 
     res.json({ message: 'Video added successfully' });
   } catch (error: any) {
