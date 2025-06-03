@@ -84,16 +84,44 @@ export function channelFromDisk(mediaDir: string, channelId: ChannelID): Channel
   };
 }
 
-export function rescan(mediaDir: string) {
-  const channels = fs.readdirSync(mediaDir, { withFileTypes: true });
+async function addVideoOnline(video: Video, channel: Channel, serverUrl: string): Promise<void> {
+  const response = await fetch(`${serverUrl}/api/add-video`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      video,
+      channel,
+    })
+  });
 
-  resetMediaInDb();
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Failed to add video ${video.video_id}: ${error.message}`);
+  }
+}
+
+function addVideoOffline(video: Video, channel: Channel, addedChannels: Set<ChannelID>): void {
+  if (!addedChannels.has(channel.channel_id)) {
+    addChannel(channel);
+    addedChannels.add(channel.channel_id);
+  }
+  addVideo(video);
+}
+
+async function rescanMain(mediaDir: string, online: boolean = false, serverUrl: string = 'http://localhost:3000') {
+  const channels = fs.readdirSync(mediaDir, { withFileTypes: true });
+  let addedChannels = new Set<ChannelID>();
+
+  if (!online) {
+    resetMediaInDb();
+  }
 
   try {
     for (const channelEntry of channels) {
       if (!channelEntry.isDirectory()) continue;
       console.log(channelEntry.name);
-      let hasAddedThisChannel = false;
 
       const channelPath = path.join(mediaDir, channelEntry.name);
       const channelJson = path.join(channelPath, 'data.json');
@@ -104,32 +132,68 @@ export function rescan(mediaDir: string) {
       }
 
       const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
+      const channelData = channelFromDisk(mediaDir, channelEntry.name as ChannelID);
 
       for (const videoEntry of videoEntries) {
         if (!videoEntry.isDirectory()) continue;
         let vid = videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID);
         if (vid != null) {
-          if (!hasAddedThisChannel) {
-            addChannel(channelFromDisk(mediaDir, channelEntry.name as ChannelID));
-            hasAddedThisChannel = true;
+          try {
+            if (online) {
+              await addVideoOnline(vid, channelData, serverUrl);
+            } else {
+              addVideoOffline(vid, channelData, addedChannels);
+            }
+          } catch (error) {
+            console.error(`Error adding video ${vid.video_id}:`, error);
           }
-          addVideo(vid);
         }
       }
     }
   } catch (e) {
-    console.error('Error while rescanning; DB is probably in a partial state. You should correct the error and rerun.');
+    console.error('Error while rescanning; operation may be incomplete.');
     throw e;
   }
+}
+
+export function rescan(mediaDir: string) {
+  return rescanMain(mediaDir, false);
+}
+
+async function rescanOnline(mediaDir: string, serverUrl: string = 'http://localhost:3000') {
+  return rescanMain(mediaDir, true, serverUrl);
 }
 
 // todo this goes elsewhere
 import { parseArgs } from 'util';
 
-let { positionals } = parseArgs({ allowPositionals: true });
+let { values, positionals } = parseArgs({
+  allowPositionals: true,
+  options: {
+    online: {
+      type: 'boolean',
+      default: false
+    },
+    server: {
+      type: 'string',
+      default: 'http://localhost:3000',
+    },
+  },
+});
+
 if (positionals.length !== 1) {
-  console.log('Usage: node scan.ts path-to-media-dir');
+  console.log('Usage: node scan.ts [--online] [--server=url] path-to-media-dir');
+  console.log('  --online: Use API endpoint instead of direct database access');
+  console.log('  --server: Server URL (default: http://localhost:3000)');
   process.exit(1);
 }
+
 let mediaDir = positionals[0];
-rescan(mediaDir);
+
+if (values.online) {
+  console.log(`Scanning ${mediaDir} using online API at ${values.server}`);
+  await rescanOnline(mediaDir, values.server);
+} else {
+  console.log(`Scanning ${mediaDir} using direct database access`);
+  rescan(mediaDir);
+}

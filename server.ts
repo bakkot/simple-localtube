@@ -348,15 +348,15 @@ app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => 
 
 app.post('/api/add-video', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { video, channel } = req.body;
+    const { video, channel } = req.body as { video: Video, channel: Channel };
 
     if (!video || !channel) {
       res.status(400).json({ message: 'Both video and channel data are required' });
       return;
     }
 
-    const requiredVideoFields = ['video_id', 'title', 'description', 'video_filename', 'upload_timestamp'];
-    const requiredChannelFields = ['channel_id', 'channel', 'short_id'];
+    const requiredVideoFields = ['video_id', 'title', 'description', 'video_filename', 'upload_timestamp'] as const;
+    const requiredChannelFields = ['channel_id', 'channel', 'short_id'] as const;
 
     for (const field of requiredVideoFields) {
       if (!video[field]) {
@@ -373,31 +373,10 @@ app.post('/api/add-video', async (req: Request, res: Response): Promise<void> =>
     }
 
     if (!channelExists(video.channel_id as ChannelID)) {
-      const channelData: Channel = {
-        channel_id: channel.channel_id,
-        channel: channel.channel,
-        short_id: channel.short_id,
-        description: channel.description || null,
-        avatar_filename: channel.avatar_filename || null,
-        banner_filename: channel.banner_filename || null,
-        banner_uncropped_filename: channel.banner_uncropped_filename || null,
-      };
-      addChannel(channelData);
+      addChannel(channel);
     }
 
-    const videoData: Video = {
-      video_id: video.video_id,
-      channel_id: video.channel_id,
-      title: video.title,
-      description: video.description,
-      video_filename: video.video_filename,
-      thumb_filename: video.thumb_filename || null,
-      duration_seconds: video.duration_seconds || 0,
-      upload_timestamp: video.upload_timestamp,
-      subtitles: video.subtitles || {},
-    };
-
-    addVideo(videoData);
+    addVideo(video);
 
     res.json({ message: 'Video added successfully' });
   } catch (error: any) {
