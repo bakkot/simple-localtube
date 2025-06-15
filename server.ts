@@ -34,8 +34,8 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
     return;
   }
 
-  // Skip login, setup, and add-video routes
-  if (req.path === '/login' || req.path === '/api/login' || req.path === '/api/add-video' || isSetup) {
+  // Login. setup, and public-api do not require auth
+  if (req.path === '/login' || req.path.startsWith('/public-api/') || isSetup) {
     return next();
   }
 
@@ -193,28 +193,6 @@ app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise
   res.sendFile(channel.avatar_filename);
 });
 
-app.post('/api/login', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      res.status(400).json({ message: 'Username and password required' });
-      return;
-    }
-
-    const token = await checkUsernamePassword(username, password);
-
-    if (token) {
-      res.json({ token });
-    } else {
-      res.status(401).json({ message: 'Invalid username or password' });
-    }
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
 app.post('/api/setup', async (req: Request, res: Response): Promise<void> => {
   try {
     if (hasAnyUsers()) {
@@ -346,7 +324,29 @@ app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => 
   res.json(videos);
 });
 
-app.post('/api/add-video', async (req: Request, res: Response): Promise<void> => {
+app.post('/public-api/login', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      res.status(400).json({ message: 'Username and password required' });
+      return;
+    }
+
+    const token = await checkUsernamePassword(username, password);
+
+    if (token) {
+      res.json({ token });
+    } else {
+      res.status(401).json({ message: 'Invalid username or password' });
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.post('/public-api/add-video', async (req: Request, res: Response): Promise<void> => {
   try {
     const { video, channel } = req.body as { video: Video, channel: Channel };
 

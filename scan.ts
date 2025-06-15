@@ -85,7 +85,7 @@ export async function channelFromDisk(mediaDir: string, channelId: ChannelID): P
 }
 
 async function addVideoOnline(video: Video, channel: Channel, serverUrl: string): Promise<void> {
-  const response = await fetch(`${serverUrl}/api/add-video`, {
+  const response = await fetch(`${serverUrl}/public-api/add-video`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
