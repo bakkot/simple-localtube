@@ -346,6 +346,31 @@ app.post('/public-api/login', async (req: Request, res: Response): Promise<void>
   }
 });
 
+app.get('/public-api/has-video', (req: Request, res: Response): void => {
+  const videoId = req.query.video_id as string;
+
+  if (!videoId) {
+    res.status(400).json({ message: 'video_id query parameter is required' });
+    return;
+  }
+
+  const video = getVideoById(videoId as VideoID);
+  res.json(video !== undefined);
+});
+
+app.get('/public-api/has-channel', (req: Request, res: Response): void => {
+  const channelId = req.query.channel_id as string;
+
+  if (!channelId) {
+    res.status(400).json({ message: 'channel_id query parameter is required' });
+    return;
+  }
+
+  const channels = getAllChannels();
+  const channel = channels.find(c => c.channel_id === channelId);
+  res.json(channel !== undefined);
+});
+
 app.post('/public-api/add-video', async (req: Request, res: Response): Promise<void> => {
   try {
     const { video, channel } = req.body as { video: Video, channel: Channel };
