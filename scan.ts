@@ -1,4 +1,4 @@
-import { addChannel, addVideo, resetMediaInDb, type Channel, type Video } from './media-db.ts';
+import type { Channel, Video } from './media-db.ts';
 import { nameExt, type ChannelID, type VideoID } from './util.ts';
 
 import fs from 'fs';
@@ -102,7 +102,13 @@ async function addVideoOnline(video: Video, channel: Channel, serverUrl: string)
   }
 }
 
-function addVideoOffline(video: Video, channel: Channel, addedChannels: Set<ChannelID>): void {
+let addChannel: ((channel: Channel) => void) | null = null;
+let addVideo: ((video: Video) => void) | null = null;
+async function addVideoOffline(video: Video, channel: Channel, addedChannels: Set<ChannelID>) {
+  if (addChannel == null || addVideo == null) {
+    // doing this here instead of at root because it opens the DB, which we don't want to do when not offline
+    ({ addChannel, addVideo } = await import('./media-db.ts'));
+  }
   if (!addedChannels.has(channel.channel_id)) {
     addChannel(channel);
     addedChannels.add(channel.channel_id);
@@ -113,10 +119,6 @@ function addVideoOffline(video: Video, channel: Channel, addedChannels: Set<Chan
 async function rescanMain(mediaDir: string, online: boolean = false, serverUrl: string = 'http://localhost:3000') {
   const channels = await fsp.readdir(mediaDir, { withFileTypes: true });
   let addedChannels = new Set<ChannelID>();
-
-  if (!online) {
-    resetMediaInDb();
-  }
 
   try {
     for (const channelEntry of channels) {
@@ -144,7 +146,7 @@ async function rescanMain(mediaDir: string, online: boolean = false, serverUrl: 
             if (online) {
               await addVideoOnline(vid, channelData, serverUrl);
             } else {
-              addVideoOffline(vid, channelData, addedChannels);
+              await addVideoOffline(vid, channelData, addedChannels);
             }
           } catch (error) {
             console.error(`Error adding video ${vid.video_id}:`, error);
@@ -163,30 +165,52 @@ export async function rescan(mediaDir: string) {
 }
 
 async function rescanOnline(mediaDir: string, serverUrl: string = 'http://localhost:3000') {
+  try {
+    const up = await (await fetch(serverUrl + '/public-api/healthcheck')).json();
+    if (!up) throw null;
+  } catch {
+    throw new Error(`${serverUrl} doesn't appear to be running`);
+  }
   return rescanMain(mediaDir, true, serverUrl);
 }
 
 // todo this goes elsewhere
 import { parseArgs } from 'util';
 
+const defaultUrl = 'http://localhost:3000';
+
 let { values, positionals } = parseArgs({
   allowPositionals: true,
+  allowNegative: true,
   options: {
     online: {
       type: 'boolean',
-      default: false
+      default: false,
     },
     server: {
       type: 'string',
-      default: 'http://localhost:3000',
+      default: defaultUrl,
     },
   },
 });
 
 if (positionals.length !== 1) {
-  console.log('Usage: node scan.ts [--online] [--server=url] path-to-media-dir');
-  console.log('  --online: Use API endpoint instead of direct database access');
-  console.log('  --server: Server URL (default: http://localhost:3000)');
+  console.log(`Usage: node scan.ts [--online] [--server=url] path-to-media-dir
+  --online: Use API endpoints instead of direct database access
+  --server: Server URL for use with --online (default: ${defaultUrl})
+
+This expects media-dir to be organized like:
+
+some-channel-id/data.json
+some-channel-id/avatar.png
+some-channel-id/banner.png
+some-channel-id/some-video-id/data.json
+some-channel-id/some-video-id/thumb.jpg
+some-channel-id/some-video-id/subs.en.vtt
+some-channel-id/some-video-id/video.mp4
+
+Only the data.json files and video.mp4 (or video.webm) are mandatory. data.json files should be in the format given by yt-dlp's --write-info-json.
+`);
   process.exit(1);
 }
 

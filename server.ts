@@ -1,7 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed } from './frontend.ts';
@@ -354,8 +354,7 @@ app.get('/public-api/has-video', (req: Request, res: Response): void => {
     return;
   }
 
-  const video = getVideoById(videoId as VideoID);
-  res.json(video !== undefined);
+  res.json(isVideoInDb(videoId as VideoID));
 });
 
 app.get('/public-api/has-channel', (req: Request, res: Response): void => {
@@ -366,9 +365,11 @@ app.get('/public-api/has-channel', (req: Request, res: Response): void => {
     return;
   }
 
-  const channels = getAllChannels();
-  const channel = channels.find(c => c.channel_id === channelId);
-  res.json(channel !== undefined);
+  res.json(getChannelByShortId(channelId as ChannelID) != null);
+});
+
+app.get('/public-api/healthcheck', (req: Request, res: Response): void => {
+  res.json(true);
 });
 
 app.post('/public-api/add-video', async (req: Request, res: Response): Promise<void> => {

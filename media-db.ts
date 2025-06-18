@@ -16,7 +16,7 @@ if (existing.length === 0) {
     CREATE TABLE channels (
         channel_id TEXT PRIMARY KEY,
         channel TEXT NOT NULL,
-        short_id TEXT NOT NULL,
+        short_id TEXT NOT NULL UNIQUE,
         description TEXT,
         avatar_filename TEXT,
         banner_filename TEXT,
@@ -186,6 +186,10 @@ export function isVideoInDb(videoId: VideoID): boolean {
   return !!isVideoInDbStmt.get(videoId)
 }
 
+export function isChannelInDb(channelId: ChannelID): boolean {
+  return !!channelExistsStmt.get(channelId);
+}
+
 export function resetMediaInDb() {
   resetVideos.run();
   resetChannels.run();
@@ -224,12 +228,12 @@ export function getVideoById(videoId: VideoID): VideoWithChannel | null {
   if (!row) return null;
   return {
     ...row,
-    subtitles: JSON.parse(row.subtitles)
+    subtitles: JSON.parse(row.subtitles),
   };
 }
 
 export function getChannelByShortId(shortId: string): Channel | null {
-  return getChannelByShortIdStmt.get(shortId) as unknown as  Channel | null;
+  return getChannelByShortIdStmt.get(shortId) as unknown as Channel | null;
 }
 
 export function getVideosByChannel(channelId: ChannelID, limit: number = 30, offset: number = 0): VideoWithChannel[] {
@@ -238,10 +242,6 @@ export function getVideosByChannel(channelId: ChannelID, limit: number = 30, off
     ...row,
     subtitles: JSON.parse(row.subtitles)
   }));
-}
-
-export function channelExists(channelId: ChannelID): boolean {
-  return !!channelExistsStmt.get(channelId);
 }
 
 export function getAllChannels(): { channel_id: ChannelID; channel: string }[] {

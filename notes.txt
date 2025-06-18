@@ -16,13 +16,12 @@ todo consistency for node:foo vs foo
 
 todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
 
-TODO future-compat for non-youtube
+TODO add 'service' field from data.json's .webpage_url_domain (default youtube.com)
+TODO extra_data in DB schema for forward-compat
 
-handle missing avatars etc
+handle missing avatars etc (placeholder)
 
 - favicon
-- rescan should be a seperate script and should hit the notify-video endpoint
-  - have a healthcheck too
 - pull out the yt-dlp stuff
 - test w/ pinchflat, have sample lifecycle script
 - placeholder avatar

@@ -1,4 +1,8 @@
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import stream from 'stream';
+import { pipeline } from 'stream/promises';
 
 export type VideoID = string & { __brand: "video id" };
 export type ChannelID = string & { __brand: "channel id" };
@@ -105,3 +109,69 @@ export class LRUCache<K, V> {
     return this.cache.entries();
   }
 }
+
+export async function fetchTo(url: string, targetDir: string, basename: string) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const contentType = response.headers.get('content-type');
+  const mimeType = contentType?.split(';')[0].trim();
+
+  const extension = imageMimeToExt[mimeType!];
+  if (extension == null) {
+    throw new Error(`could not identify mime type; got content type of ${JSON.stringify(contentType)}`);
+  }
+
+  const filename = `${basename}${extension}`;
+  const filepath = path.join(targetDir, filename);
+  await pipeline(stream.Readable.fromWeb(response.body! as any), fs.createWriteStream(filepath));
+
+  return filename;
+}
+
+const imageMimeToExt: Record<string, string | undefined> = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/svg+xml': '.svg',
+  // @ts-expect-error
+  __proto__: null,
+};
+
+
+// TODO consider whether we actually care about these
+// https://github.com/nodejs/node/issues/58486
+const EXIT_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2'];
+export function getTemp(): { [Symbol.dispose]: () => void; path: string; } {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localtube-'));
+  console.log({ tempDir });
+  function cleanup() {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+  function cleanupAndExit() {
+    cleanup();
+    process.exit();
+  }
+
+  process.on('exit', cleanup);
+  for (let signal of EXIT_SIGNALS) {
+    process.on(signal, cleanupAndExit);
+  }
+
+  return {
+    [Symbol.dispose]() {
+      cleanup();
+      process.removeListener('exit', cleanup);
+      for (let signal of EXIT_SIGNALS) {
+        process.removeListener(signal, cleanupAndExit);
+      }
+    },
+    path: tempDir,
+  };
+}
+

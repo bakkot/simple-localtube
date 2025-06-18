@@ -3,7 +3,7 @@ import { scrypt, randomBytes, createHmac } from 'node:crypto';
 import { promisify } from 'node:util';
 import path from 'path';
 import fs from 'fs';
-import { channelExists } from './media-db.ts';
+import { isChannelInDb } from './media-db.ts';
 import type { ChannelID } from './util.ts';
 import { LRUCache } from './util.ts';
 
@@ -155,7 +155,7 @@ function parsePermissions(permissionsString: string): Permissions {
     throw new Error('malformed permissions');
   }
   return {
-    allowedChannels: allowedChannels === 'all' ? 'all' : new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && channelExists(c as ChannelID))),
+    allowedChannels: allowedChannels === 'all' ? 'all' : new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && isChannelInDb(c as ChannelID))),
     createUser,
   };
 }
@@ -179,7 +179,7 @@ export async function addUser(
 
   if (permissions.allowedChannels !== 'all') {
     for (const channelId of permissions.allowedChannels) {
-      if (!channelExists(channelId as ChannelID)) {
+      if (!isChannelInDb(channelId as ChannelID)) {
         throw new Error(`Channel '${channelId}' does not exist`);
       }
     }
