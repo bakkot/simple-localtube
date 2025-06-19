@@ -15,7 +15,7 @@ if (existing.length === 0) {
   db.exec(`
     CREATE TABLE channels (
         channel_id TEXT PRIMARY KEY,
-        channel TEXT NOT NULL,
+        channel TEXT NOT NULL, -- TODO better name
         short_id TEXT NOT NULL UNIQUE,
         description TEXT,
         avatar_filename TEXT,
@@ -107,6 +107,10 @@ let getVideoByIdStmt = db.prepare(`
   WHERE v.video_id = ?
 `);
 
+let getChannelByIdStmt = db.prepare(`
+  SELECT * FROM channels WHERE channel_id = ?
+`);
+
 let getChannelByShortIdStmt = db.prepare(`
   SELECT * FROM channels WHERE short_id = ?
 `);
@@ -130,7 +134,7 @@ let getAllChannelsStmt = db.prepare(`
 
 export interface Channel {
   channel_id: ChannelID;
-  channel: string;
+  channel: string; // TODO better name
   short_id: string;
   description: string | null;
   avatar_filename: string | null;
@@ -230,6 +234,10 @@ export function getVideoById(videoId: VideoID): VideoWithChannel | null {
     ...row,
     subtitles: JSON.parse(row.subtitles),
   };
+}
+
+export function getChannelById(channelId: ChannelID): Channel | null {
+  return getChannelByIdStmt.get(channelId) as unknown as Channel | null;
 }
 
 export function getChannelByShortId(shortId: string): Channel | null {

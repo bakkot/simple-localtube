@@ -5,7 +5,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 
-export async function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: VideoID): Promise<Video | null> {
+export async function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: VideoID, fetchMissingMetadata?: ((channelId: ChannelID, videoId: VideoID) => Promise<void>)): Promise<Video | null> {
   let dir = path.join(mediaDir, channelId, videoId);
   let contents = await fsp.readdir(dir);
   let vids = contents.filter(c => c === 'video.mp4' || c === 'video.webm');
@@ -13,9 +13,15 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
     throw new Error(`${channelId}/${videoId} does not contain a video`);
   }
   if (!contents.includes('data.json')) {
-    // throw new Error(`${channelId}/${videoId} does not contain a data.json file`);
-    console.error(`skipping ${channelId}/${videoId} because of missing data.json`);
-    return null;
+    if (fetchMissingMetadata) {
+      await fetchMissingMetadata(channelId, videoId);
+      if (!fs.existsSync(path.join(dir, 'data.json'))) {
+        throw new Error(`fetching metadata for ${channelId}/${videoId} did not result in a data.json in ${dir}`);
+      }
+    } else {
+      console.error(`skipping ${channelId}/${videoId} because of missing data.json`);
+      return null;
+    }
   }
   let {
     fulltitle: title,
@@ -38,7 +44,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
     let { name, ext } = nameExt(file);
     if (name === 'thumb') {
       if (thumb_filename != null) {
-        throw new Error('multiple thumbs');
+        throw new Error(`multiple thumbs for ${videoId}`);
       }
       thumb_filename = file;
     } else if (ext === 'vtt' && name.startsWith('subs.')) {
@@ -167,7 +173,7 @@ export async function rescan(mediaDir: string) {
 async function rescanOnline(mediaDir: string, serverUrl: string = 'http://localhost:3000') {
   try {
     const up = await (await fetch(serverUrl + '/public-api/healthcheck')).json();
-    if (!up) throw null;
+    if (up !== true) throw null;
   } catch {
     throw new Error(`${serverUrl} doesn't appear to be running`);
   }

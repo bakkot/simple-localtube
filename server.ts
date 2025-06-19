@@ -1,7 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed } from './frontend.ts';
@@ -374,15 +374,14 @@ app.get('/public-api/healthcheck', (req: Request, res: Response): void => {
 
 app.post('/public-api/add-video', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { video, channel } = req.body as { video: Video, channel: Channel };
+    const video = req.body as Video;
 
-    if (!video || !channel) {
-      res.status(400).json({ message: 'Both video and channel data are required' });
+    if (!video) {
+      res.status(400).json({ message: 'add-video requires video data' });
       return;
     }
 
-    const requiredVideoFields = ['video_id', 'title', 'description', 'video_filename', 'upload_timestamp'] as const;
-    const requiredChannelFields = ['channel_id', 'channel', 'short_id'] as const;
+    const requiredVideoFields = ['video_id', 'title', 'description', 'channel_id', 'video_filename', 'upload_timestamp'] as const;
 
     for (const field of requiredVideoFields) {
       if (video[field] == null) {
@@ -390,18 +389,56 @@ app.post('/public-api/add-video', async (req: Request, res: Response): Promise<v
         return;
       }
     }
+    if (getChannelById(video.channel_id) == null) {
+      res.status(400).json({ message: `Trying to add video for unknown channel ${video.channel_id}` });
+      return;
+    }
 
+    // TODO adding video which agrees with existing data should not error
+
+    addVideo(video);
+    console.log(`added ${JSON.stringify(video.title)} from API`);
+
+    res.json(true);
+  } catch (error: any) {
+    console.error('Add video error:', error);
+    if (error.message.includes('UNIQUE constraint failed')) {
+      if (error.message.includes('videos.video_id')) {
+        res.status(409).json({ message: 'Video with this ID already exists' });
+      } else if (error.message.includes('channels.channel_id')) {
+        res.status(409).json({ message: 'Channel with this ID already exists' });
+      } else if (error.message.includes('channels.short_id')) {
+        res.status(409).json({ message: 'Channel with this short ID already exists' });
+      } else {
+        res.status(409).json({ message: 'Duplicate entry detected' });
+      }
+    } else {
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+});
+
+app.post('/public-api/add-channel', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const channel = req.body as Channel;
+
+    if (!channel) {
+      res.status(400).json({ message: 'add-channel requires channel data' });
+      return;
+    }
+
+    const requiredChannelFields = ['channel_id', 'channel', 'short_id'] as const;
     for (const field of requiredChannelFields) {
       if (channel[field] == null) {
         res.status(400).json({ message: `Channel field '${field}' is required` });
         return;
       }
     }
+    // TODO adding channel which agrees with existing data should not error
 
     addChannel(channel);
 
-    addVideo(video);
-    console.log(`added ${JSON.stringify(video.title)} from API`);
+    console.log(`added ${JSON.stringify(channel.channel)} from API`);
 
     res.json({ message: 'Video added successfully' });
   } catch (error: any) {
