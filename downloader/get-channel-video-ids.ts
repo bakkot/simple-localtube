@@ -22,7 +22,7 @@ export async function getLatestVideoUrls(server: string, channelId: ChannelID, a
   const channelVideosUrl = `https://www.youtube.com/channel/${channelId}/videos`;
   // console.log(`Fetching latest videos for channel ${channelId} from ${channelVideosUrl}`);
 
-  const newVideoUrls: VideoID[] = [];
+  const newVideoIds: VideoID[] = [];
   let startIndex = 1;
 
   while (true) {
@@ -61,7 +61,7 @@ export async function getLatestVideoUrls(server: string, channelId: ChannelID, a
         }
 
         if (!(await hasVideo(server, videoId))) {
-          newVideoUrls.push(videoId);
+          newVideoIds.push(videoId);
         } else if (!all) {
           console.log(`Found known video ${videoId}. Stopping search.`);
           break;
@@ -89,6 +89,6 @@ export async function getLatestVideoUrls(server: string, channelId: ChannelID, a
     if (all) break;
   }
 
-  console.log(`Found ${newVideoUrls.length} new video URLs for channel ${channelId}.`);
-  return newVideoUrls;
+  console.log(`Found ${newVideoIds.length} new videos for channel ${channelId}`);
+  return newVideoIds;
 }

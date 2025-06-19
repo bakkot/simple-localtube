@@ -47,17 +47,17 @@ export async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID
   let bannerUncroppedName = bannerUncropped == null ? null : await fetchTo(bannerUncropped.url, tempDir.path, 'banner_uncropped');
   let bannerName = banner == null ? null : await fetchTo(banner.url, tempDir.path, 'banner');
 
-  move(tempJsonPath, jsonPath);
+  await move(tempJsonPath, jsonPath);
   if (avatarName != null) {
-    move(path.join(tempDir.path, avatarName), path.join(fullPath, avatarName));
+    await move(path.join(tempDir.path, avatarName), path.join(fullPath, avatarName));
   }
   if (bannerUncroppedName != null) {
-    move(path.join(tempDir.path, bannerUncroppedName), path.join(fullPath, bannerUncroppedName));
+    await move(path.join(tempDir.path, bannerUncroppedName), path.join(fullPath, bannerUncroppedName));
   }
   if (bannerName != null) {
-    move(path.join(tempDir.path, bannerName), path.join(fullPath, bannerName));
+    await move(path.join(tempDir.path, bannerName), path.join(fullPath, bannerName));
   }
 
-  console.log({ avatarName, bannerName, bannerUncroppedName });
+  // console.log({ avatarName, bannerName, bannerUncroppedName });
 }
 

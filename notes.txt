@@ -11,8 +11,26 @@ when checking for new videos, also have to check WIP set; presence there counts
 
 maybe have a "subscribed" JSON?
 
+clean up console.log
+
+
+rename scan.ts to something else
+
+FTS5
+one version with descriptions
+one with subs
+one with both
+one with neither
+
+channel id from short ID:
+./yt-dlp --playlist-items 0 -O playlist:channel_url https://www.youtube.com/@NileRed
+or:
+document.querySelector('link[rel=canonical]').href on channel page
+
 
 todo consistency for node:foo vs foo
+
+get some eslinting
 
 todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
 

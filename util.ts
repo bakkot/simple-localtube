@@ -1,4 +1,5 @@
 import fs from 'fs';
+import fsp from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import stream from 'stream';
@@ -35,15 +36,14 @@ export function nameExt(file: string): { name: string, ext: string } {
   return { name: split.slice(0, -1).join('.'), ext: split.at(-1)! };
 }
 
-// TODO this probably actually _should_ be async...
-export function move(source: string, destination: string) {
+export async function move(source: string, destination: string) {
   try {
-    fs.renameSync(source, destination);
+    await fsp.rename(source, destination);
   } catch (err: any) {
     if (err?.code !== 'EXDEV') {
       throw err;
     }
-    fs.copyFileSync(source, destination);
+    await fsp.copyFile(source, destination);
     fs.unlinkSync(source);
   }
 }
@@ -147,8 +147,8 @@ const imageMimeToExt: Record<string, string | undefined> = {
 // TODO consider whether we actually care about these
 // https://github.com/nodejs/node/issues/58486
 const EXIT_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2'];
-export function getTemp(): { [Symbol.dispose]: () => void; path: string; } {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localtube-'));
+export function getTemp(base=os.tmpdir()): { [Symbol.dispose]: () => void; path: string; } {
+  const tempDir = fs.mkdtempSync(path.join(base, 'tmp-localtube-'));
   console.log({ tempDir });
   function cleanup() {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -158,10 +158,11 @@ export function getTemp(): { [Symbol.dispose]: () => void; path: string; } {
     process.exit();
   }
 
-  process.on('exit', cleanup);
-  for (let signal of EXIT_SIGNALS) {
-    process.on(signal, cleanupAndExit);
-  }
+  // TODO
+  // process.on('exit', cleanup);
+  // for (let signal of EXIT_SIGNALS) {
+  //   process.on(signal, cleanupAndExit);
+  // }
 
   return {
     [Symbol.dispose]() {

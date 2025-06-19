@@ -204,7 +204,7 @@ for await (const entry of openedDir) {
     if (json.length !== 1) {
       throw new Error(`did not find json; tempdir contents: ${JSON.stringify(json)}`);
     }
-    move(path.join(tempDir, json[0]), jsonPath);
+    await move(path.join(tempDir, json[0]), jsonPath);
     console.log(jsonPath);
     await sleep(1000);
   }

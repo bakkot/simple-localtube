@@ -440,7 +440,7 @@ app.post('/public-api/add-channel', async (req: Request, res: Response): Promise
 
     console.log(`added ${JSON.stringify(channel.channel)} from API`);
 
-    res.json({ message: 'Video added successfully' });
+    res.json(true);
   } catch (error: any) {
     console.error('Add video error:', error);
     if (error.message.includes('UNIQUE constraint failed')) {

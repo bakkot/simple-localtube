@@ -39,6 +39,8 @@ if (existing.length === 0) {
     CREATE INDEX idx_videos_channel_id ON videos(channel_id);
     CREATE INDEX idx_videos_upload_timestamp ON videos(upload_timestamp);
     CREATE INDEX idx_videos_channel_upload ON videos(channel_id, upload_timestamp DESC);
+    CREATE INDEX idx_videos_duration_seconds ON videos(duration_seconds);
+    CREATE INDEX idx_videos_channel_duration_seconds ON videos(channel_id, duration_seconds);
     CREATE INDEX idx_channels_short_id ON channels(short_id);
   `);
 } else if (!(new Set(existing)).isSubsetOf(new Set(['channels', 'videos']))) {
