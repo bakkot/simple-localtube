@@ -791,11 +791,14 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
     .channel-list { display: flex; flex-direction: column; gap: 15px; }
     .channel-item { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 15px; }
     .channel-avatar { width: 60px; height: 60px; border-radius: 50%; }
-    .channel-details { display: flex; flex-direction: column; gap: 3px; }
+    .channel-details { display: flex; flex-direction: column; gap: 3px; flex: 1; }
     .channel-status { font-size: 14px; padding: 4px 8px; border-radius: 4px; }
     .status-subscribing { background: #fff3cd; color: #856404; }
     .status-subscribed { background: #d4edda; color: #155724; }
     .channel-id { font-size: 12px; color: #666; margin-top: 5px; }
+    .unsubscribe-btn { background: #d32f2f; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .unsubscribe-btn:hover { background: #b71c1c; }
+    .unsubscribe-btn:disabled { background: #ccc; cursor: not-allowed; }
     .no-channels { text-align: center; color: #666; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .add-subscription-form { background: white; padding: 20px; margin-top: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
     .add-subscription-form h2 { margin: 0 0 15px 0; color: #333; }
@@ -862,6 +865,11 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
               </div>
               <div class="channel-id">${channel.channel_id}</div>
             </div>
+            ${canSubscribe ? `
+              <button class="unsubscribe-btn" onclick="unsubscribe('${channel.channel_id}', '${channel.channel.replace(/'/g, "\\'")}', event)">
+                Unsubscribe
+              </button>
+            ` : ''}
           </div>
         `).join('')}
       </div>
@@ -874,6 +882,43 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
     }
 
     ${canSubscribe ? `
+      async function unsubscribe(channelId, channelName, event) {
+        const shiftPressed = event.shiftKey;
+
+        if (!shiftPressed) {
+          const confirmed = confirm(\`Are you sure you want to unsubscribe from "\${channelName}"?\\n\\nTip: Hold Shift while clicking to bypass this confirmation.\`);
+          if (!confirmed) {
+            return;
+          }
+        }
+
+        const button = event.target;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Unsubscribing...';
+
+        try {
+          const response = await fetch('/api/unsubscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId })
+          });
+
+          if (response.ok) {
+            window.location.reload();
+          } else {
+            const error = await response.json();
+            alert('Failed to unsubscribe: ' + (error.message || 'Unknown error'));
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+        } catch (err) {
+          alert('Network error: ' + err.message);
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      }
+
       const addForm = document.getElementById('addSubscriptionForm');
       const addButton = document.getElementById('addButton');
       const addMessage = document.getElementById('addMessage');
@@ -904,7 +949,7 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
             addMessage.textContent = 'Subscription added successfully! Refreshing page...';
             addMessage.className = 'message success';
             document.getElementById('channelId').value = '';
-            setTimeout(() => { window.location.reload(); }, 1500);
+            setTimeout(() => { window.location.reload(); }, 500);
           } else {
             const error = await response.json();
             addMessage.textContent = error.message || 'Failed to add subscription';

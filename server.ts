@@ -122,6 +122,38 @@ function addSubscription(channelId: ChannelID, title: string): void {
   }
 }
 
+function removeSubscription(channelId: ChannelID): void {
+  if (!values.subscriptions) {
+    throw new Error('Subscriptions file not configured');
+  }
+
+  let subscriptionsData;
+  try {
+    subscriptionsData = JSON.parse(readFileSync(values.subscriptions, 'utf8'));
+  } catch (error) {
+    throw new Error('Error reading subscriptions file');
+  }
+
+  const subscribing = subscriptionsData.subscribing || [];
+  const subscribed = subscriptionsData.subscribed || [];
+  const titles = subscriptionsData.titles || {};
+
+  if (!subscribing.includes(channelId) && !subscribed.includes(channelId)) {
+    throw new Error('Channel is not in subscriptions');
+  }
+
+  subscriptionsData.subscribing = subscribing.filter((id: string) => id !== channelId);
+  subscriptionsData.subscribed = subscribed.filter((id: string) => id !== channelId);
+  const { [channelId]: removed, ...remainingTitles } = titles;
+  subscriptionsData.titles = remainingTitles;
+
+  try {
+    writeFileSync(values.subscriptions, JSON.stringify(subscriptionsData, null, 2));
+  } catch (error) {
+    throw new Error('Error writing subscriptions file');
+  }
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -514,6 +546,30 @@ app.post('/api/add-subscription', async (req: Request, res: Response): Promise<v
   } catch (error: any) {
     console.error('Add subscription error:', error);
     res.status(500).json({ message: 'Failed to add subscription: ' + error.message });
+  }
+});
+
+app.post('/api/unsubscribe', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userPermissions = getUserPermissions(req.username!);
+
+    if (!userPermissions.canSubscribe) {
+      res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
+      return;
+    }
+
+    const { channelId } = req.body;
+
+    if (!channelId || typeof channelId !== 'string') {
+      res.status(400).json({ message: 'Channel ID is required and must be a string' });
+      return;
+    }
+
+    removeSubscription(channelId as ChannelID);
+    res.json({ message: 'Unsubscribed successfully' });
+  } catch (error: any) {
+    console.error('Unsubscribe error:', error);
+    res.status(500).json({ message: 'Failed to unsubscribe: ' + error.message });
   }
 });
 
