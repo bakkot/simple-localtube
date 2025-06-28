@@ -56,12 +56,13 @@ if (temps.length > 0) {
 type SubscriptionStatus = {
   subscribing: ChannelID[];
   subscribed: ChannelID[];
+  titles: Record<ChannelID, string>;
 }
 
 let status: SubscriptionStatus;
 
 if (!fs.existsSync(subscriptionsFile)) {
-  status = { subscribing: [], subscribed: [] };
+  status = { subscribing: [], subscribed: [], titles: {} };
   writeStatus();
 }
 status = JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8'));
@@ -207,6 +208,7 @@ for (const channel of toSub) {
   subbed.add(channel);
   status.subscribing = [...toSub];
   status.subscribed.push(channel);
+  delete status.titles[channel];
   writeStatus();
 }
 console.log(`Performed initial fetch for ${toSubSize} channels`);
