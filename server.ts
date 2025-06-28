@@ -1,10 +1,12 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
+import { parseArgs } from 'util';
+import { readFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers } from './user-db.ts';
-import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed } from './frontend.ts';
+import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage } from './frontend.ts';
 
 // Extend Request interface to include username
 declare global {
@@ -14,6 +16,14 @@ declare global {
     }
   }
 }
+
+const { values } = parseArgs({
+  options: {
+    subscriptions: {
+      type: 'string',
+    },
+  },
+});
 
 const app = express();
 const PORT = 3000;
@@ -161,6 +171,22 @@ app.get('/add-user', (req: Request, res: Response): void => {
   const availableChannels = getChannelsForUser(userPermissions.allowedChannels);
 
   res.send(renderAddUserPage(req.username!, userPermissions, availableChannels));
+});
+
+app.get('/subscriptions', (req: Request, res: Response): void => {
+  if (!values.subscriptions) {
+    res.status(500).send('Server was started without passing --subscriptions');
+    return;
+  }
+
+  try {
+    const subscriptionsData = JSON.parse(readFileSync(values.subscriptions, 'utf8'));
+    const allowedChannels = getUserPermissions(req.username!).allowedChannels;
+    res.send(renderSubscriptionsPage(req.username!, subscriptionsData, allowedChannels));
+  } catch (error) {
+    console.error('Error reading subscriptions file:', error);
+    res.status(500).send('Error reading subscriptions file');
+  }
 });
 
 app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<void> => {

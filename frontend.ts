@@ -1,5 +1,6 @@
 import type { VideoWithChannel } from './media-db.ts';
-import { nameExt } from './util.ts';
+import { getChannelById } from './media-db.ts';
+import { nameExt, type ChannelID } from './util.ts';
 
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -707,6 +708,98 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
 
     // Initialize visibility
     updateChannelsVisibility();
+  </script>
+</body>
+</html>`;
+}
+
+export function renderSubscriptionsPage(username: string, subscriptionsData: { subscribing?: string[], subscribed?: string[] }, allowedChannels: Set<ChannelID> | 'all'): string {
+  const subscribing = subscriptionsData.subscribing || [];
+  const subscribed = subscriptionsData.subscribed || [];
+
+  const allChannelIds = [...subscribing, ...subscribed];
+  const channelInfos = [];
+
+  for (const channelId of allChannelIds) {
+    if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
+      continue;
+    }
+
+    const channel = getChannelById(channelId as ChannelID);
+    if (channel) {
+      const avatarExt = channel.avatar_filename ? nameExt(channel.avatar_filename).ext : null;
+      channelInfos.push({
+        ...channel,
+        status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
+        avatarExt
+      });
+    }
+  }
+
+  channelInfos.sort((a, b) => a.channel.localeCompare(b.channel));
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Subscriptions - LocalTube</title>
+  <style>
+    ${commonCSS}
+    body { margin: 20px; }
+    h1 { color: #333; margin: 0px; }
+    .subscriptions-container { margin-top: 20px; }
+    .channel-list { display: flex; flex-direction: column; gap: 15px; }
+    .channel-item { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 15px; }
+    .channel-avatar { width: 60px; height: 60px; border-radius: 50%; }
+    .channel-details { flex: 1; }
+    .channel-name { font-weight: bold; font-size: 16px; margin-bottom: 5px; }
+    .channel-status { font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+    .status-subscribing { background: #fff3cd; color: #856404; }
+    .status-subscribed { background: #d4edda; color: #155724; }
+    .channel-id { font-size: 12px; color: #666; margin-top: 5px; }
+    .no-channels { text-align: center; color: #666; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Subscriptions</h1>
+    <a href="/" class="back-link">← Back to Home</a>
+    <div class="user-info">
+      <span class="username">${username}</span>
+      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+    </div>
+  </div>
+  <div class="subscriptions-container">
+    ${channelInfos.length === 0 ? `
+      <div class="no-channels">No subscriptions found</div>
+    ` : `
+      <div class="channel-list">
+        ${channelInfos.map(channel => `
+          <div class="channel-item">
+            ${channel.avatar_filename ? `
+              <img class="channel-avatar" src="/media/avatars/${channel.short_id}.${channel.avatarExt}" alt="${channel.channel}">
+            ` : `
+              <div class="channel-avatar" style="background: #ddd;"></div>
+            `}
+            <div class="channel-details">
+              <div class="channel-name">
+                <a href="/c/${channel.short_id}" class="channel-name">${channel.channel}</a>
+              </div>
+              <span class="channel-status ${channel.status === 'subscribing' ? 'status-subscribing' : 'status-subscribed'}">
+                ${channel.status}
+              </span>
+              <div class="channel-id">${channel.channel_id}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `}
+  </div>
+  <script>
+    function logout() {
+      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/login';
+    }
   </script>
 </body>
 </html>`;
