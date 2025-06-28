@@ -551,6 +551,23 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
       </div>
 
       <div class="permission-section">
+        <h3>Subscription Permissions</h3>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="can-subscribe-yes" name="canSubscribe" value="true" ${userPermissions.allowedChannels !== 'all' ? 'disabled' : ''}>
+            <label for="can-subscribe-yes">Can manage subscriptions</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="can-subscribe-no" name="canSubscribe" value="false" checked>
+            <label for="can-subscribe-no">Cannot manage subscriptions</label>
+          </div>
+        </div>
+        ${userPermissions.allowedChannels !== 'all' ? `
+          <p style="color: #666; font-size: 14px; margin-top: 10px;">Subscription management is only available for users with access to all channels.</p>
+        ` : ''}
+      </div>
+
+      <div class="permission-section">
         <h3>Channel Permissions</h3>
         ${userPermissions.allowedChannels === 'all' ? `
         <div class="radio-group">
@@ -649,9 +666,16 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
       const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value ||
                                 document.querySelector('input[name="permissions"][type="hidden"]')?.value;
       const createUser = document.querySelector('input[name="createUser"]:checked')?.value === 'true';
+      const canSubscribe = document.querySelector('input[name="canSubscribe"]:checked')?.value === 'true';
 
       if (!selectedPermission) {
         message.textContent = 'Please select channel permissions';
+        message.className = 'error';
+        return;
+      }
+
+      if (canSubscribe && selectedPermission !== 'all') {
+        message.textContent = 'Subscription management is only available for users with access to all channels';
         message.className = 'error';
         return;
       }
@@ -683,7 +707,8 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
             username,
             password,
             allowedChannels,
-            createUser
+            createUser,
+            canSubscribe
           })
         });
 

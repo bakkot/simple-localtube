@@ -28,6 +28,7 @@ type User = {
 type Permissions = {
   allowedChannels: Set<ChannelID> | 'all';
   createUser: boolean;
+  canSubscribe: boolean;
 };
 
 
@@ -150,13 +151,14 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
 }
 
 function parsePermissions(permissionsString: string): Permissions {
-  let { allowedChannels, createUser } = JSON.parse(permissionsString);
+  let { allowedChannels, createUser, canSubscribe } = JSON.parse(permissionsString);
   if (allowedChannels !== 'all' && !Array.isArray(allowedChannels) || typeof createUser != 'boolean') {
     throw new Error('malformed permissions');
   }
   return {
     allowedChannels: allowedChannels === 'all' ? 'all' : new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && isChannelInDb(c as ChannelID))),
     createUser,
+    canSubscribe: typeof canSubscribe === 'boolean' ? canSubscribe : false,
   };
 }
 
@@ -164,6 +166,7 @@ function serializePermissions(permissions: Permissions): string {
   return JSON.stringify({
     allowedChannels: permissions.allowedChannels === 'all' ? 'all' : [...permissions.allowedChannels],
     createUser: permissions.createUser,
+    canSubscribe: permissions.canSubscribe,
   });
 }
 

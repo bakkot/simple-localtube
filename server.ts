@@ -242,6 +242,7 @@ app.post('/api/setup', async (req: Request, res: Response): Promise<void> => {
     await addUser(username, password, {
       allowedChannels: 'all',
       createUser: true,
+      canSubscribe: true,
     });
 
     res.json({ message: 'Administrator account created successfully' });
@@ -264,15 +265,21 @@ app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const { username, password, allowedChannels, createUser } = req.body;
+    const { username, password, allowedChannels, createUser, canSubscribe } = req.body;
 
-    if (!username || !password || !allowedChannels || createUser === undefined) {
-      res.status(400).json({ message: 'Username, password, allowedChannels, and createUser are required' });
+    if (!username || !password || !allowedChannels || createUser === undefined || canSubscribe === undefined) {
+      res.status(400).json({ message: 'Username, password, allowedChannels, createUser, and canSubscribe are required' });
       return;
     }
 
-    if (typeof username !== 'string' || typeof password !== 'string' || typeof createUser !== 'boolean') {
-      res.status(400).json({ message: 'Username and password must be strings, createUser must be boolean' });
+    if (typeof username !== 'string' || typeof password !== 'string' || typeof createUser !== 'boolean' || typeof canSubscribe !== 'boolean') {
+      res.status(400).json({ message: 'Username and password must be strings, createUser and canSubscribe must be boolean' });
+      return;
+    }
+
+    // Validate canSubscribe permission restriction
+    if (canSubscribe && allowedChannels !== 'all') {
+      res.status(400).json({ message: 'Subscription management is only available for users with access to all channels' });
       return;
     }
 
@@ -307,6 +314,7 @@ app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => 
     await addUser(username, password, {
       allowedChannels: channelPermissions,
       createUser,
+      canSubscribe,
     });
 
     res.json({ message: 'User created successfully' });
