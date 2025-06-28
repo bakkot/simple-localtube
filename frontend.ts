@@ -812,8 +812,8 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
       <form id="addSubscriptionForm">
         <div class="form-row">
           <div class="form-group">
-            <label for="channelId">Channel ID:</label>
-            <input type="text" id="channelId" name="channelId" placeholder="Enter full channel ID" required>
+            <label for="channelId">Channel URL, Handle, or ID:</label>
+            <input type="text" id="channelId" name="channelId" placeholder="e.g. @username, UCxxxxx, or https://youtube.com/..." required>
           </div>
           <button type="submit" class="add-button" id="addButton">Add Subscription</button>
         </div>

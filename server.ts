@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
-import { nameExt, type VideoID, type ChannelID } from './util.ts';
+import { nameExt, toChannelID, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage } from './frontend.ts';
 
@@ -25,7 +25,71 @@ const { values } = parseArgs({
   },
 });
 
-function addSubscription(channelId: string): void {
+async function resolveChannelInput(input: string): Promise<ChannelID> {
+  let url: string;
+
+  // Check if input looks like a URL
+  if (input.startsWith('http:') || input.startsWith('https:')) {
+    try {
+      const parsedUrl = new URL(input);
+      if (!parsedUrl.hostname.endsWith('youtube.com')) {
+        throw new Error('Only YouTube URLs are supported');
+      }
+      url = input;
+    } catch (error) {
+      throw new Error('Invalid URL format');
+    }
+  } else {
+    // Check if it's alphanumeric/underscore, possibly with leading @
+    const cleanInput = input.trim();
+    if (cleanInput.startsWith('@')) {
+      const handle = cleanInput.slice(1);
+      if (!/^[a-zA-Z0-9_]+$/.test(handle)) {
+        throw new Error('Invalid handle format. Use only letters, numbers, and underscores');
+      }
+      url = `https://youtube.com/@${handle}`;
+    } else {
+      if (!/^[a-zA-Z0-9_]+$/.test(cleanInput)) {
+        throw new Error('Invalid channel ID format. Use only letters, numbers, and underscores');
+      }
+      url = `https://youtube.com/channel/${cleanInput}`;
+    }
+  }
+
+  // Fetch the page and extract canonical URL
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; LocalTube/1.0)'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`YouTube returned ${response.status}: ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    const canonicalMatch = html.match(/<link\s+rel="canonical"\s+href="([^"]+)"/i);
+
+    if (!canonicalMatch) {
+      throw new Error('Could not find canonical URL on YouTube page');
+    }
+
+    const channelId = toChannelID(canonicalMatch[1]);
+    if (!channelId) {
+      throw new Error('Could not extract channel ID from canonical URL');
+    }
+
+    return channelId;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to resolve channel: ${error.message}`);
+    }
+    throw new Error('Failed to resolve channel');
+  }
+}
+
+function addSubscription(channelId: ChannelID): void {
   if (!values.subscriptions) {
     throw new Error('Subscriptions file not configured');
   }
@@ -423,7 +487,7 @@ app.get('/public-api/healthcheck', (req: Request, res: Response): void => {
   res.json(true);
 });
 
-app.post('/api/add-subscription', (req: Request, res: Response): void => {
+app.post('/api/add-subscription', async (req: Request, res: Response): Promise<void> => {
   try {
     const userPermissions = getUserPermissions(req.username!);
 
@@ -435,21 +499,16 @@ app.post('/api/add-subscription', (req: Request, res: Response): void => {
     const { channelId } = req.body;
 
     if (!channelId || typeof channelId !== 'string') {
-      res.status(400).json({ message: 'Channel ID is required and must be a string' });
+      res.status(400).json({ message: 'Channel input is required and must be a string' });
       return;
     }
 
-    addSubscription(channelId.trim());
+    const resolvedChannelId = await resolveChannelInput(channelId.trim());
+    addSubscription(resolvedChannelId);
     res.json({ message: 'Subscription added successfully' });
   } catch (error: any) {
     console.error('Add subscription error:', error);
-    if (error.message === 'Channel is already in subscriptions') {
-      res.status(409).json({ message: 'Channel is already subscribed' });
-    } else if (error.message === 'Subscriptions file not configured') {
-      res.status(500).json({ message: 'Subscriptions not configured on server' });
-    } else {
-      res.status(500).json({ message: 'Failed to add subscription' });
-    }
+    res.status(500).json({ message: 'Failed to add subscription: ' + error.message });
   }
 });
 

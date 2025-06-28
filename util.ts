@@ -28,6 +28,25 @@ export function toVideoID(url: string): VideoID | null {
   return null;
 }
 
+export function toChannelID(url: string): ChannelID | null {
+  try {
+    const parsedUrl = new URL(url);
+    if (
+      parsedUrl.hostname === 'www.youtube.com' ||
+      parsedUrl.hostname === 'youtube.com' ||
+      parsedUrl.hostname === 'm.youtube.com'
+    ) {
+      const pathMatch = parsedUrl.pathname.match(/^\/channel\/([a-zA-Z0-9_-]+)/);
+      if (pathMatch) {
+        return pathMatch[1] as ChannelID;
+      }
+    }
+  } catch {
+    // pass
+  }
+  return null;
+}
+
 export function nameExt(file: string): { name: string, ext: string } {
   let split = file.split('.');
   if (split.length === 1) {
