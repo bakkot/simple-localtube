@@ -2,7 +2,7 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
@@ -24,6 +24,34 @@ const { values } = parseArgs({
     },
   },
 });
+
+function addSubscription(channelId: string): void {
+  if (!values.subscriptions) {
+    throw new Error('Subscriptions file not configured');
+  }
+
+  let subscriptionsData;
+  try {
+    subscriptionsData = JSON.parse(readFileSync(values.subscriptions, 'utf8'));
+  } catch (error) {
+    throw new Error('Error reading subscriptions file');
+  }
+
+  const subscribing = subscriptionsData.subscribing || [];
+  const subscribed = subscriptionsData.subscribed || [];
+
+  if (subscribing.includes(channelId) || subscribed.includes(channelId)) {
+    throw new Error('Channel is already in subscriptions');
+  }
+
+  subscriptionsData.subscribing = [...subscribing, channelId];
+
+  try {
+    writeFileSync(values.subscriptions, JSON.stringify(subscriptionsData, null, 2));
+  } catch (error) {
+    throw new Error('Error writing subscriptions file');
+  }
+}
 
 const app = express();
 const PORT = 3000;
@@ -181,8 +209,8 @@ app.get('/subscriptions', (req: Request, res: Response): void => {
 
   try {
     const subscriptionsData = JSON.parse(readFileSync(values.subscriptions, 'utf8'));
-    const allowedChannels = getUserPermissions(req.username!).allowedChannels;
-    res.send(renderSubscriptionsPage(req.username!, subscriptionsData, allowedChannels));
+    const userPermissions = getUserPermissions(req.username!);
+    res.send(renderSubscriptionsPage(req.username!, subscriptionsData, userPermissions.allowedChannels, userPermissions.canSubscribe));
   } catch (error) {
     console.error('Error reading subscriptions file:', error);
     res.status(500).send('Error reading subscriptions file');
@@ -393,6 +421,36 @@ app.get('/public-api/has-channel', (req: Request, res: Response): void => {
 
 app.get('/public-api/healthcheck', (req: Request, res: Response): void => {
   res.json(true);
+});
+
+app.post('/api/add-subscription', (req: Request, res: Response): void => {
+  try {
+    const userPermissions = getUserPermissions(req.username!);
+
+    if (!userPermissions.canSubscribe) {
+      res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
+      return;
+    }
+
+    const { channelId } = req.body;
+
+    if (!channelId || typeof channelId !== 'string') {
+      res.status(400).json({ message: 'Channel ID is required and must be a string' });
+      return;
+    }
+
+    addSubscription(channelId.trim());
+    res.json({ message: 'Subscription added successfully' });
+  } catch (error: any) {
+    console.error('Add subscription error:', error);
+    if (error.message === 'Channel is already in subscriptions') {
+      res.status(409).json({ message: 'Channel is already subscribed' });
+    } else if (error.message === 'Subscriptions file not configured') {
+      res.status(500).json({ message: 'Subscriptions not configured on server' });
+    } else {
+      res.status(500).json({ message: 'Failed to add subscription' });
+    }
+  }
 });
 
 app.post('/public-api/add-video', async (req: Request, res: Response): Promise<void> => {

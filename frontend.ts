@@ -738,7 +738,7 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
 </html>`;
 }
 
-export function renderSubscriptionsPage(username: string, subscriptionsData: { subscribing?: string[], subscribed?: string[] }, allowedChannels: Set<ChannelID> | 'all'): string {
+export function renderSubscriptionsPage(username: string, subscriptionsData: { subscribing?: string[], subscribed?: string[] }, allowedChannels: Set<ChannelID> | 'all', canSubscribe: boolean): string {
   const subscribing = subscriptionsData.subscribing || [];
   const subscribed = subscriptionsData.subscribed || [];
 
@@ -783,6 +783,18 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
     .status-subscribed { background: #d4edda; color: #155724; }
     .channel-id { font-size: 12px; color: #666; margin-top: 5px; }
     .no-channels { text-align: center; color: #666; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .add-subscription-form { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    .add-subscription-form h2 { margin: 0 0 15px 0; color: #333; }
+    .form-row { display: flex; gap: 10px; align-items: flex-end; }
+    .form-group { flex: 1; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+    .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; box-sizing: border-box; }
+    .add-button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; white-space: nowrap; }
+    .add-button:hover { background: #1565c0; }
+    .add-button:disabled { background: #ccc; cursor: not-allowed; }
+    .message { margin-top: 10px; font-size: 14px; }
+    .error { color: #d32f2f; }
+    .success { color: #388e3c; }
   </style>
 </head>
 <body>
@@ -794,6 +806,21 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
       <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
     </div>
   </div>
+  ${canSubscribe ? `
+    <div class="add-subscription-form">
+      <h2>Add New Subscription</h2>
+      <form id="addSubscriptionForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="channelId">Channel ID:</label>
+            <input type="text" id="channelId" name="channelId" placeholder="Enter full channel ID" required>
+          </div>
+          <button type="submit" class="add-button" id="addButton">Add Subscription</button>
+        </div>
+        <div id="addMessage" class="message"></div>
+      </form>
+    </div>
+  ` : ''}
   <div class="subscriptions-container">
     ${channelInfos.length === 0 ? `
       <div class="no-channels">No subscriptions found</div>
@@ -825,6 +852,53 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
       document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       window.location.href = '/login';
     }
+
+    ${canSubscribe ? `
+      const addForm = document.getElementById('addSubscriptionForm');
+      const addButton = document.getElementById('addButton');
+      const addMessage = document.getElementById('addMessage');
+
+      addForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const channelId = document.getElementById('channelId').value.trim();
+        if (!channelId) {
+          addMessage.textContent = 'Please enter a channel ID';
+          addMessage.className = 'message error';
+          return;
+        }
+
+        addButton.disabled = true;
+        addButton.textContent = 'Adding...';
+        addMessage.textContent = '';
+        addMessage.className = 'message';
+
+        try {
+          const response = await fetch('/api/add-subscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId })
+          });
+
+          if (response.ok) {
+            addMessage.textContent = 'Subscription added successfully! Refreshing page...';
+            addMessage.className = 'message success';
+            document.getElementById('channelId').value = '';
+            setTimeout(() => { window.location.reload(); }, 1500);
+          } else {
+            const error = await response.json();
+            addMessage.textContent = error.message || 'Failed to add subscription';
+            addMessage.className = 'message error';
+          }
+        } catch (err) {
+          addMessage.textContent = \`Network error: \${err.message}. Please try again.\`;
+          addMessage.className = 'message error';
+        }
+
+        addButton.disabled = false;
+        addButton.textContent = 'Add Subscription';
+      });
+    ` : ''}
   </script>
 </body>
 </html>`;
