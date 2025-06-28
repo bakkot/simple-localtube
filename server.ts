@@ -25,7 +25,7 @@ const { values } = parseArgs({
   },
 });
 
-async function resolveChannelInput(input: string): Promise<ChannelID> {
+async function resolveChannelInput(input: string): Promise<{ channelId: ChannelID; title: string }> {
   let url: string;
 
   // Check if input looks like a URL
@@ -80,7 +80,10 @@ async function resolveChannelInput(input: string): Promise<ChannelID> {
       throw new Error('Could not extract channel ID from canonical URL');
     }
 
-    return channelId;
+    const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim().replace(/ - YouTube$/, '') : 'Unknown Channel';
+
+    return { channelId, title };
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Failed to resolve channel: ${error.message}`);
@@ -89,7 +92,7 @@ async function resolveChannelInput(input: string): Promise<ChannelID> {
   }
 }
 
-function addSubscription(channelId: ChannelID): void {
+function addSubscription(channelId: ChannelID, title: string): void {
   if (!values.subscriptions) {
     throw new Error('Subscriptions file not configured');
   }
@@ -103,12 +106,14 @@ function addSubscription(channelId: ChannelID): void {
 
   const subscribing = subscriptionsData.subscribing || [];
   const subscribed = subscriptionsData.subscribed || [];
+  const titles = subscriptionsData.titles || {};
 
   if (subscribing.includes(channelId) || subscribed.includes(channelId)) {
     throw new Error('Channel is already in subscriptions');
   }
 
   subscriptionsData.subscribing = [...subscribing, channelId];
+  subscriptionsData.titles = { ...titles, [channelId]: title };
 
   try {
     writeFileSync(values.subscriptions, JSON.stringify(subscriptionsData, null, 2));
@@ -503,8 +508,8 @@ app.post('/api/add-subscription', async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const resolvedChannelId = await resolveChannelInput(channelId.trim());
-    addSubscription(resolvedChannelId);
+    const { channelId: resolvedChannelId, title } = await resolveChannelInput(channelId.trim());
+    addSubscription(resolvedChannelId, title);
     res.json({ message: 'Subscription added successfully' });
   } catch (error: any) {
     console.error('Add subscription error:', error);

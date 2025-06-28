@@ -738,9 +738,10 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
 </html>`;
 }
 
-export function renderSubscriptionsPage(username: string, subscriptionsData: { subscribing?: string[], subscribed?: string[] }, allowedChannels: Set<ChannelID> | 'all', canSubscribe: boolean): string {
+export function renderSubscriptionsPage(username: string, subscriptionsData: { subscribing?: string[], subscribed?: string[], titles?: Record<string, string> }, allowedChannels: Set<ChannelID> | 'all', canSubscribe: boolean): string {
   const subscribing = subscriptionsData.subscribing || [];
   const subscribed = subscriptionsData.subscribed || [];
+  const titles = subscriptionsData.titles || {};
 
   const allChannelIds = [...subscribing, ...subscribed];
   const channelInfos = [];
@@ -757,6 +758,20 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
         ...channel,
         status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
         avatarExt
+      });
+    } else {
+      // Channel not in media DB, use stored title
+      const storedTitle = titles[channelId] || 'Unknown Channel';
+      channelInfos.push({
+        channel_id: channelId,
+        channel: storedTitle,
+        short_id: null, // No short_id available
+        description: null,
+        avatar_filename: null,
+        banner_filename: null,
+        banner_uncropped_filename: null,
+        status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
+        avatarExt: null
       });
     }
   }
@@ -776,14 +791,13 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
     .channel-list { display: flex; flex-direction: column; gap: 15px; }
     .channel-item { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 15px; }
     .channel-avatar { width: 60px; height: 60px; border-radius: 50%; }
-    .channel-details { flex: 1; }
-    .channel-name { font-weight: bold; font-size: 16px; margin-bottom: 5px; }
+    .channel-details { display: flex; flex-direction: column; gap: 3px; }
     .channel-status { font-size: 14px; padding: 4px 8px; border-radius: 4px; }
     .status-subscribing { background: #fff3cd; color: #856404; }
     .status-subscribed { background: #d4edda; color: #155724; }
     .channel-id { font-size: 12px; color: #666; margin-top: 5px; }
     .no-channels { text-align: center; color: #666; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .add-subscription-form { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    .add-subscription-form { background: white; padding: 20px; margin-top: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
     .add-subscription-form h2 { margin: 0 0 15px 0; color: #333; }
     .form-row { display: flex; gap: 10px; align-items: flex-end; }
     .form-group { flex: 1; }
@@ -834,12 +848,18 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
               <div class="channel-avatar" style="background: #ddd;"></div>
             `}
             <div class="channel-details">
-              <div class="channel-name">
-                <a href="/c/${channel.short_id}" class="channel-name">${channel.channel}</a>
+              <div>
+                ${channel.short_id ? `
+                  <a href="/c/${channel.short_id}" class="channel-name">${channel.channel}</a>
+                ` : `
+                  <span>${channel.channel}</span>
+                `}
               </div>
-              <span class="channel-status ${channel.status === 'subscribing' ? 'status-subscribing' : 'status-subscribed'}">
-                ${channel.status}
-              </span>
+              <div>
+                <span class="channel-status ${channel.status === 'subscribing' ? 'status-subscribing' : 'status-subscribed'}">
+                  ${channel.status}
+                </span>
+              </div>
               <div class="channel-id">${channel.channel_id}</div>
             </div>
           </div>
