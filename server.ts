@@ -5,7 +5,7 @@ import { parseArgs } from 'util';
 import { readFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, type VideoID, type ChannelID } from './util.ts';
-import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers } from './user-db.ts';
+import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage } from './frontend.ts';
 
 // Extend Request interface to include username
@@ -277,7 +277,6 @@ app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // Validate canSubscribe permission restriction
     if (canSubscribe && allowedChannels !== 'all') {
       res.status(400).json({ message: 'Subscription management is only available for users with access to all channels' });
       return;
@@ -285,37 +284,27 @@ app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => 
 
     let channelPermissions: Set<ChannelID> | 'all';
     if (allowedChannels === 'all') {
-      if (userPermissions.allowedChannels !== 'all') {
-        res.status(403).json({ message: 'Only users with all-channel access can grant all-channel access' });
-        return;
-      }
       channelPermissions = 'all';
     } else {
       if (!Array.isArray(allowedChannels)) {
         res.status(400).json({ message: 'allowedChannels must be "all" or an array of channel IDs' });
         return;
       }
-
-      const requestedChannelSet = new Set(allowedChannels);
-      const currentUserChannels = userPermissions.allowedChannels;
-
-      if (currentUserChannels !== 'all') {
-        for (const channelId of requestedChannelSet) {
-          if (!currentUserChannels.has(channelId as ChannelID)) {
-            res.status(403).json({ message: `You don't have permission to grant access to channel: ${channelId}` });
-            return;
-          }
-        }
-      }
-
-      channelPermissions = requestedChannelSet as Set<ChannelID>;
+      channelPermissions = new Set(allowedChannels) as Set<ChannelID>;
     }
 
-    await addUser(username, password, {
+    const requestedPermissions = {
       allowedChannels: channelPermissions,
       createUser,
       canSubscribe,
-    });
+    };
+
+    if (!arePermissionsAtLeastAsRestrictive(requestedPermissions, userPermissions)) {
+      res.status(403).json({ message: 'You cannot grant permissions that you do not have' });
+      return;
+    }
+
+    await addUser(username, password, requestedPermissions);
 
     res.json({ message: 'User created successfully' });
   } catch (error: any) {

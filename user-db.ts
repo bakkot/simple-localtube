@@ -220,6 +220,46 @@ export function canUserViewChannel(username: string, channelId: ChannelID): bool
   return permissions.allowedChannels === 'all' || permissions.allowedChannels.has(channelId);
 }
 
+export function arePermissionsAtLeastAsRestrictive(
+  requestedPermissions: Permissions,
+  granterPermissions: Permissions
+): boolean {
+  // Check createUser permission - can only grant if granter has it
+  if (requestedPermissions.createUser && !granterPermissions.createUser) {
+    return false;
+  }
+
+  // Check canSubscribe permission - can only grant if granter has it
+  if (requestedPermissions.canSubscribe && !granterPermissions.canSubscribe) {
+    return false;
+  }
+
+  // Check special rule: canSubscribe requires all channels access
+  if (requestedPermissions.canSubscribe && requestedPermissions.allowedChannels !== 'all') {
+    return false;
+  }
+
+  // Check channel permissions
+  if (granterPermissions.allowedChannels === 'all') {
+    // Granter has all channels, can grant any channel permissions
+    return true;
+  }
+
+  if (requestedPermissions.allowedChannels === 'all') {
+    // Granter doesn't have all channels but requested permissions do
+    return false;
+  }
+
+  // Both have specific channel sets - check if requested is subset of granter's
+  for (const channelId of requestedPermissions.allowedChannels) {
+    if (!granterPermissions.allowedChannels.has(channelId)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function hasAnyUsers(): boolean {
   return !!hasAnyUsersStmt.get();
 }
