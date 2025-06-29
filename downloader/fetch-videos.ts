@@ -71,6 +71,10 @@ function writeStatus() {
   fs.writeFileSync(subscriptionsFile, JSON.stringify(status, null, 2));
 }
 
+function readStatus(): SubscriptionStatus {
+  return JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8'));
+}
+
 try {
   const up = await (await fetch(server + '/public-api/healthcheck')).json();
   if (up !== true) throw null;
@@ -199,19 +203,34 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
   }
 }
 
-const toSub = new Set(status.subscribing);
 const subbed = new Set<ChannelID>();
-const toSubSize = toSub.size;
-for (const channel of toSub) {
+let processedCount = 0;
+while (status.subscribing.length > 0) {
+  const channel = status.subscribing[0];
   await subscribe(channel);
-  toSub.delete(channel);
+
+  const freshStatus = readStatus();
+  const isInSubscribing = freshStatus.subscribing.includes(channel);
+  const isInSubscribed = freshStatus.subscribed.includes(channel);
+
+  if (isInSubscribing && isInSubscribed) {
+    throw new Error(`Channel ${channel} found in both subscribing and subscribed lists`);
+  }
+
+  status = freshStatus;
   subbed.add(channel);
-  status.subscribing = [...toSub];
+  processedCount++;
+
+  if (!isInSubscribing || isInSubscribed) {
+    continue;
+  }
+
+  status.subscribing = status.subscribing.filter(id => id !== channel);
   status.subscribed.push(channel);
   delete status.titles[channel];
   writeStatus();
 }
-console.log(`Performed initial fetch for ${toSubSize} channels`);
+console.log(`Performed initial fetch for ${processedCount} channels`);
 
 for (const channel of status.subscribed) {
   if (subbed.has(channel)) continue;
