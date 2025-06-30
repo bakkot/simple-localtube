@@ -195,3 +195,71 @@ export function getTemp(base=os.tmpdir()): { [Symbol.dispose]: () => void; path:
   };
 }
 
+export async function lock(lockPath: string) {
+  const absolutePath = path.resolve(lockPath);
+  const lockFilePath = `${absolutePath}.localtube-lock`;
+
+  const maxWaitTime = 60000; // 60 seconds
+  const checkInterval = 1000; // 1 second
+  const staleThreshold = 20000; // 20 seconds
+  const startTime = Date.now();
+
+  let elapsedTime = 0;
+
+  while (elapsedTime < maxWaitTime) {
+    try {
+      const stats = await fsp.stat(lockFilePath);
+      const fileAge = Date.now() - stats.mtime.getTime();
+
+      if (fileAge > staleThreshold) {
+        // File is stale, delete it and continue to try creating lock
+        await fsp.unlink(lockFilePath);
+      } else {
+        // File exists and is fresh, wait and check again
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
+        elapsedTime = Date.now() - startTime;
+        continue;
+      }
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+      // File doesn't exist, continue to try creating lock
+    }
+
+    // Try to create the lock file (fail if it already exists)
+    try {
+      await fsp.writeFile(lockFilePath, '', { flag: 'wx' });
+      // Successfully created lock file
+      break;
+    } catch (error: any) {
+      if (error.code === 'EEXIST') {
+        // Someone else got the lock, wait and try again
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
+        elapsedTime = Date.now() - startTime;
+        continue;
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  if (elapsedTime >= maxWaitTime) {
+    throw new Error(`Failed to acquire lock after ${maxWaitTime / 1000} seconds`);
+  }
+
+  function release() {
+    try {
+      fs.unlinkSync(lockFilePath);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+      // If file doesn't exist, that's fine - it's already "released"
+    }
+  }
+  return {
+    release,
+    [Symbol.dispose]: release,
+  };
+}

@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
-import { nameExt, toChannelID, type VideoID, type ChannelID } from './util.ts';
+import { nameExt, toChannelID, lock, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage } from './frontend.ts';
 
@@ -24,6 +24,7 @@ const { values } = parseArgs({
     },
   },
 });
+const subscriptionsFile = values.subscriptions;
 
 async function resolveChannelInput(input: string): Promise<{ channelId: ChannelID; title: string }> {
   let url: string;
@@ -92,17 +93,13 @@ async function resolveChannelInput(input: string): Promise<{ channelId: ChannelI
   }
 }
 
-function addSubscription(channelId: ChannelID, title: string): void {
-  if (!values.subscriptions) {
+async function addSubscription(channelId: ChannelID, title: string): Promise<void> {
+  if (!subscriptionsFile) {
     throw new Error('Subscriptions file not configured');
   }
 
-  let subscriptionsData;
-  try {
-    subscriptionsData = JSON.parse(readFileSync(values.subscriptions, 'utf8'));
-  } catch (error) {
-    throw new Error('Error reading subscriptions file');
-  }
+  using _lockfile = await lock(subscriptionsFile);
+  const subscriptionsData = JSON.parse(readFileSync(subscriptionsFile, 'utf8'));
 
   const subscribing = subscriptionsData.subscribing || [];
   const subscribed = subscriptionsData.subscribed || [];
@@ -115,24 +112,16 @@ function addSubscription(channelId: ChannelID, title: string): void {
   subscriptionsData.subscribing = [...subscribing, channelId];
   subscriptionsData.titles = { ...titles, [channelId]: title };
 
-  try {
-    writeFileSync(values.subscriptions, JSON.stringify(subscriptionsData, null, 2));
-  } catch (error) {
-    throw new Error('Error writing subscriptions file');
-  }
+  writeFileSync(subscriptionsFile, JSON.stringify(subscriptionsData, null, 2));
 }
 
-function removeSubscription(channelId: ChannelID): void {
-  if (!values.subscriptions) {
+async function removeSubscription(channelId: ChannelID): Promise<void> {
+  if (!subscriptionsFile) {
     throw new Error('Subscriptions file not configured');
   }
 
-  let subscriptionsData;
-  try {
-    subscriptionsData = JSON.parse(readFileSync(values.subscriptions, 'utf8'));
-  } catch (error) {
-    throw new Error('Error reading subscriptions file');
-  }
+  using _lockfile = await lock(subscriptionsFile);
+  const subscriptionsData = JSON.parse(readFileSync(subscriptionsFile, 'utf8'));
 
   const subscribing = subscriptionsData.subscribing || [];
   const subscribed = subscriptionsData.subscribed || [];
@@ -147,11 +136,7 @@ function removeSubscription(channelId: ChannelID): void {
   const { [channelId]: removed, ...remainingTitles } = titles;
   subscriptionsData.titles = remainingTitles;
 
-  try {
-    writeFileSync(values.subscriptions, JSON.stringify(subscriptionsData, null, 2));
-  } catch (error) {
-    throw new Error('Error writing subscriptions file');
-  }
+  writeFileSync(subscriptionsFile, JSON.stringify(subscriptionsData, null, 2));
 }
 
 const app = express();
@@ -303,13 +288,13 @@ app.get('/add-user', (req: Request, res: Response): void => {
 });
 
 app.get('/subscriptions', (req: Request, res: Response): void => {
-  if (!values.subscriptions) {
+  if (!subscriptionsFile) {
     res.status(500).send('Server was started without passing --subscriptions');
     return;
   }
 
   try {
-    const subscriptionsData = JSON.parse(readFileSync(values.subscriptions, 'utf8'));
+    const subscriptionsData = JSON.parse(readFileSync(subscriptionsFile, 'utf8'));
     const userPermissions = getUserPermissions(req.username!);
     res.send(renderSubscriptionsPage(req.username!, subscriptionsData, userPermissions.allowedChannels, userPermissions.canSubscribe));
   } catch (error) {
@@ -541,7 +526,7 @@ app.post('/api/add-subscription', async (req: Request, res: Response): Promise<v
     }
 
     const { channelId: resolvedChannelId, title } = await resolveChannelInput(channelId.trim());
-    addSubscription(resolvedChannelId, title);
+    await addSubscription(resolvedChannelId, title);
     res.json({ message: 'Subscription added successfully' });
   } catch (error: any) {
     console.error('Add subscription error:', error);
@@ -565,7 +550,7 @@ app.post('/api/unsubscribe', async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    removeSubscription(channelId as ChannelID);
+    await removeSubscription(channelId as ChannelID);
     res.json({ message: 'Unsubscribed successfully' });
   } catch (error: any) {
     console.error('Unsubscribe error:', error);

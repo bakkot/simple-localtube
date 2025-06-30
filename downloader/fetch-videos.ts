@@ -1,4 +1,4 @@
-import { getTemp, move, nameExt, type ChannelID, type VideoID } from '../util.ts';
+import { getTemp, lock, move, nameExt, type ChannelID, type VideoID } from '../util.ts';
 import { parseArgs } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,6 +63,7 @@ let status: SubscriptionStatus;
 
 if (!fs.existsSync(subscriptionsFile)) {
   status = { subscribing: [], subscribed: [], titles: {} };
+  // we're just not going to worry about this particular race
   writeStatus();
 }
 status = JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8'));
@@ -209,6 +210,7 @@ while (status.subscribing.length > 0) {
   const channel = status.subscribing[0];
   await subscribe(channel);
 
+  using _lockfile = await lock(subscriptionsFile);
   const freshStatus = readStatus();
   const isInSubscribing = freshStatus.subscribing.includes(channel);
   const isInSubscribed = freshStatus.subscribed.includes(channel);
