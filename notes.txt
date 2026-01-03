@@ -30,6 +30,8 @@ document.querySelector('link[rel=canonical]').href on channel page
 
 todo consistency for node:foo vs foo
 
+should be a different port
+
 get some eslinting
 
 todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
@@ -43,3 +45,5 @@ handle missing avatars etc (placeholder)
 - pull out the yt-dlp stuff
 - test w/ pinchflat, have sample lifecycle script
 - placeholder avatar
+
+yt-dlp --proxy http://192.168.50.26:811

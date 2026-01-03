@@ -645,6 +645,9 @@ app.post('/public-api/add-channel', async (req: Request, res: Response): Promise
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, (error) => {
+  if (error) {
+    throw error;
+  }
   console.log(`LocalTube server running on http://localhost:${PORT}`);
 });
