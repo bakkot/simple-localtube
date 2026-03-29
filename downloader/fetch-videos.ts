@@ -1,6 +1,7 @@
 import { getTemp, lock, move, nameExt, type ChannelID, type VideoID } from '../util.ts';
 import { parseArgs, promisify } from 'node:util';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync, exec as execCb } from 'node:child_process';
 import { getLatestVideoUrls, hasChannel, hasVideo } from './get-channel-video-ids.ts';
@@ -31,6 +32,7 @@ if (positionals.length !== 2) {
   console.log(`Usage: node fetch-videos.ts [--server=url] path-to-subscriptions.json path-to-media-dir
   --server url    server URL (default: ${defaultUrl})
   --tempdir dir   path for temporary files (default: path-to-media-dir)
+                  the special value "OS_DEFAULT" will use your operating system's default
 
 It is recommended but not required that tempdir be on the same volume as the media, to avoid needing to copy files across volumes.
 
@@ -47,6 +49,8 @@ let { server, tempdir } = values;
 if (tempdir == null) {
   // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
   tempdir = mediaDir;
+} else if (tempdir === 'OS_DEFAULT') {
+  tempdir = os.tmpdir();
 }
 
 try {

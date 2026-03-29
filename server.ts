@@ -502,7 +502,7 @@ app.get('/public-api/has-channel', (req: Request, res: Response): void => {
     return;
   }
 
-  res.json(getChannelByShortId(channelId as ChannelID) != null);
+  res.json(getChannelById(channelId as ChannelID) != null);
 });
 
 app.get('/public-api/healthcheck', (req: Request, res: Response): void => {
@@ -607,6 +607,7 @@ app.post('/public-api/add-video', async (req: Request, res: Response): Promise<v
 });
 
 app.post('/public-api/add-channel', async (req: Request, res: Response): Promise<void> => {
+  // TODO bail if exists
   try {
     const channel = req.body as Channel;
 
