@@ -19,6 +19,13 @@ document minimum node version
 
 ban `any`, fix existing uses
 
+speed control, subtitles, etc
+
+fetch-videos needs a `--verbose`
+
+fetch-videos maybe doesn't need the server running (just save the files? or update the sql directly?)
+
+
 rename scan.ts to something else, move it under scripts
 split out all the scan logic to its own folder w/ docs
 

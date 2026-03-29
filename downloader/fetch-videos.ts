@@ -21,12 +21,18 @@ let { values, positionals } = parseArgs({
       type: 'string',
       default: defaultUrl,
     },
+    tempdir: {
+      type: 'string',
+    },
   },
 });
 
 if (positionals.length !== 2) {
   console.log(`Usage: node fetch-videos.ts [--server=url] path-to-subscriptions.json path-to-media-dir
-  --server: Server URL (default: ${defaultUrl})
+  --server url    server URL (default: ${defaultUrl})
+  --tempdir dir   path for temporary files (default: path-to-media-dir)
+
+It is recommended but not required that tempdir be on the same volume as the media, to avoid needing to copy files across volumes.
 
 This expects media-dir to be organized like:
 
@@ -37,7 +43,11 @@ some-channel-id/some-video-id/video.mp4
 }
 
 let [subscriptionsFile, mediaDir] = positionals;
-let { server } = values;
+let { server, tempdir } = values;
+if (tempdir == null) {
+  // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
+  tempdir = mediaDir;
+}
 
 try {
   if (!fs.lstatSync(mediaDir).isDirectory()) {
@@ -48,9 +58,9 @@ try {
   process.exit(1);
 }
 
-const temps = fs.readdirSync(mediaDir).filter(f => f.startsWith('tmp-localtube-'));
+const temps = fs.readdirSync(tempdir).filter(f => f.startsWith('tmp-localtube-'));
 if (temps.length > 0) {
-  console.error(`Found "tmp-localtube-" directories in ${mediaDir}, which suggests downloader is already running; exiting. If this is not the case, delete any such directories and retry.`);
+  console.error(`Found "tmp-localtube-" directories in ${tempdir}, which suggests downloader is already running; exiting. If this is not the case, delete any such directories and retry.`);
   process.exit(1);
 }
 
@@ -146,8 +156,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
   } else if (!metadataExists && videoFileExists) {
     throw new Error(`found video for ${channelId}/${videoId}, but no data.json`);
   } else if (!metadataExists && !videoFileExists) {
-    // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
-    using tempDir = getTemp(mediaDir);
+    using tempDir = getTemp(tempdir);
     console.log(`fetching https://www.youtube.com/watch?v=${videoId} to ${tempDir.path}`);
     const command = [
         YT_DLP_PATH,
@@ -157,6 +166,10 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
         '--write-subs',
         '--sub-langs',
         'en.*',
+        '--format',
+        'b',
+        '--retry-sleep',
+        'fragment:exp=1:20',
         '--sleep-requests',
         '10', // seconds
         '--min-sleep-interval',
@@ -164,10 +177,11 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
         '--max-sleep-interval',
         '5', // seconds
         '--sleep-subtitles',
-        '10', // seconds
+        '20', // seconds
         `https://www.youtube.com/watch?v=${videoId}`,
       ].join(' ');
     console.log(`executing: ${command}`);
+    // TODO option to print to stdout/s
     const result = await execAsync(
       command,
       {
