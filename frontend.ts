@@ -137,6 +137,22 @@ const formPageCSS = `
   .form-info { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; line-height: 1.4; }
 `;
 
+function renderUserBlock(username: string) {
+  // look, nothing stops you from putting scripts in the middle of presentation elements
+  // it's fine
+  return `
+    <div class="user-info">
+      <span class="username">${username}</span>
+      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+    </div>
+    <script>
+      function logout() {
+        document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        window.location.href = '/login';
+      }
+    </script>`;
+}
+
 export function renderNotAllowed(username: string): string {
   return `
 <!DOCTYPE html>
@@ -155,10 +171,7 @@ export function renderNotAllowed(username: string): string {
 </head>
 <body>
   <div class="header">
-    <div class="user-info">
-      <span class="username">${username}</span>
-      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-    </div>
+    ${renderUserBlock(username)}
   </div>
   <div class="not-allowed-container">
     <div class="not-allowed-title">Access Not Allowed</div>
@@ -167,12 +180,6 @@ export function renderNotAllowed(username: string): string {
     </div>
     <a href="/" class="home-button">Return Home</a>
   </div>
-  <script>
-    function logout() {
-      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
-    }
-  </script>
 </body>
 </html>`;
 }
@@ -352,10 +359,7 @@ export function renderHomePage(username: string, videos: VideoWithChannel[]): st
 <body>
   <div class="header">
     <h1>LocalTube</h1>
-    <div class="user-info">
-      <span class="username">${username}</span>
-      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-    </div>
+    ${renderUserBlock(username)}
   </div>
   <div class="video-grid" id="video-grid">
     ${videos.map(video => renderVideoCard(video, true)).join('')}
@@ -363,11 +367,6 @@ export function renderHomePage(username: string, videos: VideoWithChannel[]): st
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
     ${videoCardScript}
-
-    function logout() {
-      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
-    }
 
     createInfiniteScroll('/api/videos', true);
   </script>
@@ -398,10 +397,7 @@ export function renderVideoPage(video: any, username: string): string {
   <div class="content-section">
     <div class="header">
       <a href="/" class="back-link">← Back to Home</a>
-      <div class="user-info">
-        <span class="username">${username}</span>
-        <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-      </div>
+      ${renderUserBlock(username)}
     </div>
   </div>
   <div class="video-section">
@@ -422,12 +418,6 @@ export function renderVideoPage(video: any, username: string): string {
     </div>
   </div>
   </div>
-  <script>
-    function logout() {
-      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
-    }
-  </script>
 </body>
 </html>`;
 }
@@ -453,10 +443,7 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    <div class="user-info">
-      <span class="username">${username}</span>
-      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-    </div>
+    ${renderUserBlock(username)}
   </div>
   <div class="channel-header">
     <div class="channel-info">
@@ -473,11 +460,6 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
     ${videoCardScript}
-
-    function logout() {
-      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
-    }
 
     createInfiniteScroll('/api/channel/${channel.short_id}/videos', false);
   </script>
@@ -515,10 +497,7 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    <div class="user-info">
-      <span class="username">${username}</span>
-      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-    </div>
+    ${renderUserBlock(username)}
   </div>
   <div class="form-container">
     <h1>Add New User</h1>
@@ -647,11 +626,6 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
       document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
         checkbox.checked = false;
       });
-    }
-
-    function logout() {
-      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
     }
 
     form.addEventListener('submit', async (e) => {
@@ -814,10 +788,7 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
   <div class="header">
     <h1>Subscriptions</h1>
     <a href="/" class="back-link">← Back to Home</a>
-    <div class="user-info">
-      <span class="username">${username}</span>
-      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-    </div>
+    ${renderUserBlock(username)}
   </div>
   ${canSubscribe ? `
     <div class="add-subscription-form">
@@ -872,11 +843,6 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
     `}
   </div>
   <script>
-    function logout() {
-      document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
-    }
-
     ${canSubscribe ? `
       async function unsubscribe(channelId, channelName, event) {
         const shiftPressed = event.shiftKey;
