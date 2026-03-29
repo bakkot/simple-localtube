@@ -13,8 +13,16 @@ maybe have a "subscribed" JSON?
 
 clean up console.log
 
+TODO provisioning accounts: some way to make an account in the "set a password" state (+UI)
 
-rename scan.ts to something else
+document minimum node version
+
+ban `any`, fix existing uses
+
+rename scan.ts to something else, move it under scripts
+split out all the scan logic to its own folder w/ docs
+
+add add-user link
 
 FTS5
 one version with descriptions

@@ -398,12 +398,10 @@ export function renderVideoPage(video: any, username: string): string {
   <div class="content-section">
     <div class="header">
       <a href="/" class="back-link">← Back to Home</a>
-      ${username ? `
-        <div class="user-info">
-          <span class="username">${username}</span>
-          <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-        </div>
-      ` : ''}
+      <div class="user-info">
+        <span class="username">${username}</span>
+        <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+      </div>
     </div>
   </div>
   <div class="video-section">
@@ -455,12 +453,10 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${username ? `
-      <div class="user-info">
-        <span class="username">${username}</span>
-        <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
-      </div>
-    ` : ''}
+    <div class="user-info">
+      <span class="username">${username}</span>
+      <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
+    </div>
   </div>
   <div class="channel-header">
     <div class="channel-info">

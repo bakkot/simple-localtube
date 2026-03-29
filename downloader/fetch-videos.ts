@@ -144,6 +144,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
   } else if (!metadataExists && !videoFileExists) {
     // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
     using tempDir = getTemp(mediaDir);
+    console.log(`fetching https://www.youtube.com/watch?v=${videoId} to ${tempDir.path}`);
     const result = spawnSync(
       YT_DLP_PATH,
       ['--write-info-json', '--write-thumbnail', '--write-auto-subs', '--write-subs', '--sub-langs', 'en.*', `https://www.youtube.com/watch?v=${videoId}`],
@@ -159,7 +160,8 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
     if (result.status !== 0) {
       throw new Error(`Command failed with exit code ${result.status}\nStderr: ${result.stderr}`);
     }
-    const files = fs.readdirSync(tempDir.path);
+    // filter out `._` files created by macOS and similar
+    const files = fs.readdirSync(tempDir.path).filter(f => !f.startsWith('.'));
 
     // this is a little silly but I couldn't figure out how to get yt-dlp to print things in a usable way
     const json = files.filter(f => f.endsWith('.json'));
@@ -175,7 +177,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
       throw new Error(`got not exactly 1 thumb file after download ${JSON.stringify(thumb)}`);
     }
     const subs = files.filter(f => f.endsWith('.vtt'));
-    if (files.length !== subs.length + 3) {
+    if (files.length !== subs.length + 3 /* i.e. json,video,thumb */) {
       throw new Error(`got unexpected files after download ${JSON.stringify(files)}`);
     }
 
@@ -187,6 +189,9 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
     }
     console.log(`downloaded video ${nameExt(video[0]).name}`);
   }
+  // at this point metadata + video exist, either because we just downloaded it
+  // or because it already existed, possibly because we downloaded it previously but the server went down during the download
+
   const video = await videoFromDisk(mediaDir, channelId, videoId);
   if (video == null) {
     throw new Error(`metadata did not exist after fetching for ${channelId}/${videoId}`);

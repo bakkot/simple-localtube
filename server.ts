@@ -158,7 +158,7 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
     return;
   }
 
-  // Login. setup, and public-api do not require auth
+  // Login, setup, and public-api do not require auth
   if (req.path === '/login' || req.path.startsWith('/public-api/') || isSetup) {
     return next();
   }
@@ -517,6 +517,8 @@ app.post('/api/add-subscription', async (req: Request, res: Response): Promise<v
       res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
       return;
     }
+
+    // TODO 403 if no subscriptions file configured
 
     const { channelId } = req.body;
 
