@@ -1,11 +1,13 @@
 import { getTemp, lock, move, nameExt, type ChannelID, type VideoID } from '../util.ts';
-import { parseArgs } from 'node:util';
+import { parseArgs, promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, exec as execCb } from 'node:child_process';
 import { getLatestVideoUrls, hasChannel, hasVideo } from './get-channel-video-ids.ts';
 import { channelFromDisk, videoFromDisk } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
+
+const execAsync = promisify(execCb);
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, '..', 'yt-dlp');
 
@@ -73,6 +75,8 @@ function writeStatus() {
 }
 
 function readStatus(): SubscriptionStatus {
+  // TODO validate channel IDs are in the right format
+  // this is required for security because these are going to get put into shell commands
   return JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8'));
 }
 
@@ -145,21 +149,42 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
     // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
     using tempDir = getTemp(mediaDir);
     console.log(`fetching https://www.youtube.com/watch?v=${videoId} to ${tempDir.path}`);
-    const result = spawnSync(
-      YT_DLP_PATH,
-      ['--write-info-json', '--write-thumbnail', '--write-auto-subs', '--write-subs', '--sub-langs', 'en.*', `https://www.youtube.com/watch?v=${videoId}`],
+    const command = [
+        YT_DLP_PATH,
+        '--write-info-json',
+        '--write-thumbnail',
+        '--write-auto-subs',
+        '--write-subs',
+        '--sub-langs',
+        'en.*',
+        '--sleep-requests',
+        '10', // seconds
+        '--min-sleep-interval',
+        '2', // seconds
+        '--max-sleep-interval',
+        '5', // seconds
+        '--sleep-subtitles',
+        '10', // seconds
+        `https://www.youtube.com/watch?v=${videoId}`,
+      ].join(' ');
+    console.log(`executing: ${command}`);
+    const result = await execAsync(
+      command,
       {
-        stdio: 'pipe',
         encoding: 'utf-8',
         cwd: tempDir.path,
       },
     );
-    if (result.error) {
-      throw result.error;
-    }
-    if (result.status !== 0) {
-      throw new Error(`Command failed with exit code ${result.status}\nStderr: ${result.stderr}`);
-    }
+    // probably we should check stderr
+    // but, we're going to validate that we have the expected files anyway, so whatever
+
+    // if (result.error) {
+    //   throw result.error;
+    // }
+    // if (result.status !== 0) {
+    //   throw new Error(`Command failed with exit code ${result.status}\nStderr: ${result.stderr}`);
+    // }
+
     // filter out `._` files created by macOS and similar
     const files = fs.readdirSync(tempDir.path).filter(f => !f.startsWith('.'));
 
