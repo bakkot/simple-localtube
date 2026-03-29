@@ -28,7 +28,7 @@ export function toVideoID(url: string): VideoID | null {
   return null;
 }
 
-export function toChannelID(url: string): ChannelID | null {
+export function channelIDFromCanonicalURL(url: string): ChannelID | null {
   try {
     const parsedUrl = new URL(url);
     if (
@@ -36,7 +36,7 @@ export function toChannelID(url: string): ChannelID | null {
       parsedUrl.hostname === 'youtube.com' ||
       parsedUrl.hostname === 'm.youtube.com'
     ) {
-      const pathMatch = parsedUrl.pathname.match(/^\/channel\/([a-zA-Z0-9_-]+)/);
+      const pathMatch = parsedUrl.pathname.match(/^\/channel\/(UC[a-zA-Z0-9_-]+)/);
       if (pathMatch) {
         return pathMatch[1] as ChannelID;
       }
@@ -45,6 +45,13 @@ export function toChannelID(url: string): ChannelID | null {
     // pass
   }
   return null;
+}
+
+export function assertChannelId(thing: string): ChannelID {
+  if (/^UC[a-zA-Z0-9_-]+$/.test(thing)) {
+    return thing as ChannelID;
+  }
+  throw new Error(`input ${JSON.stringify(thing)} does not appear to be a valid channel ID`);
 }
 
 export function nameExt(file: string): { name: string, ext: string } {
@@ -194,6 +201,43 @@ export function getTemp(base=os.tmpdir()): { [Symbol.dispose]: () => void; path:
     path: tempDir,
   };
 }
+
+export type SubscriptionFile = {
+  subscribing: ChannelID[];
+  subscribed: ChannelID[];
+  titles: Record<ChannelID, string>;
+}
+
+export function readSubscriptionsFile(subscriptionsFile: string): SubscriptionFile {
+  if (!fs.existsSync(subscriptionsFile)) {
+    const result: SubscriptionFile = { subscribing: [], subscribed: [], titles: {} };
+    fs.writeFileSync(subscriptionsFile, JSON.stringify(result, null, 2));
+    return result;
+  }
+
+  const data: Record<string, unknown> = JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8'));
+
+  if (!Array.isArray(data.subscribing) || !Array.isArray(data.subscribed) || !data.titles || typeof data.titles !== 'object') {
+    throw new Error(`malformed subscriptions file at ${subscriptionsFile}`);
+  }
+  // yes recreating the whole object is wasteful
+  // but this doesn't happen very often so I don't care
+  return {
+    subscribing: data.subscribing.map(assertChannelId),
+    subscribed: data.subscribed.map(assertChannelId),
+    titles: {
+      // @ts-expect-error typescript fix your shit
+      __proto__: null,
+      ...Object.fromEntries(Object.entries(data.titles).map(([k, v]) => {
+        if (typeof v !== 'string') {
+          throw new Error(`bad title ${JSON.stringify(v)} in subscriptions object`);
+        }
+        return [assertChannelId(k), v];
+      })),
+    },
+  };
+}
+
 
 export async function lock(lockPath: string) {
   const absolutePath = path.resolve(lockPath);

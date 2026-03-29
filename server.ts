@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
-import { nameExt, toChannelID, lock, type VideoID, type ChannelID } from './util.ts';
+import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID, readSubscriptionsFile } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
@@ -182,14 +182,16 @@ app.get('/subscriptions', (req: Request, res: Response): void => {
     return;
   }
 
+  let subscriptionsData
   try {
-    const subscriptionsData = JSON.parse(readFileSync(subscriptionsFile, 'utf8'));
-    const userPermissions = getUserPermissions(req.username!);
-    res.send(renderSubscriptionsPage(req.username!, subscriptionsData, userPermissions.allowedChannels, userPermissions.canSubscribe));
+    subscriptionsData = readSubscriptionsFile(subscriptionsFile);
   } catch (error) {
     console.error('Error reading subscriptions file:', error);
     res.status(500).send('Error reading subscriptions file');
+    return;
   }
+  const userPermissions = getUserPermissions(req.username!);
+  res.send(renderSubscriptionsPage(req.username!, subscriptionsData, userPermissions.allowedChannels, userPermissions.canSubscribe));
 });
 
 app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<void> => {

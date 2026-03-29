@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, checkUsernamePassword, getUserPermissions, hasAnyUsers } from './user-db.ts';
-import { lock, toChannelID, type ChannelID, type VideoID } from './util.ts';
+import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID } from './util.ts';
 import { addChannel, addVideo, getChannelById, getChannelByShortId, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, type Channel, type Video } from './media-db.ts';
 import { readFileSync, writeFileSync } from 'fs';
 import { subscriptionsFile } from './server.ts';
@@ -55,7 +55,7 @@ async function resolveChannelInput(input: string): Promise<{ channelId: ChannelI
       throw new Error('Could not find canonical URL on YouTube page');
     }
 
-    const channelId = toChannelID(canonicalMatch[1]);
+    const channelId = channelIDFromCanonicalURL(canonicalMatch[1]);
     if (!channelId) {
       throw new Error('Could not extract channel ID from canonical URL');
     }
@@ -399,7 +399,7 @@ export function addAPIs(app: Express) {
   app.post('/public-api/add-channel', async (req: Request, res: Response): Promise<void> => {
     // TODO bail if exists
     try {
-      const channel = req.body as Channel;
+      const channel = req.body as Record<string, unknown>;
 
       if (!channel) {
         res.status(400).json({ message: 'add-channel requires channel data' });
@@ -415,7 +415,8 @@ export function addAPIs(app: Express) {
       }
       // TODO adding channel which agrees with existing data should not error
 
-      addChannel(channel);
+      // TODO validate
+      addChannel(channel as unknown as Channel);
 
       console.log(`added ${JSON.stringify(channel.channel)} from API`);
 

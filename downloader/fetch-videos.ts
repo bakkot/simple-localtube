@@ -1,4 +1,4 @@
-import { getTemp, lock, move, nameExt, type ChannelID, type VideoID } from '../util.ts';
+import { getTemp, lock, move, nameExt, readSubscriptionsFile, type ChannelID, type SubscriptionFile, type VideoID } from '../util.ts';
 import { parseArgs, promisify } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -69,30 +69,12 @@ if (temps.length > 0) {
 }
 
 
-type SubscriptionStatus = {
-  subscribing: ChannelID[];
-  subscribed: ChannelID[];
-  titles: Record<ChannelID, string>;
-}
-
-let status: SubscriptionStatus;
-
-if (!fs.existsSync(subscriptionsFile)) {
-  status = { subscribing: [], subscribed: [], titles: {} };
-  // we're just not going to worry about this particular race
-  writeStatus();
-}
-status = JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8'));
+let status = readSubscriptionsFile(subscriptionsFile);
 
 function writeStatus() {
   fs.writeFileSync(subscriptionsFile, JSON.stringify(status, null, 2));
 }
 
-function readStatus(): SubscriptionStatus {
-  // TODO validate channel IDs are in the right format
-  // this is required for security because these are going to get put into shell commands
-  return JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8'));
-}
 
 try {
   const up = await (await fetch(server + '/public-api/healthcheck')).json();
@@ -259,7 +241,7 @@ while (status.subscribing.length > 0) {
   await subscribe(channel);
 
   using _lockfile = await lock(subscriptionsFile);
-  const freshStatus = readStatus();
+  const freshStatus = readSubscriptionsFile(subscriptionsFile);
   const isInSubscribing = freshStatus.subscribing.includes(channel);
   const isInSubscribed = freshStatus.subscribed.includes(channel);
 

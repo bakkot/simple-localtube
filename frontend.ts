@@ -1,6 +1,6 @@
 import type { VideoWithChannel } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
-import { nameExt, type ChannelID } from './util.ts';
+import { nameExt, type ChannelID, type SubscriptionFile } from './util.ts';
 
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -382,7 +382,7 @@ export function renderVideoPage(video: any, username: string): string {
 <!DOCTYPE html>
 <html>
 <head>
-  <title>${video.title}</title>
+  <title>${video.title} - LocalTube</title>
   <style>
     ${commonCSS}
     body { margin: 0;  }
@@ -429,7 +429,7 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
 <!DOCTYPE html>
 <html>
 <head>
-  <title>${channel.channel}</title>
+  <title>${channel.channel} - LocalTube</title>
   <style>
     ${commonCSS}
     body { margin: 20px; }
@@ -708,20 +708,20 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
 </html>`;
 }
 
-export function renderSubscriptionsPage(username: string, subscriptionsData: { subscribing?: string[], subscribed?: string[], titles?: Record<string, string> }, allowedChannels: Set<ChannelID> | 'all', canSubscribe: boolean): string {
-  const subscribing = subscriptionsData.subscribing || [];
-  const subscribed = subscriptionsData.subscribed || [];
-  const titles = subscriptionsData.titles || {};
+export function renderSubscriptionsPage(username: string, subscriptionsData: SubscriptionFile, allowedChannels: Set<ChannelID> | 'all', canSubscribe: boolean): string {
+  const subscribing = subscriptionsData.subscribing;
+  const subscribed = subscriptionsData.subscribed;
+  const titles = subscriptionsData.titles;
 
   const allChannelIds = [...subscribing, ...subscribed];
   const channelInfos = [];
 
   for (const channelId of allChannelIds) {
-    if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
+    if (allowedChannels !== 'all' && !allowedChannels.has(channelId)) {
       continue;
     }
 
-    const channel = getChannelById(channelId as ChannelID);
+    const channel = getChannelById(channelId);
     if (channel) {
       const avatarExt = channel.avatar_filename ? nameExt(channel.avatar_filename).ext : null;
       channelInfos.push({
@@ -796,7 +796,7 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: { s
       <form id="addSubscriptionForm">
         <div class="form-row">
           <div class="form-group">
-            <label for="channelId">Channel URL, Handle, or ID:</label>
+            <label for="channelId">Handle, ID, or channel URL:</label>
             <input type="text" id="channelId" name="channelId" placeholder="e.g. @username, UCxxxxx, or https://youtube.com/..." required>
           </div>
           <button type="submit" class="add-button" id="addButton">Add Subscription</button>
