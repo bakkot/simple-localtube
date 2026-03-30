@@ -1,5 +1,6 @@
 import type { VideoWithChannel } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
+import type { Permissions } from './user-db.ts';
 import { nameExt, type ChannelID, type SubscriptionFile } from './util.ts';
 
 function formatDuration(seconds: number): string {
@@ -472,7 +473,7 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
 </html>`;
 }
 
-export function renderAddUserPage(username: string, userPermissions: any, availableChannels: any[]): string {
+export function renderAddUserPage(username: string, userPermissions: Permissions, availableChannels: any[]): string {
   return `
 <!DOCTYPE html>
 <html>

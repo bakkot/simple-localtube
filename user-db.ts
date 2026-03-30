@@ -25,7 +25,7 @@ type User = {
   permissions: Permissions;
 }
 
-type Permissions = {
+export type Permissions = {
   allowedChannels: Set<ChannelID> | 'all';
   createUser: boolean;
   canSubscribe: boolean;
