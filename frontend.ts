@@ -422,7 +422,9 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
     .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; position: relative; }
     video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
     .subtitle-overlay { position: absolute; bottom: 60px; left: 0; right: 0; text-align: center; pointer-events: none; }
-    .subtitle-cue { background: rgba(0,0,0,0.7); color: white; font-size: 1.3em; padding: 4px 8px; border-radius: 4px; }
+    .subtitle-cue { background: rgba(0,0,0,0.7); color: white; font-size: 1.3em; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+    .subtitle-cue .word.spoken { color: white; }
+    .subtitle-cue .word.unspoken { color: rgba(255,255,255,0.4); }
     video::cue { visibility: hidden; }
     .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
     .channel-info { display: flex; align-items: center; margin-bottom: 15px; }
@@ -449,27 +451,97 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
     const video = document.querySelector('video');
     const overlay = document.querySelector('.subtitle-overlay');
 
-    function renderCues() {
+    function parseVTT(text) {
+      const cues = [];
+      const blocks = text.split('\\n\\n');
+      for (const block of blocks) {
+        const lines = block.trim().split('\\n');
+        const timeLine = lines.find(l => l.includes(' --> '));
+        if (!timeLine) continue;
+        const [startStr, rest] = timeLine.split(' --> ');
+        const endStr = rest.split(' ')[0];
+        const start = parseTS(startStr);
+        const end = parseTS(endStr);
+        const textLines = lines.slice(lines.indexOf(timeLine) + 1);
+        if (!textLines.length) continue;
+        const words = parseWords(textLines.join('\\n'), start);
+        if (words.length && words.every(w => !w.text.trim())) continue;
+        cues.push({ start, end, words });
+      }
+        console.log(cues);
+      return cues;
+    }
+
+    function parseTS(s) {
+      const parts = s.trim().split(':');
+      const secParts = parts.pop().split('.');
+      const secs = parseInt(secParts[0]);
+      const ms = parseInt((secParts[1] || '0').padEnd(3, '0'));
+      let total = secs + ms / 1000;
+      if (parts.length) total += parseInt(parts.pop()) * 60;
+      if (parts.length) total += parseInt(parts.pop()) * 3600;
+      return total;
+    }
+
+    function parseWords(raw, cueStart) {
+      const words = [];
+      let currentTime = cueStart;
+      const tagRe = /<(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})>|<c>|<\\/c>/g;
+      const cleaned = raw.replace(/\\n/g, ' ');
+      let lastIndex = 0;
+      let match;
+      while ((match = tagRe.exec(cleaned)) !== null) {
+        const before = cleaned.slice(lastIndex, match.index);
+        if (before) words.push({ text: before, time: currentTime });
+        if (match[1]) currentTime = parseTS(match[1]);
+        lastIndex = tagRe.lastIndex;
+      }
+      const tail = cleaned.slice(lastIndex);
+      if (tail) words.push({ text: tail, time: currentTime });
+      return words;
+    }
+
+    let parsedCues = [];
+    let activeTrackLang = null;
+
+    async function loadSubtitles(lang) {
+      if (lang === activeTrackLang) return;
+      activeTrackLang = lang;
+      if (!lang) { parsedCues = []; return; }
+      const res = await fetch('/media/subtitles/${video.video_id}/' + lang);
+      const text = await res.text();
+      parsedCues = parseVTT(text);
+    }
+
+    function renderKaraoke() {
       overlay.innerHTML = '';
-      for (const track of video.textTracks) {
-        if (track.mode !== 'showing' || !track.activeCues?.length) continue;
-        for (const cue of track.activeCues) {
-          // const content = [...cue.getCueAsHTML().querySelectorAll('span')].map(x => x.textContent).join('');
-          const content = cue.text.split('\\n').slice(1).join('\\n')
-            .replace(/<\\/?c>|<[\\d:.]+>/g, '');
-          // // const firstLine = cue.text.split('\\n')[0]?.trim();
-          // // if (!firstLine) continue;
-          const span = document.createElement('span');
-          span.className = 'subtitle-cue';
-          span.textContent = content;
-          overlay.appendChild(span);
+      if (!parsedCues.length) return;
+      const t = video.currentTime;
+      for (const cue of parsedCues) {
+        if (t < cue.start || t > cue.end) continue;
+        const span = document.createElement('span');
+        span.className = 'subtitle-cue';
+        for (const w of cue.words) {
+          const ws = document.createElement('span');
+          ws.className = t >= w.time ? 'word spoken' : 'word unspoken';
+          ws.textContent = w.text;
+          span.appendChild(ws);
         }
+        overlay.appendChild(span);
         break;
       }
     }
 
+    video.addEventListener('timeupdate', renderKaraoke);
+
+    video.textTracks.addEventListener('change', () => {
+      for (const track of video.textTracks) {
+        if (track.mode === 'showing') { loadSubtitles(track.language); return; }
+      }
+      loadSubtitles(null);
+    });
     for (const track of video.textTracks) {
-      track.addEventListener('cuechange', renderCues);
+      if (track.mode === 'showing') { loadSubtitles(track.language); break; }
     }
   </script>
   <div class="content-section">
