@@ -1,0 +1,74 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Setup - LocalTube</title>
+  <style>
+    __COMMON_CSS__
+    __FORM_PAGE_CSS__
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <h1>Welcome to LocalTube</h1>
+    <div class="form-info">
+      No users have been configured yet. Please create the first account to get started.
+    </div>
+    <form class="page-form" id="setupForm">
+      <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button type="submit" class="form-button" id="setupButton">Create Account</button>
+      <div id="message"></div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('setupForm');
+    const button = document.getElementById('setupButton');
+    const message = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      button.disabled = true;
+      button.textContent = 'Creating Account...';
+      message.textContent = '';
+      message.className = '';
+
+      try {
+        const response = await fetch('/api/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+          message.textContent = 'Account created successfully! Redirecting to login...';
+          message.className = 'success';
+          setTimeout(() => { window.location.href = '/login'; }, 1500);
+          return;
+        } else {
+          const error = await response.json();
+          message.textContent = error.message || 'Setup failed';
+          message.className = 'error';
+        }
+      } catch (err) {
+        message.textContent = 'Network error. Please try again.';
+        message.className = 'error';
+      }
+
+      button.disabled = false;
+      button.textContent = 'Create Account';
+    });
+  </script>
+</body>
+</html>

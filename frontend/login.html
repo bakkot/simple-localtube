@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login - LocalTube</title>
+  <style>
+    __COMMON_CSS__
+    __FORM_PAGE_CSS__
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <h1>Login to LocalTube</h1>
+    <form class="page-form" id="loginForm">
+      <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button type="submit" class="form-button" id="loginButton">Login</button>
+      <div id="message"></div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const button = document.getElementById('loginButton');
+    const message = document.getElementById('message');
+
+    // Get next URL from query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const nextParam = urlParams.get('next');
+    const nextUrl = (nextParam && nextParam.startsWith('/')) ? nextParam : '/';
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      button.disabled = true;
+      button.textContent = 'Logging in...';
+      message.textContent = '';
+      message.className = '';
+
+      try {
+        const response = await fetch('/public-api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          document.cookie = 'auth=' + data.token + '; path=/; max-age=' + (365 * 24 * 60 * 60);
+          message.textContent = 'Login successful! Redirecting...';
+          message.className = 'success';
+          setTimeout(() => { window.location.href = nextUrl; }, 100);
+          return;
+        } else {
+          const error = await response.json();
+          message.textContent = error.message || 'Login failed';
+          message.className = 'error';
+        }
+      } catch (err) {
+        message.textContent = 'Network error. Please try again.';
+        message.className = 'error';
+      }
+
+      button.disabled = false;
+      button.textContent = 'Login';
+    });
+  </script>
+</body>
+</html>

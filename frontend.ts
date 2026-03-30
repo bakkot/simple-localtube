@@ -1,7 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { VideoWithChannel } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
 import type { Permissions } from './user-db.ts';
 import { nameExt, type ChannelID, type SubscriptionFile } from './util.ts';
+
+const templates = path.join(import.meta.dirname, 'frontend');
 
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -186,505 +190,93 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
     </script>`;
 }
 
+const notAllowedTemplate = fs.readFileSync(path.join(templates, 'not-allowed.html'), 'utf8');
 export function renderNotAllowed(username: string, permissions: Permissions): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Not Allowed - LocalTube</title>
-  <style>
-    ${commonCSS}
-    body { margin: 20px; }
-    .not-allowed-container { max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
-    .not-allowed-title { color: #d32f2f; font-size: 24px; margin-bottom: 20px; }
-    .not-allowed-message { color: #666; line-height: 1.5; margin-bottom: 30px; }
-    .home-button { display: inline-block; background: #1976d2; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; }
-    .home-button:hover { background: #1565c0; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    ${renderTopRightBlock(username, permissions)}
-  </div>
-  <div class="not-allowed-container">
-    <div class="not-allowed-title">Access Not Allowed</div>
-    <div class="not-allowed-message">
-      You don't have permission to view this content.
-    </div>
-    <a href="/" class="home-button">Return Home</a>
-  </div>
-</body>
-</html>`;
+  return notAllowedTemplate
+    .replace('__COMMON_CSS__', commonCSS)
+    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
 }
 
+const setupTemplate = fs.readFileSync(path.join(templates, 'setup.html'), 'utf8');
 export function renderSetupPage(): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Setup - LocalTube</title>
-  <style>
-    ${commonCSS}
-    ${formPageCSS}
-  </style>
-</head>
-<body>
-  <div class="form-container">
-    <h1>Welcome to LocalTube</h1>
-    <div class="form-info">
-      No users have been configured yet. Please create the first account to get started.
-    </div>
-    <form class="page-form" id="setupForm">
-      <div class="form-group">
-        <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required>
-      </div>
-      <div class="form-group">
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
-      </div>
-      <button type="submit" class="form-button" id="setupButton">Create Account</button>
-      <div id="message"></div>
-    </form>
-  </div>
-
-  <script>
-    const form = document.getElementById('setupForm');
-    const button = document.getElementById('setupButton');
-    const message = document.getElementById('message');
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-
-      button.disabled = true;
-      button.textContent = 'Creating Account...';
-      message.textContent = '';
-      message.className = '';
-
-      try {
-        const response = await fetch('/api/setup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-
-        if (response.ok) {
-          message.textContent = 'Account created successfully! Redirecting to login...';
-          message.className = 'success';
-          setTimeout(() => { window.location.href = '/login'; }, 1500);
-          return;
-        } else {
-          const error = await response.json();
-          message.textContent = error.message || 'Setup failed';
-          message.className = 'error';
-        }
-      } catch (err) {
-        message.textContent = 'Network error. Please try again.';
-        message.className = 'error';
-      }
-
-      button.disabled = false;
-      button.textContent = 'Create Account';
-    });
-  </script>
-</body>
-</html>`;
+  return setupTemplate
+    .replace('__COMMON_CSS__', commonCSS)
+    .replace('__FORM_PAGE_CSS__', formPageCSS);
 }
 
+const loginTemplate = fs.readFileSync(path.join(templates, 'login.html'), 'utf8');
 export function renderLoginPage(): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Login - LocalTube</title>
-  <style>
-    ${commonCSS}
-    ${formPageCSS}
-  </style>
-</head>
-<body>
-  <div class="form-container">
-    <h1>Login to LocalTube</h1>
-    <form class="page-form" id="loginForm">
-      <div class="form-group">
-        <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required>
-      </div>
-      <div class="form-group">
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
-      </div>
-      <button type="submit" class="form-button" id="loginButton">Login</button>
-      <div id="message"></div>
-    </form>
-  </div>
-
-  <script>
-    const form = document.getElementById('loginForm');
-    const button = document.getElementById('loginButton');
-    const message = document.getElementById('message');
-
-    // Get next URL from query parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const nextParam = urlParams.get('next');
-    const nextUrl = (nextParam && nextParam.startsWith('/')) ? nextParam : '/';
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-
-      button.disabled = true;
-      button.textContent = 'Logging in...';
-      message.textContent = '';
-      message.className = '';
-
-      try {
-        const response = await fetch('/public-api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          document.cookie = 'auth=' + data.token + '; path=/; max-age=' + (365 * 24 * 60 * 60);
-          message.textContent = 'Login successful! Redirecting...';
-          message.className = 'success';
-          setTimeout(() => { window.location.href = nextUrl; }, 100);
-          return;
-        } else {
-          const error = await response.json();
-          message.textContent = error.message || 'Login failed';
-          message.className = 'error';
-        }
-      } catch (err) {
-        message.textContent = 'Network error. Please try again.';
-        message.className = 'error';
-      }
-
-      button.disabled = false;
-      button.textContent = 'Login';
-    });
-  </script>
-</body>
-</html>`;
+  return loginTemplate
+    .replace('__COMMON_CSS__', commonCSS)
+    .replace('__FORM_PAGE_CSS__', formPageCSS);
 }
 
+const homeTemplate = fs.readFileSync(path.join(templates, 'home.html'), 'utf8');
 export function renderHomePage(username: string, permissions: Permissions, videos: VideoWithChannel[]): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>LocalTube</title>
-  <style>
-    ${commonCSS}
-    body { margin: 20px; }
-    h1 { color: #333; margin: 0px; }
-    .video-grid { margin-top: 20px; }
-    .video-title { margin-bottom: 8px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>LocalTube</h1>
-    ${renderTopRightBlock(username, permissions)}
-  </div>
-  <div class="video-grid" id="video-grid">
-    ${videos.map(video => renderVideoCard(video, true)).join('')}
-  </div>
-  <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
-  <script>
-    ${videoCardScript}
-
-    createInfiniteScroll('/api/videos', true);
-  </script>
-</body>
-</html>`;
+  return homeTemplate
+    .replace('__COMMON_CSS__', commonCSS)
+    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
+    .replace('__VIDEOS__', videos.map(video => renderVideoCard(video, true)).join(''))
+    .replace('__VIDEO_CARD_SCRIPT__', videoCardScript);
 }
 
+const videoTemplate = fs.readFileSync(path.join(templates, 'video.html'), 'utf8');
 export function renderVideoPage(video: VideoWithChannel, username: string, permissions: Permissions): string {
   const videoExt = nameExt(video.video_filename).ext;
   const avatarExt = video.avatar_filename == null ? null : nameExt(video.avatar_filename).ext;
 
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>${video.title} - LocalTube</title>
-  <style>
-    ${commonCSS}
-    body { margin: 0;  }
-    .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; position: relative; }
-    video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
-    .subtitle-overlay { position: absolute; bottom: 60px; left: 0; right: 0; text-align: center; pointer-events: none; }
-    .subtitle-cue { background: rgba(0,0,0,0.7); color: white; font-size: 1.3em; padding: 4px 8px; border-radius: 4px; display: inline-block; white-space: pre-wrap; }
-    .subtitle-cue .word.spoken { color: white; }
-    .subtitle-cue .word.unspoken { color: rgba(255,255,255,0.4); }
-    video::cue { visibility: hidden; }
-    .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-    .channel-info { display: flex; align-items: center; margin-bottom: 15px; }
-    .channel-avatar { border-radius: 50%; margin-right: 10px; }
-  </style>
-</head>
-<body>
-  <div class="content-section">
-    <div class="header">
-      <a href="/" class="back-link">← Back to Home</a>
-      ${renderTopRightBlock(username, permissions)}
-    </div>
-  </div>
-  <div class="video-section">
-    <video controls autoplay>
-      <source src="/media/videos/${video.video_id}.${videoExt}" type="video/${videoExt === 'mp4' ? 'mp4' : 'webm'}">
-      ${Object.entries(video.subtitles).map(([lang, _]) =>
-        `<track kind="subtitles" src="/media/subtitles/${video.video_id}/${lang}" srclang="${lang}" label="${lang}">`
-      ).join('\n      ')}
-    </video>
-    <div class="subtitle-overlay"></div>
-  </div>
-  <script>
-    const video = document.querySelector('video');
-    const overlay = document.querySelector('.subtitle-overlay');
-
-    function parseVTT(text) {
-      const cues = [];
-      const blocks = text.replace(/^\\uFEFF/, '').split(/\\n{2,}/);
-      for (const block of blocks) {
-        const lines = block.trim().split('\\n');
-        if (/^(WEBVTT|NOTE|STYLE|REGION)(\\s|$)/.test(lines[0])) continue;
-        const timeLine = lines.find(l => l.includes(' --> '));
-        if (!timeLine) continue;
-        const [startStr, rest] = timeLine.split(' --> ');
-        const endStr = rest.split(' ')[0];
-        const start = parseTS(startStr);
-        const end = parseTS(endStr);
-        const textLines = lines.slice(lines.indexOf(timeLine) + 1);
-        if (!textLines.length) continue;
-        const words = parseWords(textLines.join('\\n'), start);
-        if (words.length && words.every(w => !w.text.trim())) continue;
-        cues.push({ start, end, words });
-      }
-      return cues;
-    }
-
-    function parseTS(s) {
-      const parts = s.trim().split(':');
-      const secParts = parts.pop().split('.');
-      const secs = parseInt(secParts[0]);
-      const ms = parseInt((secParts[1] || '0').padEnd(3, '0'));
-      let total = secs + ms / 1000;
-      if (parts.length) total += parseInt(parts.pop()) * 60;
-      if (parts.length) total += parseInt(parts.pop()) * 3600;
-      return total;
-    }
-
-    const tsPattern = '(?:\\\\d{2}:)?\\\\d{2}:\\\\d{2}\\\\.\\\\d{3}';
-    const tagRe = new RegExp('<(' + tsPattern + ')>|</?(?:c|b|i|u|ruby|rt)(?:\\\\.[^>]*)?>|</?(?:v|lang)(?:\\\\s[^>]*)?>','g');
-
-    function parseWords(raw, cueStart) {
-      const words = [];
-      let currentTime = cueStart;
-      let lastIndex = 0;
-      let match;
-      tagRe.lastIndex = 0;
-      while ((match = tagRe.exec(raw)) !== null) {
-        const before = raw.slice(lastIndex, match.index);
-        if (before) words.push({ text: before, time: currentTime });
-        if (match[1]) currentTime = parseTS(match[1]);
-        lastIndex = tagRe.lastIndex;
-      }
-      const tail = raw.slice(lastIndex);
-      if (tail) words.push({ text: tail, time: currentTime });
-      return words;
-    }
-
-    let parsedCues = [];
-    let activeTrackLang = null;
-
-    async function loadSubtitles(lang) {
-      if (lang === activeTrackLang) return;
-      activeTrackLang = lang;
-      if (!lang) { parsedCues = []; return; }
-      const res = await fetch('/media/subtitles/${video.video_id}/' + lang);
-      const text = await res.text();
-      parsedCues = parseVTT(text);
-    }
-
-    function renderKaraoke() {
-      overlay.innerHTML = '';
-      if (!parsedCues.length) return;
-      const t = video.currentTime;
-      for (const cue of parsedCues) {
-        if (t < cue.start || t > cue.end) continue;
-        const span = document.createElement('span');
-        span.className = 'subtitle-cue';
-        for (const w of cue.words) {
-          const ws = document.createElement('span');
-          ws.className = t >= w.time ? 'word spoken' : 'word unspoken';
-          ws.textContent = w.text;
-          span.appendChild(ws);
-        }
-        overlay.appendChild(span);
-        break;
-      }
-    }
-
-    video.addEventListener('timeupdate', renderKaraoke);
-
-    video.textTracks.addEventListener('change', () => {
-      for (const track of video.textTracks) {
-        if (track.mode === 'showing') { loadSubtitles(track.language); return; }
-      }
-      loadSubtitles(null);
-    });
-    for (const track of video.textTracks) {
-      if (track.mode === 'showing') { loadSubtitles(track.language); break; }
-    }
-  </script>
-  <div class="content-section">
-    <div class="video-container">
-    <div class="video-info">
-      <div class="video-title">${video.title}</div>
+  return videoTemplate
+    .replace('__COMMON_CSS__', commonCSS)
+    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
+    .replaceAll('__VIDEO__TITLE__', video.title)
+    .replace('__VIDEO__DESCRIPTION__', video.description)
+    .replace('__VIDEO_ID__', video.video_id)
+    .replace('__VIDEO_ELEMENT__', `
+      <video controls autoplay>
+        <source src="/media/videos/${video.video_id}.${videoExt}" type="video/${videoExt === 'mp4' ? 'mp4' : 'webm'}">
+        ${Object.entries(video.subtitles).map(([lang, _]) =>
+          `<track kind="subtitles" src="/media/subtitles/${video.video_id}/${lang}" srclang="${lang}" label="${lang}">`
+        ).join('\n      ')}
+      </video>`)
+    .replace('__CHANNEL_INFO__', `
       <div class="channel-info">
         ${video.avatar_filename ? `<img class="channel-avatar" width=40 height=40 src="/media/avatars/${video.channel_short_id}.${avatarExt}" alt="${video.channel}">` : ''}
         <a href="/c/${video.channel_short_id}" class="channel-name">${video.channel}</a>
-      </div>
-      <div class="description">${video.description}</div>
-    </div>
-  </div>
-  </div>
-</body>
-</html>`;
+      </div>`)
 }
 
+const channelTemplate = fs.readFileSync(path.join(templates, 'channel.html'), 'utf8');
 export function renderChannelPage(channel: any, videos: VideoWithChannel[], username: string, permissions: Permissions): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
 
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>${channel.channel} - LocalTube</title>
-  <style>
-    ${commonCSS}
-    body { margin: 20px; }
-    .channel-header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 20px; margin-bottom: 20px; }
-    .channel-info { display: flex; align-items: center; }
-    .channel-avatar { width: 80px; height: 80px; border-radius: 50%; margin-right: 20px; }
-    .channel-details h1 { margin: 0 0 10px 0; color: #333; }
-    .channel-description { color: #666; line-height: 1.5; white-space: pre-wrap; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <a href="/" class="back-link">← Back to Home</a>
-    ${renderTopRightBlock(username, permissions)}
-  </div>
-  <div class="channel-header">
-    <div class="channel-info">
-      ${channel.avatar_filename ? `<img class="channel-avatar" width=80 height=80 src="/media/avatars/${channel.short_id}.${avatarExt}" alt="${channel.channel}">` : ''}
-      <div class="channel-details">
-        <h1>${channel.channel}</h1>
-        ${channel.description ? `<div class="channel-description">${channel.description}</div>` : ''}
-      </div>
-    </div>
-  </div>
-  <div class="video-grid" id="video-grid">
-    ${videos.map(video => renderVideoCard(video, false)).join('')}
-  </div>
-  <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
-  <script>
-    ${videoCardScript}
-
-    createInfiniteScroll('/api/channel/${channel.short_id}/videos', false);
-  </script>
-</body>
-</html>`;
+  return channelTemplate
+    .replace('__COMMON_CSS__', commonCSS)
+    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
+    .replace('__CHANNEL_INFO__', `
+      <div class="channel-info">
+        ${channel.avatar_filename ? `<img class="channel-avatar" width=80 height=80 src="/media/avatars/${channel.short_id}.${avatarExt}" alt="${channel.channel}">` : ''}
+        <div class="channel-details">
+          <h1>${channel.channel}</h1>
+          ${channel.description ? `<div class="channel-description">${channel.description}</div>` : ''}
+        </div>
+      </div>`)
+    .replace('__VIDEOS__', videos.map(video => renderVideoCard(video, false)).join(''))
+    .replace('__VIDEO_CARD_SCRIPT__', videoCardScript)
+    .replace('__SHORT_ID__', channel.short_id)
+    .replace('__TITLE__', channel.channel);
 }
 
+const addUserTemplate = fs.readFileSync(path.join(templates, 'add-user.html'), 'utf8');
 export function renderAddUserPage(username: string, permissions: Permissions, availableChannels: any[]): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Add User - LocalTube</title>
-  <style>
-    ${commonCSS}
-    ${formPageCSS}
-    body { margin: 20px; }
-    .form-container { max-width: 600px; margin: 20px auto; }
-    .form-group { margin-bottom: 20px; }
-    .permission-section h3 { color: #333; margin-bottom: 15px; margin-top: 0px; }
-    .radio-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
-    .radio-option { display: flex; align-items: center; gap: 8px; }
-    .radio-option input[type="radio"] { margin: 0; }
-    .channels-section { display: none; }
-    .channels-section.visible { display: block; }
-    .channel-controls { display: flex; gap: 10px; margin-bottom: 15px; }
-    .channel-controls button { padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
-    .channel-controls button:hover { background: #f5f5f5; }
-    .channels-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
-    .channel-option { display: flex; align-items: center; gap: 8px; }
-    .channel-option input[type="checkbox"] { margin: 0; }
-    .form-button { width: 100%; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <a href="/" class="back-link">← Back to Home</a>
-    ${renderTopRightBlock(username, permissions)}
-  </div>
-  <div class="form-container">
-    <h1>Add New User</h1>
-    <form class="page-form" id="addUserForm">
-      <div class="form-group">
-        <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required>
-      </div>
-      <div class="form-group">
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
-      </div>
-
-      <div class="permission-section">
-        <h3>User Permissions</h3>
-        <div class="radio-group">
-          <div class="radio-option">
-            <input type="radio" id="create-user-yes" name="createUser" value="true">
-            <label for="create-user-yes">Can create users</label>
-          </div>
-          <div class="radio-option">
-            <input type="radio" id="create-user-no" name="createUser" value="false" checked>
-            <label for="create-user-no">Cannot create users</label>
-          </div>
-        </div>
-      </div>
-
-      <div class="permission-section">
-        <h3>Subscription Permissions</h3>
-        <div class="radio-group">
-          <div class="radio-option">
-            <input type="radio" id="can-subscribe-yes" name="canSubscribe" value="true" ${permissions.allowedChannels !== 'all' ? 'disabled' : ''}>
-            <label for="can-subscribe-yes">Can manage subscriptions</label>
-          </div>
-          <div class="radio-option">
-            <input type="radio" id="can-subscribe-no" name="canSubscribe" value="false" checked>
-            <label for="can-subscribe-no">Cannot manage subscriptions</label>
-          </div>
-        </div>
-        ${permissions.allowedChannels !== 'all' ? `
-          <p style="color: #666; font-size: 14px; margin-top: 10px;">Subscription management is only available for users with access to all channels.</p>
-        ` : ''}
-      </div>
-
-      <div class="permission-section">
-        <h3>Channel Permissions</h3>
-        ${permissions.allowedChannels === 'all' ? `
+  return addUserTemplate
+    .replace('__COMMON_CSS__', commonCSS)
+    .replace('__FORM_PAGE_CSS__', formPageCSS)
+    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
+    .replace('__DISABLE_CAN_SUBSCRIBE__', permissions.allowedChannels !== 'all' ? 'disabled' : '')
+    .replace('__SUB_MANAGEMENT_DISCLAIMER__', permissions.allowedChannels !== 'all' ? `
+        <p style="color: #666; font-size: 14px; margin-top: 10px;">Subscription management is only available for users with access to all channels.</p>
+      ` : '')
+    .replace('__CHANNEL_PERMISSIONS__', permissions.allowedChannels === 'all' ? `
         <div class="radio-group">
           <div class="radio-option">
             <input type="radio" id="perm-all" name="permissions" value="all" required>
@@ -727,218 +319,18 @@ export function renderAddUserPage(username: string, permissions: Permissions, av
             `).join('')}
           </div>
         </div>
-        `}
-      </div>
-
-      <button type="submit" class="form-button" id="createButton">Create User</button>
-      <div id="message"></div>
-    </form>
-  </div>
-
-  <script>
-    const permissionRadios = document.querySelectorAll('input[name="permissions"]');
-    const channelsSection = document.getElementById('channelsSection');
-    const form = document.getElementById('addUserForm');
-    const button = document.getElementById('createButton');
-    const message = document.getElementById('message');
-
-    function updateChannelsVisibility() {
-      if (!channelsSection) return; // it is always visible for restricted users
-      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
-      if (selectedPermission === 'allowlist') {
-        channelsSection.classList.add('visible');
-      } else {
-        channelsSection.classList.remove('visible');
-      }
-    }
-
-    permissionRadios.forEach(radio => {
-      radio.addEventListener('change', updateChannelsVisibility);
-    });
-
-    function selectAllChannels() {
-      document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
-        checkbox.checked = true;
-      });
-    }
-
-    function deselectAllChannels() {
-      document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
-        checkbox.checked = false;
-      });
-    }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value ||
-                                document.querySelector('input[name="permissions"][type="hidden"]')?.value;
-      const createUser = document.querySelector('input[name="createUser"]:checked')?.value === 'true';
-      const canSubscribe = document.querySelector('input[name="canSubscribe"]:checked')?.value === 'true';
-
-      if (!selectedPermission) {
-        message.textContent = 'Please select channel permissions';
-        message.className = 'error';
-        return;
-      }
-
-      if (canSubscribe && selectedPermission !== 'all') {
-        message.textContent = 'Subscription management is only available for users with access to all channels';
-        message.className = 'error';
-        return;
-      }
-
-      let allowedChannels;
-      if (selectedPermission === 'all') {
-        allowedChannels = 'all';
-      } else {
-        allowedChannels = Array.from(document.querySelectorAll('input[name="channels"]:checked'))
-          .map(checkbox => checkbox.value);
-
-        if (allowedChannels.length === 0) {
-          message.textContent = 'Please select at least one channel for allowlist access';
-          message.className = 'error';
-          return;
-        }
-      }
-
-      button.disabled = true;
-      button.textContent = 'Creating User...';
-      message.textContent = '';
-      message.className = '';
-
-      try {
-        const response = await fetch('/api/add-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username,
-            password,
-            allowedChannels,
-            createUser,
-            canSubscribe
-          })
-        });
-
-        if (response.ok) {
-          message.textContent = 'User created successfully!';
-          message.className = 'success';
-          form.reset();
-          updateChannelsVisibility();
-        } else {
-          const error = await response.json();
-          message.textContent = error.message || 'Failed to create user';
-          message.className = 'error';
-        }
-      } catch (err) {
-        message.textContent = 'Network error. Please try again.';
-        message.className = 'error';
-      }
-
-      button.disabled = false;
-      button.textContent = 'Create User';
-    });
-
-    // Initialize visibility
-    updateChannelsVisibility();
-  </script>
-</body>
-</html>`;
+        `)
 }
 
+const settingsTemplate = fs.readFileSync(path.join(templates, 'settings.html'), 'utf8');
 export function renderSettingsPage(username: string, permissions: Permissions): string {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Settings - LocalTube</title>
-  <style>
-    ${commonCSS}
-    ${formPageCSS}
-    body { margin: 20px; }
-    .form-container { max-width: 600px; margin: 20px auto; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <a href="/" class="back-link">← Back to Home</a>
-    ${renderTopRightBlock(username, permissions)}
-  </div>
-  <div class="form-container">
-    <h1>Settings</h1>
-    <form class="page-form" id="changePasswordForm">
-      <h3 style="margin: 0; color: #333;">Change Password</h3>
-      <div class="form-group">
-        <label for="currentPassword">Current Password:</label>
-        <input type="password" id="currentPassword" name="currentPassword" required>
-      </div>
-      <div class="form-group">
-        <label for="newPassword">New Password:</label>
-        <input type="password" id="newPassword" name="newPassword" required>
-      </div>
-      <div class="form-group">
-        <label for="confirmPassword">Confirm New Password:</label>
-        <input type="password" id="confirmPassword" name="confirmPassword" required>
-      </div>
-      <button type="submit" class="form-button" id="changePasswordButton">Change Password</button>
-      <div id="message"></div>
-    </form>
-  </div>
-
-  <script>
-    const form = document.getElementById('changePasswordForm');
-    const button = document.getElementById('changePasswordButton');
-    const message = document.getElementById('message');
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const currentPassword = document.getElementById('currentPassword').value;
-      const newPassword = document.getElementById('newPassword').value;
-      const confirmPassword = document.getElementById('confirmPassword').value;
-
-      if (newPassword !== confirmPassword) {
-        message.textContent = 'New passwords do not match';
-        message.className = 'error';
-        return;
-      }
-
-      button.disabled = true;
-      button.textContent = 'Changing Password...';
-      message.textContent = '';
-      message.className = '';
-
-      try {
-        const response = await fetch('/api/change-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentPassword, newPassword })
-        });
-
-        if (response.ok) {
-          message.textContent = 'Password changed successfully!';
-          message.className = 'success';
-          form.reset();
-        } else {
-          const error = await response.json();
-          message.textContent = error.message || 'Failed to change password';
-          message.className = 'error';
-        }
-      } catch (err) {
-        message.textContent = 'Network error. Please try again.';
-        message.className = 'error';
-      }
-
-      button.disabled = false;
-      button.textContent = 'Change Password';
-    });
-  </script>
-</body>
-</html>`;
+  return settingsTemplate
+    .replace('__COMMON_CSS__', commonCSS)
+    .replace('__FORM_PAGE_CSS__', formPageCSS)
+    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
 }
 
+// const subscriptionsTemplate = fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8');
 export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptionsData: SubscriptionFile): string {
   const subscribing = subscriptionsData.subscribing;
   const subscribed = subscriptionsData.subscribed;

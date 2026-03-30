@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>__TITLE__ - LocalTube</title>
+  <style>
+    __COMMON_CSS__
+    body { margin: 20px; }
+    .channel-header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 20px; margin-bottom: 20px; }
+    .channel-info { display: flex; align-items: center; }
+    .channel-avatar { width: 80px; height: 80px; border-radius: 50%; margin-right: 20px; }
+    .channel-details h1 { margin: 0 0 10px 0; color: #333; }
+    .channel-description { color: #666; line-height: 1.5; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a href="/" class="back-link">← Back to Home</a>
+    __TOP_RIGHT_BLOCK__
+  </div>
+  <div class="channel-header">
+    __CHANNEL_INFO__
+  </div>
+  <div class="video-grid" id="video-grid">
+    __VIDEOS__
+  </div>
+  <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
+  <script>
+    __VIDEO_CARD_SCRIPT__
+    createInfiniteScroll('/api/channel/__SHORT_ID__/videos', false);
+  </script>
+</body>
+</html>

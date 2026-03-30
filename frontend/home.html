@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LocalTube</title>
+  <style>
+    __COMMON_CSS__
+    body { margin: 20px; }
+    h1 { color: #333; margin: 0px; }
+    .video-grid { margin-top: 20px; }
+    .video-title { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>LocalTube</h1>
+    __TOP_RIGHT_BLOCK__
+  </div>
+  <div class="video-grid" id="video-grid">
+    __VIDEOS__
+  </div>
+  <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
+  <script>
+    __VIDEO_CARD_SCRIPT__
+    createInfiniteScroll('/api/videos', true);
+  </script>
+</body>
+</html>

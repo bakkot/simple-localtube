@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Add User - LocalTube</title>
+  <style>
+    __COMMON_CSS__
+    __FORM_PAGE_CSS__
+    body { margin: 20px; }
+    .form-container { max-width: 600px; margin: 20px auto; }
+    .form-group { margin-bottom: 20px; }
+    .permission-section h3 { color: #333; margin-bottom: 15px; margin-top: 0px; }
+    .radio-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+    .radio-option { display: flex; align-items: center; gap: 8px; }
+    .radio-option input[type="radio"] { margin: 0; }
+    .channels-section { display: none; }
+    .channels-section.visible { display: block; }
+    .channel-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+    .channel-controls button { padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
+    .channel-controls button:hover { background: #f5f5f5; }
+    .channels-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
+    .channel-option { display: flex; align-items: center; gap: 8px; }
+    .channel-option input[type="checkbox"] { margin: 0; }
+    .form-button { width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a href="/" class="back-link">← Back to Home</a>
+    __TOP_RIGHT_BLOCK__
+  </div>
+  <div class="form-container">
+    <h1>Add New User</h1>
+    <form class="page-form" id="addUserForm">
+      <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+
+      <div class="permission-section">
+        <h3>User Permissions</h3>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="create-user-yes" name="createUser" value="true">
+            <label for="create-user-yes">Can create users</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="create-user-no" name="createUser" value="false" checked>
+            <label for="create-user-no">Cannot create users</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="permission-section">
+        <h3>Subscription Permissions</h3>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" id="can-subscribe-yes" name="canSubscribe" value="true" __DISABLE_CAN_SUBSCRIBE__>
+            <label for="can-subscribe-yes">Can manage subscriptions</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" id="can-subscribe-no" name="canSubscribe" value="false" checked>
+            <label for="can-subscribe-no">Cannot manage subscriptions</label>
+          </div>
+        </div>
+        __SUB_MANAGEMENT_DISCLAIMER__
+      </div>
+
+      <div class="permission-section">
+        <h3>Channel Permissions</h3>
+        __CHANNEL_PERMISSIONS__
+      </div>
+
+      <button type="submit" class="form-button" id="createButton">Create User</button>
+      <div id="message"></div>
+    </form>
+  </div>
+
+  <script>
+    const permissionRadios = document.querySelectorAll('input[name="permissions"]');
+    const channelsSection = document.getElementById('channelsSection');
+    const form = document.getElementById('addUserForm');
+    const button = document.getElementById('createButton');
+    const message = document.getElementById('message');
+
+    function updateChannelsVisibility() {
+      if (!channelsSection) return; // it is always visible for restricted users
+      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
+      if (selectedPermission === 'allowlist') {
+        channelsSection.classList.add('visible');
+      } else {
+        channelsSection.classList.remove('visible');
+      }
+    }
+
+    permissionRadios.forEach(radio => {
+      radio.addEventListener('change', updateChannelsVisibility);
+    });
+
+    function selectAllChannels() {
+      document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
+        checkbox.checked = true;
+      });
+    }
+
+    function deselectAllChannels() {
+      document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
+        checkbox.checked = false;
+      });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value ||
+                                document.querySelector('input[name="permissions"][type="hidden"]')?.value;
+      const createUser = document.querySelector('input[name="createUser"]:checked')?.value === 'true';
+      const canSubscribe = document.querySelector('input[name="canSubscribe"]:checked')?.value === 'true';
+
+      if (!selectedPermission) {
+        message.textContent = 'Please select channel permissions';
+        message.className = 'error';
+        return;
+      }
+
+      if (canSubscribe && selectedPermission !== 'all') {
+        message.textContent = 'Subscription management is only available for users with access to all channels';
+        message.className = 'error';
+        return;
+      }
+
+      let allowedChannels;
+      if (selectedPermission === 'all') {
+        allowedChannels = 'all';
+      } else {
+        allowedChannels = Array.from(document.querySelectorAll('input[name="channels"]:checked'))
+          .map(checkbox => checkbox.value);
+
+        if (allowedChannels.length === 0) {
+          message.textContent = 'Please select at least one channel for allowlist access';
+          message.className = 'error';
+          return;
+        }
+      }
+
+      button.disabled = true;
+      button.textContent = 'Creating User...';
+      message.textContent = '';
+      message.className = '';
+
+      try {
+        const response = await fetch('/api/add-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username,
+            password,
+            allowedChannels,
+            createUser,
+            canSubscribe
+          })
+        });
+
+        if (response.ok) {
+          message.textContent = 'User created successfully!';
+          message.className = 'success';
+          form.reset();
+          updateChannelsVisibility();
+        } else {
+          const error = await response.json();
+          message.textContent = error.message || 'Failed to create user';
+          message.className = 'error';
+        }
+      } catch (err) {
+        message.textContent = 'Network error. Please try again.';
+        message.className = 'error';
+      }
+
+      button.disabled = false;
+      button.textContent = 'Create User';
+    });
+
+    // Initialize visibility
+    updateChannelsVisibility();
+  </script>
+</body>
+</html>
