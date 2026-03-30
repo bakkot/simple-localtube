@@ -101,7 +101,7 @@ const commonCSS = `
   .settings { display: inline-flex; position: relative; cursor: pointer; }
   .settings-dropdown { display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); min-width: 150px; z-index: 100; }
   .settings-dropdown::before { content: ''; position: absolute; bottom: 100%; right: 0; width: 150%; height: 16px; }
-  .settings:hover .settings-dropdown { display: block; }
+  .settings:hover:not(.no-hover) .settings-dropdown, .settings.open .settings-dropdown { display: block; }
   .settings-dropdown a { display: block; padding: 8px 16px; color: #333; text-decoration: none; white-space: nowrap; }
   .settings-dropdown a:hover { background: #f0f0f0; }
   .username { color: #333; font-weight: bold; }
@@ -166,6 +166,23 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
         document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         window.location.href = '/login';
       }
+
+      const settingsBtn = document.querySelector('.settings');
+      settingsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (settingsBtn.classList.contains('open')) {
+          settingsBtn.classList.remove('open');
+          settingsBtn.classList.add('no-hover');
+          settingsBtn.addEventListener('mouseleave', () => {
+            settingsBtn.classList.remove('no-hover');
+          }, { once: true });
+        } else {
+          settingsBtn.classList.add('open');
+        }
+      });
+      document.addEventListener('click', () => {
+        settingsBtn.classList.remove('open');
+      });
     </script>`;
 }
 
