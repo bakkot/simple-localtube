@@ -98,7 +98,11 @@ const commonCSS = `
   body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; }
   .header { position: relative; }
   .topright-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
-  .settings { display: inline-flex; }
+  .settings { display: inline-flex; position: relative; cursor: pointer; }
+  .settings-dropdown { display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); min-width: 150px; z-index: 100; }
+  .settings:hover .settings-dropdown { display: block; }
+  .settings-dropdown a { display: block; padding: 8px 16px; color: #333; text-decoration: none; white-space: nowrap; }
+  .settings-dropdown a:hover { background: #f0f0f0; }
   .username { color: #333; font-weight: bold; }
   .logout-link { color: #1976d2; text-decoration: none; cursor: pointer; }
   .logout-link:hover { text-decoration: underline; }
@@ -139,7 +143,7 @@ const formPageCSS = `
   .form-info { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; line-height: 1.4; }
 `;
 
-function renderTopRightBlock(username: string) {
+function renderTopRightBlock(username: string, permissions: Permissions) {
   // look, nothing stops you from putting scripts in the middle of presentation elements
   // it's fine
   return `
@@ -147,6 +151,11 @@ function renderTopRightBlock(username: string) {
       <span class="settings">
         <!-- icons from Feather: https://github.com/feathericons/feather/blob/593b3bf516087d07d362280b34ec1a5383e71572/LICENSE -->
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-settings"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <div class="settings-dropdown">
+          <a href="/settings">Settings</a>
+          <a href="/subscriptions">Subscriptions</a>
+          ${permissions.createUser ? '<a href="/add-user">Add User</a>' : ''}
+        </div>
       </span>
       <span class="username">${username}</span>
       <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
@@ -159,7 +168,7 @@ function renderTopRightBlock(username: string) {
     </script>`;
 }
 
-export function renderNotAllowed(username: string): string {
+export function renderNotAllowed(username: string, permissions: Permissions): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -177,7 +186,7 @@ export function renderNotAllowed(username: string): string {
 </head>
 <body>
   <div class="header">
-    ${renderTopRightBlock(username)}
+    ${renderTopRightBlock(username, permissions)}
   </div>
   <div class="not-allowed-container">
     <div class="not-allowed-title">Access Not Allowed</div>
@@ -348,7 +357,7 @@ export function renderLoginPage(): string {
 </html>`;
 }
 
-export function renderHomePage(username: string, videos: VideoWithChannel[]): string {
+export function renderHomePage(username: string, permissions: Permissions, videos: VideoWithChannel[]): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -365,7 +374,7 @@ export function renderHomePage(username: string, videos: VideoWithChannel[]): st
 <body>
   <div class="header">
     <h1>LocalTube</h1>
-    ${renderTopRightBlock(username)}
+    ${renderTopRightBlock(username, permissions)}
   </div>
   <div class="video-grid" id="video-grid">
     ${videos.map(video => renderVideoCard(video, true)).join('')}
@@ -380,7 +389,7 @@ export function renderHomePage(username: string, videos: VideoWithChannel[]): st
 </html>`;
 }
 
-export function renderVideoPage(video: any, username: string): string {
+export function renderVideoPage(video: any, username: string, permissions: Permissions): string {
   const videoExt = nameExt(video.video_filename).ext;
   const avatarExt = video.avatar_filename == null ? null : nameExt(video.avatar_filename).ext;
 
@@ -403,7 +412,7 @@ export function renderVideoPage(video: any, username: string): string {
   <div class="content-section">
     <div class="header">
       <a href="/" class="back-link">← Back to Home</a>
-      ${renderTopRightBlock(username)}
+      ${renderTopRightBlock(username, permissions)}
     </div>
   </div>
   <div class="video-section">
@@ -428,7 +437,7 @@ export function renderVideoPage(video: any, username: string): string {
 </html>`;
 }
 
-export function renderChannelPage(channel: any, videos: VideoWithChannel[], username: string): string {
+export function renderChannelPage(channel: any, videos: VideoWithChannel[], username: string, permissions: Permissions): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
 
   return `
@@ -449,7 +458,7 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${renderTopRightBlock(username)}
+    ${renderTopRightBlock(username, permissions)}
   </div>
   <div class="channel-header">
     <div class="channel-info">
@@ -473,7 +482,7 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
 </html>`;
 }
 
-export function renderAddUserPage(username: string, userPermissions: Permissions, availableChannels: any[]): string {
+export function renderAddUserPage(username: string, permissions: Permissions, availableChannels: any[]): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -503,7 +512,7 @@ export function renderAddUserPage(username: string, userPermissions: Permissions
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${renderTopRightBlock(username)}
+    ${renderTopRightBlock(username, permissions)}
   </div>
   <div class="form-container">
     <h1>Add New User</h1>
@@ -535,7 +544,7 @@ export function renderAddUserPage(username: string, userPermissions: Permissions
         <h3>Subscription Permissions</h3>
         <div class="radio-group">
           <div class="radio-option">
-            <input type="radio" id="can-subscribe-yes" name="canSubscribe" value="true" ${userPermissions.allowedChannels !== 'all' ? 'disabled' : ''}>
+            <input type="radio" id="can-subscribe-yes" name="canSubscribe" value="true" ${permissions.allowedChannels !== 'all' ? 'disabled' : ''}>
             <label for="can-subscribe-yes">Can manage subscriptions</label>
           </div>
           <div class="radio-option">
@@ -543,14 +552,14 @@ export function renderAddUserPage(username: string, userPermissions: Permissions
             <label for="can-subscribe-no">Cannot manage subscriptions</label>
           </div>
         </div>
-        ${userPermissions.allowedChannels !== 'all' ? `
+        ${permissions.allowedChannels !== 'all' ? `
           <p style="color: #666; font-size: 14px; margin-top: 10px;">Subscription management is only available for users with access to all channels.</p>
         ` : ''}
       </div>
 
       <div class="permission-section">
         <h3>Channel Permissions</h3>
-        ${userPermissions.allowedChannels === 'all' ? `
+        ${permissions.allowedChannels === 'all' ? `
         <div class="radio-group">
           <div class="radio-option">
             <input type="radio" id="perm-all" name="permissions" value="all" required>
@@ -714,7 +723,7 @@ export function renderAddUserPage(username: string, userPermissions: Permissions
 </html>`;
 }
 
-export function renderSettingsPage(username: string): string {
+export function renderSettingsPage(username: string, permissions: Permissions): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -730,7 +739,7 @@ export function renderSettingsPage(username: string): string {
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${renderTopRightBlock(username)}
+    ${renderTopRightBlock(username, permissions)}
   </div>
   <div class="form-container">
     <h1>Settings</h1>
@@ -805,7 +814,7 @@ export function renderSettingsPage(username: string): string {
 </html>`;
 }
 
-export function renderSubscriptionsPage(username: string, subscriptionsData: SubscriptionFile, allowedChannels: Set<ChannelID> | 'all', canSubscribe: boolean): string {
+export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptionsData: SubscriptionFile): string {
   const subscribing = subscriptionsData.subscribing;
   const subscribed = subscriptionsData.subscribed;
   const titles = subscriptionsData.titles;
@@ -814,7 +823,7 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: Sub
   const channelInfos = [];
 
   for (const channelId of allChannelIds) {
-    if (allowedChannels !== 'all' && !allowedChannels.has(channelId)) {
+    if (permissions.allowedChannels !== 'all' && !permissions.allowedChannels.has(channelId)) {
       continue;
     }
 
@@ -885,9 +894,9 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: Sub
   <div class="header">
     <h1>Subscriptions</h1>
     <a href="/" class="back-link">← Back to Home</a>
-    ${renderTopRightBlock(username)}
+    ${renderTopRightBlock(username, permissions)}
   </div>
-  ${canSubscribe ? `
+  ${permissions.canSubscribe ? `
     <div class="add-subscription-form">
       <h2>Add New Subscription</h2>
       <form id="addSubscriptionForm">
@@ -929,7 +938,7 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: Sub
               </div>
               <div class="channel-id">${channel.channel_id}</div>
             </div>
-            ${canSubscribe ? `
+            ${permissions.canSubscribe ? `
               <button class="unsubscribe-btn" onclick="unsubscribe('${channel.channel_id}', '${channel.channel.replace(/'/g, "\\'")}', event)">
                 Unsubscribe
               </button>
@@ -940,7 +949,7 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: Sub
     `}
   </div>
   <script>
-    ${canSubscribe ? `
+    ${permissions.canSubscribe ? `
       async function unsubscribe(channelId, channelName, event) {
         const shiftPressed = event.shiftKey;
 

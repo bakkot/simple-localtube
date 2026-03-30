@@ -123,10 +123,10 @@ app.get('/login', (req: Request, res: Response): void => {
 });
 
 app.get('/', (req, res) => {
-  const allowedChannels = getUserPermissions(req.username!).allowedChannels;
-  const videos = getRecentVideosForChannels(allowedChannels, 30);
+  const permissions = getUserPermissions(req.username!);
+  const videos = getRecentVideosForChannels(permissions.allowedChannels, 30);
 
-  res.send(renderHomePage(req.username!, videos));
+  res.send(renderHomePage(req.username!, permissions, videos));
 });
 
 // Video player page
@@ -137,12 +137,13 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     return;
   }
 
+  const permissions = getUserPermissions(req.username!);
   if (!canUserViewChannel(req.username!, video.channel_id)) {
-    res.send(renderNotAllowed(req.username!));
+    res.send(renderNotAllowed(req.username!, permissions));
     return;
   }
 
-  res.send(renderVideoPage(video, req.username!));
+  res.send(renderVideoPage(video, req.username!, permissions));
 });
 
 // Channel page
@@ -153,21 +154,22 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
     return;
   }
 
+  const permissions = getUserPermissions(req.username!);
   if (!canUserViewChannel(req.username!, channel.channel_id)) {
-    res.send(renderNotAllowed(req.username!));
+    res.send(renderNotAllowed(req.username!, permissions));
     return;
   }
 
   const videos = getVideosByChannel(channel.channel_id, 30);
 
-  res.send(renderChannelPage(channel, videos, req.username!));
+  res.send(renderChannelPage(channel, videos, req.username!, permissions));
 });
 
 app.get('/add-user', (req: Request, res: Response): void => {
   const userPermissions = getUserPermissions(req.username!);
 
   if (!userPermissions.createUser) {
-    res.send(renderNotAllowed(req.username!));
+    res.send(renderNotAllowed(req.username!, userPermissions));
     return;
   }
 
@@ -177,7 +179,8 @@ app.get('/add-user', (req: Request, res: Response): void => {
 });
 
 app.get('/settings', (req: Request, res: Response): void => {
-  res.send(renderSettingsPage(req.username!));
+  const permissions = getUserPermissions(req.username!);
+  res.send(renderSettingsPage(req.username!, permissions));
 });
 
 app.get('/subscriptions', (req: Request, res: Response): void => {
@@ -195,7 +198,7 @@ app.get('/subscriptions', (req: Request, res: Response): void => {
     return;
   }
   const userPermissions = getUserPermissions(req.username!);
-  res.send(renderSubscriptionsPage(req.username!, subscriptionsData, userPermissions.allowedChannels, userPermissions.canSubscribe));
+  res.send(renderSubscriptionsPage(req.username!, userPermissions, subscriptionsData));
 });
 
 app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<void> => {
