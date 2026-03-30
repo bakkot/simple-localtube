@@ -879,9 +879,9 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
   <title>Subscriptions - LocalTube</title>
   <style>
     ${commonCSS}
+    ${formPageCSS}
     body { margin: 20px; }
-    h1 { color: #333; margin: 0px; }
-    .subscriptions-container { margin-top: 20px; }
+    .form-container { max-width: 600px; margin: 20px auto; }
     .channel-list { display: flex; flex-direction: column; gap: 15px; }
     .channel-item { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 15px; }
     .channel-avatar { width: 60px; height: 60px; border-radius: 50%; }
@@ -893,43 +893,36 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
     .unsubscribe-btn { background: #d32f2f; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
     .unsubscribe-btn:hover { background: #b71c1c; }
     .unsubscribe-btn:disabled { background: #ccc; cursor: not-allowed; }
-    .no-channels { text-align: center; color: #666; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .add-subscription-form { background: white; padding: 20px; margin-top: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    .add-subscription-form h2 { margin: 0 0 15px 0; color: #333; }
-    .form-row { display: flex; gap: 10px; align-items: flex-end; }
+    .no-channels { text-align: center; color: #666; padding: 40px; }
+    .form-row { display: flex; gap: 10px; align-items: flex-end; width: 100%; }
     .form-group { flex: 1; }
-    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
-    .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; box-sizing: border-box; }
+    .form-group input { width: 100%; box-sizing: border-box; }
     .add-button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; white-space: nowrap; }
     .add-button:hover { background: #1565c0; }
     .add-button:disabled { background: #ccc; cursor: not-allowed; }
     .message { margin-top: 10px; font-size: 14px; }
-    .error { color: #d32f2f; }
-    .success { color: #388e3c; }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>Subscriptions</h1>
     <a href="/" class="back-link">← Back to Home</a>
     ${renderTopRightBlock(username, permissions)}
   </div>
-  ${permissions.canSubscribe ? `
-    <div class="add-subscription-form">
-      <h2>Add New Subscription</h2>
-      <form id="addSubscriptionForm">
+  <div class="form-container">
+    <h1>Subscriptions</h1>
+    ${permissions.canSubscribe ? `
+      <form id="addSubscriptionForm" class="page-form">
         <div class="form-row">
           <div class="form-group">
             <label for="channelId">Handle, ID, or channel URL:</label>
             <input type="text" id="channelId" name="channelId" placeholder="e.g. @username, UCxxxxx, or https://youtube.com/..." required>
           </div>
-          <button type="submit" class="add-button" id="addButton">Add Subscription</button>
+          <button type="submit" class="add-button" id="addButton">Add</button>
         </div>
         <div id="addMessage" class="message"></div>
       </form>
-    </div>
-  ` : ''}
-  <div class="subscriptions-container">
+    ` : ''}
+    <div class="subscriptions-container">
     ${channelInfos.length === 0 ? `
       <div class="no-channels">No subscriptions found</div>
     ` : `
@@ -965,6 +958,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
         `).join('')}
       </div>
     `}
+  </div>
   </div>
   <script>
     ${permissions.canSubscribe ? `
