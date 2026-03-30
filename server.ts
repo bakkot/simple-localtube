@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID, readSubscriptionsFile } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
-import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage } from './frontend.ts';
+import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
 // Extend Request interface to include username
@@ -174,6 +174,10 @@ app.get('/add-user', (req: Request, res: Response): void => {
   const availableChannels = getChannelsForUser(userPermissions.allowedChannels);
 
   res.send(renderAddUserPage(req.username!, userPermissions, availableChannels));
+});
+
+app.get('/settings', (req: Request, res: Response): void => {
+  res.send(renderSettingsPage(req.username!));
 });
 
 app.get('/subscriptions', (req: Request, res: Response): void => {

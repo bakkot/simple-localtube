@@ -708,6 +708,97 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
 </html>`;
 }
 
+export function renderSettingsPage(username: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Settings - LocalTube</title>
+  <style>
+    ${commonCSS}
+    ${formPageCSS}
+    body { margin: 20px; }
+    .form-container { max-width: 600px; margin: 20px auto; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a href="/" class="back-link">← Back to Home</a>
+    ${renderUserBlock(username)}
+  </div>
+  <div class="form-container">
+    <h1>Settings</h1>
+    <form class="page-form" id="changePasswordForm">
+      <h3 style="margin: 0; color: #333;">Change Password</h3>
+      <div class="form-group">
+        <label for="currentPassword">Current Password:</label>
+        <input type="password" id="currentPassword" name="currentPassword" required>
+      </div>
+      <div class="form-group">
+        <label for="newPassword">New Password:</label>
+        <input type="password" id="newPassword" name="newPassword" required>
+      </div>
+      <div class="form-group">
+        <label for="confirmPassword">Confirm New Password:</label>
+        <input type="password" id="confirmPassword" name="confirmPassword" required>
+      </div>
+      <button type="submit" class="form-button" id="changePasswordButton">Change Password</button>
+      <div id="message"></div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('changePasswordForm');
+    const button = document.getElementById('changePasswordButton');
+    const message = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const currentPassword = document.getElementById('currentPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+
+      if (newPassword !== confirmPassword) {
+        message.textContent = 'New passwords do not match';
+        message.className = 'error';
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = 'Changing Password...';
+      message.textContent = '';
+      message.className = '';
+
+      try {
+        const response = await fetch('/api/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        if (response.ok) {
+          message.textContent = 'Password changed successfully!';
+          message.className = 'success';
+          form.reset();
+        } else {
+          const error = await response.json();
+          message.textContent = error.message || 'Failed to change password';
+          message.className = 'error';
+        }
+      } catch (err) {
+        message.textContent = 'Network error. Please try again.';
+        message.className = 'error';
+      }
+
+      button.disabled = false;
+      button.textContent = 'Change Password';
+    });
+  </script>
+</body>
+</html>`;
+}
+
 export function renderSubscriptionsPage(username: string, subscriptionsData: SubscriptionFile, allowedChannels: Set<ChannelID> | 'all', canSubscribe: boolean): string {
   const subscribing = subscriptionsData.subscribing;
   const subscribed = subscriptionsData.subscribed;

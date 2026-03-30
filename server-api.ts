@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, checkUsernamePassword, getUserPermissions, hasAnyUsers } from './user-db.ts';
+import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getUserPermissions, hasAnyUsers } from './user-db.ts';
 import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID } from './util.ts';
 import { addChannel, addVideo, getChannelById, getChannelByShortId, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, type Channel, type Video } from './media-db.ts';
 import { readFileSync, writeFileSync } from 'fs';
@@ -214,6 +214,33 @@ export function addAPIs(app: Express) {
         res.status(409).json({ message: 'Username already exists' });
       } else if (error.message.includes('Channel') && error.message.includes('does not exist')) {
         res.status(400).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    }
+  });
+
+  app.post('/api/change-password', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        res.status(400).json({ message: 'Current password and new password are required' });
+        return;
+      }
+
+      if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+        res.status(400).json({ message: 'Passwords must be strings' });
+        return;
+      }
+
+      await changePassword(req.username!, currentPassword, newPassword);
+
+      res.json({ message: 'Password changed successfully' });
+    } catch (error: any) {
+      // console.error('Change password error:', error);
+      if (error.message === 'Current password is incorrect') {
+        res.status(403).json({ message: 'Current password is incorrect' });
       } else {
         res.status(500).json({ message: 'Internal server error' });
       }

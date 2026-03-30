@@ -84,6 +84,14 @@ let hasAnyUsersStmt = db.prepare(`
   SELECT 1 FROM users LIMIT 1
 `);
 
+let updatePasswordStmt = db.prepare(`
+  UPDATE users SET hashed_password = :hashed_password, salt = :salt WHERE username = :username
+`);
+
+export function generateSalt(): Buffer {
+  return randomBytes(32);
+}
+
 async function hashPassword(password: string, salt: Buffer, pepper: Buffer): Promise<Buffer> {
   const normalizedPassword = password.normalize('NFC');
   const passwordWithPepper = normalizedPassword + pepper.toString('base64');
@@ -188,7 +196,7 @@ export async function addUser(
     }
   }
 
-  const salt = randomBytes(32);
+  const salt = generateSalt();
   const hashedPassword = await hashPassword(password, salt, keys.pepper);
 
   addUserStmt.run({
@@ -262,6 +270,27 @@ export function arePermissionsAtLeastAsRestrictive(
 
 export function hasAnyUsers(): boolean {
   return !!hasAnyUsersStmt.get();
+}
+
+export async function changePassword(username: string, currentPassword: string, newPassword: string): Promise<void> {
+  const user = getUserByUsernameStmt.get(username) as User | undefined;
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const isValid = await verifyPassword(currentPassword, user.hashed_password, user.salt, keys.pepper);
+  if (!isValid) {
+    throw new Error('Current password is incorrect');
+  }
+
+  const salt = generateSalt();
+  const hashedPassword = await hashPassword(newPassword, salt, keys.pepper);
+
+  updatePasswordStmt.run({
+    ':hashed_password': hashedPassword,
+    ':salt': salt,
+    ':username': username,
+  });
 }
 
 export async function checkUsernamePassword(username: string, password: string): Promise<string | null> {
