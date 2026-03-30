@@ -453,9 +453,10 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
 
     function parseVTT(text) {
       const cues = [];
-      const blocks = text.split('\\n\\n');
+      const blocks = text.replace(/^\\uFEFF/, '').split(/\\n{2,}/);
       for (const block of blocks) {
         const lines = block.trim().split('\\n');
+        if (/^(WEBVTT|NOTE|STYLE|REGION)(\\s|$)/.test(lines[0])) continue;
         const timeLine = lines.find(l => l.includes(' --> '));
         if (!timeLine) continue;
         const [startStr, rest] = timeLine.split(' --> ');
@@ -468,7 +469,6 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
         if (words.length && words.every(w => !w.text.trim())) continue;
         cues.push({ start, end, words });
       }
-        console.log(cues);
       return cues;
     }
 
@@ -483,12 +483,15 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
       return total;
     }
 
+    const tsPattern = '(?:\\\\d{2}:)?\\\\d{2}:\\\\d{2}\\\\.\\\\d{3}';
+    const tagRe = new RegExp('<(' + tsPattern + ')>|</?(?:c|b|i|u|ruby|rt)(?:\\\\.[^>]*)?>|</?(?:v|lang)(?:\\\\s[^>]*)?>','g');
+
     function parseWords(raw, cueStart) {
       const words = [];
       let currentTime = cueStart;
-      const tagRe = /<(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})>|<c>|<\\/c>/g;
       let lastIndex = 0;
       let match;
+      tagRe.lastIndex = 0;
       while ((match = tagRe.exec(raw)) !== null) {
         const before = raw.slice(lastIndex, match.index);
         if (before) words.push({ text: before, time: currentTime });
