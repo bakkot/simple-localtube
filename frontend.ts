@@ -100,6 +100,7 @@ const commonCSS = `
   .topright-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
   .settings { display: inline-flex; position: relative; cursor: pointer; }
   .settings-dropdown { display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); min-width: 150px; z-index: 100; }
+  .settings-dropdown::before { content: ''; position: absolute; bottom: 100%; right: 0; width: 150%; height: 16px; }
   .settings:hover .settings-dropdown { display: block; }
   .settings-dropdown a { display: block; padding: 8px 16px; color: #333; text-decoration: none; white-space: nowrap; }
   .settings-dropdown a:hover { background: #f0f0f0; }
