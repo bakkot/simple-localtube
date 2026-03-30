@@ -422,7 +422,7 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
     .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; position: relative; }
     video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
     .subtitle-overlay { position: absolute; bottom: 60px; left: 0; right: 0; text-align: center; pointer-events: none; }
-    .subtitle-cue { background: rgba(0,0,0,0.7); color: white; font-size: 1.3em; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+    .subtitle-cue { background: rgba(0,0,0,0.7); color: white; font-size: 1.3em; padding: 4px 8px; border-radius: 4px; display: inline-block; white-space: pre-wrap; }
     .subtitle-cue .word.spoken { color: white; }
     .subtitle-cue .word.unspoken { color: rgba(255,255,255,0.4); }
     video::cue { visibility: hidden; }
@@ -487,16 +487,15 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
       const words = [];
       let currentTime = cueStart;
       const tagRe = /<(\\d{2}:\\d{2}:\\d{2}\\.\\d{3})>|<c>|<\\/c>/g;
-      const cleaned = raw.replace(/\\n/g, ' ');
       let lastIndex = 0;
       let match;
-      while ((match = tagRe.exec(cleaned)) !== null) {
-        const before = cleaned.slice(lastIndex, match.index);
+      while ((match = tagRe.exec(raw)) !== null) {
+        const before = raw.slice(lastIndex, match.index);
         if (before) words.push({ text: before, time: currentTime });
         if (match[1]) currentTime = parseTS(match[1]);
         lastIndex = tagRe.lastIndex;
       }
-      const tail = cleaned.slice(lastIndex);
+      const tail = raw.slice(lastIndex);
       if (tail) words.push({ text: tail, time: currentTime });
       return words;
     }
