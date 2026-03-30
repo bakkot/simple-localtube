@@ -11,6 +11,9 @@ when checking for new videos, also have to check WIP set; presence there counts
 
 clean up console.log
 
+audit JSON.parse, and other `any`s
+lint against any
+
 TODO provisioning accounts: some way to make an account in the "set a password" state (+UI)
 
 document minimum node version

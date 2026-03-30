@@ -153,7 +153,7 @@ export interface Video {
   thumb_filename: string | null;
   duration_seconds: number;
   upload_timestamp: number;
-  subtitles: Record<string, string>;
+  subtitles: Record<string, string>; // map langcode -> path to .vtt file on disk
 }
 
 export interface VideoWithChannel extends Video {

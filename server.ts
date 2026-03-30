@@ -221,6 +221,16 @@ app.get('/media/thumbs/:video_id', async (req: Request, res: Response): Promise<
   res.sendFile(video.thumb_filename);
 });
 
+app.get('/media/subtitles/:video_id/:lang', async (req: Request, res: Response): Promise<void> => {
+  const video = getVideoById(req.params.video_id as VideoID);
+  const subtitlePath = video?.subtitles[req.params.lang];
+  if (!subtitlePath) {
+    res.status(404).send('not found');
+    return;
+  }
+  res.type('text/vtt').sendFile(subtitlePath);
+});
+
 app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise<void> => {
   const channelShortId = nameExt(req.params.short_id).name;
   const channel = getChannelByShortId(channelShortId);

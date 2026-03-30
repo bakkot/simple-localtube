@@ -436,7 +436,9 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
   <div class="video-section">
     <video controls autoplay>
       <source src="/media/videos/${video.video_id}.${videoExt}" type="video/${videoExt === 'mp4' ? 'mp4' : 'webm'}">
-      Your browser does not support the video tag.
+      ${Object.entries(video.subtitles).map(([lang, _]) =>
+        `<track kind="subtitles" src="/media/subtitles/${video.video_id}/${lang}" srclang="${lang}" label="${lang}">`
+      ).join('\n      ')}
     </video>
   </div>
   <div class="content-section">
