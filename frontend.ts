@@ -453,10 +453,17 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
       overlay.innerHTML = '';
       for (const track of video.textTracks) {
         if (track.mode !== 'showing' || !track.activeCues?.length) continue;
-        const span = document.createElement('span');
-        span.className = 'subtitle-cue';
-        span.appendChild(track.activeCues[0].getCueAsHTML());
-        overlay.appendChild(span);
+        for (const cue of track.activeCues) {
+          // const content = [...cue.getCueAsHTML().querySelectorAll('span')].map(x => x.textContent).join('');
+          const content = cue.text.split('\\n').slice(1).join('\\n')
+            .replace(/<\\/?c>|<[\\d:.]+>/g, '');
+          // // const firstLine = cue.text.split('\\n')[0]?.trim();
+          // // if (!firstLine) continue;
+          const span = document.createElement('span');
+          span.className = 'subtitle-cue';
+          span.textContent = content;
+          overlay.appendChild(span);
+        }
         break;
       }
     }
