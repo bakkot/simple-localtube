@@ -96,7 +96,8 @@ function createInfiniteScroll(apiUrl, showChannel) {
 const commonCSS = `
   body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; }
   .header { position: relative; }
-  .user-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .topright-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .settings { display: inline-flex; }
   .username { color: #333; font-weight: bold; }
   .logout-link { color: #1976d2; text-decoration: none; cursor: pointer; }
   .logout-link:hover { text-decoration: underline; }
@@ -137,11 +138,15 @@ const formPageCSS = `
   .form-info { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; line-height: 1.4; }
 `;
 
-function renderUserBlock(username: string) {
+function renderTopRightBlock(username: string) {
   // look, nothing stops you from putting scripts in the middle of presentation elements
   // it's fine
   return `
-    <div class="user-info">
+    <div class="topright-info">
+      <span class="settings">
+        <!-- icons from Feather: https://github.com/feathericons/feather/blob/593b3bf516087d07d362280b34ec1a5383e71572/LICENSE -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-settings"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </span>
       <span class="username">${username}</span>
       <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
     </div>
@@ -171,7 +176,7 @@ export function renderNotAllowed(username: string): string {
 </head>
 <body>
   <div class="header">
-    ${renderUserBlock(username)}
+    ${renderTopRightBlock(username)}
   </div>
   <div class="not-allowed-container">
     <div class="not-allowed-title">Access Not Allowed</div>
@@ -359,7 +364,7 @@ export function renderHomePage(username: string, videos: VideoWithChannel[]): st
 <body>
   <div class="header">
     <h1>LocalTube</h1>
-    ${renderUserBlock(username)}
+    ${renderTopRightBlock(username)}
   </div>
   <div class="video-grid" id="video-grid">
     ${videos.map(video => renderVideoCard(video, true)).join('')}
@@ -397,7 +402,7 @@ export function renderVideoPage(video: any, username: string): string {
   <div class="content-section">
     <div class="header">
       <a href="/" class="back-link">← Back to Home</a>
-      ${renderUserBlock(username)}
+      ${renderTopRightBlock(username)}
     </div>
   </div>
   <div class="video-section">
@@ -443,7 +448,7 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${renderUserBlock(username)}
+    ${renderTopRightBlock(username)}
   </div>
   <div class="channel-header">
     <div class="channel-info">
@@ -497,7 +502,7 @@ export function renderAddUserPage(username: string, userPermissions: any, availa
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${renderUserBlock(username)}
+    ${renderTopRightBlock(username)}
   </div>
   <div class="form-container">
     <h1>Add New User</h1>
@@ -724,7 +729,7 @@ export function renderSettingsPage(username: string): string {
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${renderUserBlock(username)}
+    ${renderTopRightBlock(username)}
   </div>
   <div class="form-container">
     <h1>Settings</h1>
@@ -879,7 +884,7 @@ export function renderSubscriptionsPage(username: string, subscriptionsData: Sub
   <div class="header">
     <h1>Subscriptions</h1>
     <a href="/" class="back-link">← Back to Home</a>
-    ${renderUserBlock(username)}
+    ${renderTopRightBlock(username)}
   </div>
   ${canSubscribe ? `
     <div class="add-subscription-form">
