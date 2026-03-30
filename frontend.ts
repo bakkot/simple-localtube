@@ -97,7 +97,7 @@ function createInfiniteScroll(apiUrl, showChannel) {
 const commonCSS = `
   body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; }
   .header { position: relative; }
-  .topright-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .topright-info { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 10px; font-size: 16px; }
   .settings { display: inline-flex; position: relative; cursor: pointer; }
   .settings-dropdown { display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); min-width: 150px; z-index: 100; }
   .settings-dropdown::before { content: ''; position: absolute; bottom: 100%; right: 0; width: 150%; height: 16px; }
@@ -407,7 +407,7 @@ export function renderHomePage(username: string, permissions: Permissions, video
 </html>`;
 }
 
-export function renderVideoPage(video: any, username: string, permissions: Permissions): string {
+export function renderVideoPage(video: VideoWithChannel, username: string, permissions: Permissions): string {
   const videoExt = nameExt(video.video_filename).ext;
   const avatarExt = video.avatar_filename == null ? null : nameExt(video.avatar_filename).ext;
 
