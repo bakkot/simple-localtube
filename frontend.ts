@@ -419,8 +419,11 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
   <style>
     ${commonCSS}
     body { margin: 0;  }
-    .video-section { background: #000; background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+    .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; position: relative; }
     video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
+    .subtitle-overlay { position: absolute; bottom: 60px; left: 0; right: 0; text-align: center; pointer-events: none; }
+    .subtitle-cue { background: rgba(0,0,0,0.7); color: white; font-size: 1.3em; padding: 4px 8px; border-radius: 4px; }
+    video::cue { visibility: hidden; }
     .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
     .channel-info { display: flex; align-items: center; margin-bottom: 15px; }
     .channel-avatar { border-radius: 50%; margin-right: 10px; }
@@ -440,7 +443,28 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
         `<track kind="subtitles" src="/media/subtitles/${video.video_id}/${lang}" srclang="${lang}" label="${lang}">`
       ).join('\n      ')}
     </video>
+    <div class="subtitle-overlay"></div>
   </div>
+  <script>
+    const video = document.querySelector('video');
+    const overlay = document.querySelector('.subtitle-overlay');
+
+    function renderCues() {
+      overlay.innerHTML = '';
+      for (const track of video.textTracks) {
+        if (track.mode !== 'showing' || !track.activeCues?.length) continue;
+        const span = document.createElement('span');
+        span.className = 'subtitle-cue';
+        span.appendChild(track.activeCues[0].getCueAsHTML());
+        overlay.appendChild(span);
+        break;
+      }
+    }
+
+    for (const track of video.textTracks) {
+      track.addEventListener('cuechange', renderCues);
+    }
+  </script>
   <div class="content-section">
     <div class="video-container">
     <div class="video-info">
