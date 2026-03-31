@@ -15,7 +15,7 @@ export type DataModelKind = {
   [key: string]: 'boolean' | 'string' | DataModelKind;
 };
 
-export type Expr = string | [string, string];
+export type Expr = string | [string, string] | { literal: string } | { literal: boolean };
 
 export type ConditionExpr = {
   expr: Expr;
@@ -86,12 +86,50 @@ function tokenize(template: string): Token[] {
     if (template.startsWith('${', i)) {
       flushText();
       const start = i;
-      const end = template.indexOf('}', i + 2);
-      if (end === -1) fail('Unterminated interpolation', start);
-      const raw = template.slice(i + 2, end).trim();
-      tokens.push({ type: 'interpolation', expr: parseExpr(raw, template, start), offset: start });
-      i = end + 1;
-      textStart = i;
+      let j = i + 2;
+      // skip whitespace
+      while (j < template.length && template[j] === ' ') j++;
+      const quote = template[j];
+      if (quote === '"' || quote === "'") {
+        const strStart = j;
+        j++; // skip opening quote
+        let value = '';
+        while (j < template.length) {
+          const ch = template[j];
+          if (ch === '\n') fail('Newline in string literal', strStart);
+          if (ch === '\\') {
+            j++;
+            if (j >= template.length) fail('Unterminated string literal', strStart);
+            const next = template[j];
+            if (next === quote || next === '\\') {
+              value += next;
+            } else {
+              fail(`Invalid escape sequence "\\${next}" in string literal`, strStart);
+            }
+          } else if (ch === quote) {
+            break;
+          } else {
+            value += ch;
+          }
+          j++;
+        }
+        if (j >= template.length || template[j] !== quote) fail('Unterminated string literal', strStart);
+        j++; // skip closing quote
+        // skip whitespace then expect }
+        while (j < template.length && template[j] === ' ') j++;
+        if (j >= template.length || template[j] !== '}') fail('Unterminated interpolation', start);
+        tokens.push({ type: 'interpolation', expr: { literal: value }, offset: start });
+        i = j + 1;
+        textStart = i;
+      } else {
+        const end = template.indexOf('}', i + 2);
+        if (end === -1) fail('Unterminated interpolation', start);
+        const raw = template.slice(i + 2, end).trim();
+        if (raw === 'true' || raw === 'false') fail('Cannot use boolean literal in interpolation', start);
+        tokens.push({ type: 'interpolation', expr: parseExpr(raw, template, start), offset: start });
+        i = end + 1;
+        textStart = i;
+      }
     } else if (template.startsWith('<#--', i)) {
       flushText();
       const start = i;
@@ -131,9 +169,13 @@ function tokenize(template: string): Token[] {
       } else if (content === 'else') {
         tokens.push({ type: 'else', offset: start });
       } else if (content.startsWith('foreach ')) {
-        const match = content.match(/^foreach\s+(\w+)\s+of\s+([\w.]+)$/);
+        const match = content.match(/^foreach\s+(\w+)\s+of\s+(.+)$/);
         if (!match) fail(`Invalid foreach syntax: <#${content}>`, start);
-        tokens.push({ type: 'foreach_open', item: match[1], collection: parseExpr(match[2], template, start), offset: start });
+        const collectionRaw = match[2].trim();
+        if (collectionRaw === 'true' || collectionRaw === 'false') fail('Cannot use boolean literal as a collection', start);
+        if (collectionRaw.startsWith('"') || collectionRaw.startsWith("'")) fail('Cannot use string literal as a collection', start);
+        if (!/^[\w.]+$/.test(collectionRaw)) fail(`Invalid foreach syntax: <#${content}>`, start);
+        tokens.push({ type: 'foreach_open', item: match[1], collection: parseExpr(collectionRaw, template, start), offset: start });
       } else {
         fail(`Unknown directive: <#${content}>`, start);
       }
@@ -155,6 +197,11 @@ function parseConditionTokenExpr(raw: string, template: string, offset: number):
   if (trimmed.startsWith('not ')) {
     negated = true;
     trimmed = trimmed.slice(4).trim();
+  }
+  if (trimmed === 'true') return { expr: { literal: true }, negated };
+  if (trimmed === 'false') return { expr: { literal: false }, negated };
+  if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
+    throw new TemplateError('Cannot use string literal in condition', locate(template, offset));
   }
   return { expr: parseExpr(trimmed, template, offset), negated };
 }
@@ -191,6 +238,7 @@ export function parse(template: string): ParsedTemplate {
   }
 
   function validateExpr(expr: Expr, kind: 'string' | 'boolean', offset: number) {
+    if (typeof expr === 'object' && !Array.isArray(expr) && 'literal' in expr) return;
     if (typeof expr === 'string') {
       if (loopVars.has(expr)) {
         fail(`Cannot use loop variable "${expr}" as a standalone value`, offset);
@@ -289,13 +337,15 @@ export function parse(template: string): ParsedTemplate {
         if (typeof col === 'string') {
           parent = dataModel;
           key = col;
-        } else {
+        } else if (Array.isArray(col)) {
           const [base, prop] = col;
           if (!loopVars.has(base)) {
             fail(`"${base}" is not a loop variable`, token.offset);
           }
           parent = loopVars.get(base)!;
           key = prop;
+        } else {
+          throw new Error('unreachable');
         }
         let model = parent[key];
         if (typeof model !== 'object') {
@@ -365,6 +415,9 @@ export function apply(parsedTemplate: ParsedTemplate, data: DataModel): string {
   }
 
   function requireExpr(expr: Expr, offset: number): string | boolean | DataModel[] {
+    if (typeof expr === 'object' && !Array.isArray(expr) && 'literal' in expr) {
+      return expr.literal;
+    }
     let value: DataModel[string];
     if (typeof expr === 'string') {
       value = data[expr];

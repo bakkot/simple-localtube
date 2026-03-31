@@ -254,6 +254,8 @@ const channelTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'chan
 export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], username: string, permissions: Permissions): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
 
+  // TODO figure out why short_id is nullable and what to do about it
+  // probably we should not be using short_id in the API anyway
   return applyTemplate(channelTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
@@ -288,7 +290,7 @@ export function renderSettingsPage(username: string, permissions: Permissions): 
   });
 }
 
-// const subscriptionsTemplate = fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8');
+const subscriptionsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8'));
 export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptionsData: SubscriptionFile): string {
   const subscribing = subscriptionsData.subscribing;
   const subscribed = subscriptionsData.subscribed;
@@ -329,179 +331,20 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
 
   channelInfos.sort((a, b) => a.channel.localeCompare(b.channel));
 
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Subscriptions - LocalTube</title>
-  <style>
-    ${commonCSS}
-    ${formPageCSS}
-    body { margin: 20px; }
-    .form-container { max-width: 600px; margin: 20px auto; }
-    .channel-list { display: flex; flex-direction: column; gap: 15px; }
-    .channel-item { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 15px; }
-    .channel-avatar { width: 60px; height: 60px; border-radius: 50%; }
-    .channel-details { display: flex; flex-direction: column; gap: 3px; flex: 1; }
-    .channel-status { font-size: 14px; padding: 4px 8px; border-radius: 4px; }
-    .status-subscribing { background: #fff3cd; color: #856404; }
-    .status-subscribed { background: #d4edda; color: #155724; }
-    .channel-id { font-size: 12px; color: #666; margin-top: 5px; }
-    .unsubscribe-btn { background: #d32f2f; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-    .unsubscribe-btn:hover { background: #b71c1c; }
-    .unsubscribe-btn:disabled { background: #ccc; cursor: not-allowed; }
-    .no-channels { text-align: center; color: #666; padding: 40px; }
-    .form-row { display: flex; gap: 10px; align-items: flex-end; width: 100%; }
-    .form-group { flex: 1; }
-    .form-group input { width: 100%; box-sizing: border-box; }
-    .add-button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; white-space: nowrap; }
-    .add-button:hover { background: #1565c0; }
-    .add-button:disabled { background: #ccc; cursor: not-allowed; }
-    .message { margin-top: 10px; font-size: 14px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <a href="/" class="back-link">← Back to Home</a>
-    ${renderTopRightBlock(username, permissions)}
-  </div>
-  <div class="form-container">
-    <h1>Subscriptions</h1>
-    ${permissions.canSubscribe ? `
-      <form id="addSubscriptionForm" class="page-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="channelId">Handle, ID, or channel URL:</label>
-            <input type="text" id="channelId" name="channelId" placeholder="e.g. @username, UCxxxxx, or https://youtube.com/..." required>
-          </div>
-          <button type="submit" class="add-button" id="addButton">Add</button>
-        </div>
-        <div id="addMessage" class="message"></div>
-      </form>
-    ` : ''}
-    <div class="subscriptions-container">
-    ${channelInfos.length === 0 ? `
-      <div class="no-channels">No subscriptions found</div>
-    ` : `
-      <div class="channel-list">
-        ${channelInfos.map(channel => `
-          <div class="channel-item">
-            ${channel.avatar_filename ? `
-              <img class="channel-avatar" src="/media/avatars/${channel.short_id}.${channel.avatarExt}" alt="${channel.channel}">
-            ` : `
-              <div class="channel-avatar" style="background: #ddd;"></div>
-            `}
-            <div class="channel-details">
-              <div>
-                ${channel.short_id ? `
-                  <a href="/c/${channel.short_id}" class="channel-name">${channel.channel}</a>
-                ` : `
-                  <span>${channel.channel}</span>
-                `}
-              </div>
-              <div>
-                <span class="channel-status ${channel.status === 'subscribing' ? 'status-subscribing' : 'status-subscribed'}">
-                  ${channel.status}
-                </span>
-              </div>
-              <div class="channel-id">${channel.channel_id}</div>
-            </div>
-            ${permissions.canSubscribe ? `
-              <button class="unsubscribe-btn" onclick="unsubscribe('${channel.channel_id}', '${channel.channel.replace(/'/g, "\\'")}', event)">
-                Unsubscribe
-              </button>
-            ` : ''}
-          </div>
-        `).join('')}
-      </div>
-    `}
-  </div>
-  </div>
-  <script>
-    ${permissions.canSubscribe ? `
-      async function unsubscribe(channelId, channelName, event) {
-        const shiftPressed = event.shiftKey;
-
-        if (!shiftPressed) {
-          const confirmed = confirm(\`Are you sure you want to unsubscribe from "\${channelName}"?\\n\\nTip: Hold Shift while clicking to bypass this confirmation.\`);
-          if (!confirmed) {
-            return;
-          }
-        }
-
-        const button = event.target;
-        const originalText = button.textContent;
-        button.disabled = true;
-        button.textContent = 'Unsubscribing...';
-
-        try {
-          const response = await fetch('/api/unsubscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channelId })
-          });
-
-          if (response.ok) {
-            window.location.reload();
-          } else {
-            const error = await response.json();
-            alert('Failed to unsubscribe: ' + (error.message || 'Unknown error'));
-            button.disabled = false;
-            button.textContent = originalText;
-          }
-        } catch (err) {
-          alert('Network error: ' + err.message);
-          button.disabled = false;
-          button.textContent = originalText;
-        }
-      }
-
-      const addForm = document.getElementById('addSubscriptionForm');
-      const addButton = document.getElementById('addButton');
-      const addMessage = document.getElementById('addMessage');
-
-      addForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const channelId = document.getElementById('channelId').value.trim();
-        if (!channelId) {
-          addMessage.textContent = 'Please enter a channel ID';
-          addMessage.className = 'message error';
-          return;
-        }
-
-        addButton.disabled = true;
-        addButton.textContent = 'Adding...';
-        addMessage.textContent = '';
-        addMessage.className = 'message';
-
-        try {
-          const response = await fetch('/api/add-subscription', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channelId })
-          });
-
-          if (response.ok) {
-            addMessage.textContent = 'Subscription added successfully! Refreshing page...';
-            addMessage.className = 'message success';
-            document.getElementById('channelId').value = '';
-            setTimeout(() => { window.location.reload(); }, 500);
-          } else {
-            const error = await response.json();
-            addMessage.textContent = error.message || 'Failed to add subscription';
-            addMessage.className = 'message error';
-          }
-        } catch (err) {
-          addMessage.textContent = \`Network error: \${err.message}. Please try again.\`;
-          addMessage.className = 'message error';
-        }
-
-        addButton.disabled = false;
-        addButton.textContent = 'Add Subscription';
-      });
-    ` : ''}
-  </script>
-</body>
-</html>`;
+  return applyTemplate(subscriptionsTemplate, {
+    commonCSS,
+    formPageCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+    canSubscribe: permissions.canSubscribe,
+    channelInfosIsEmpty: channelInfos.length === 0,
+    channels: channelInfos.map(c => ({
+      title: c.channel,
+      id: c.channel_id,
+      escapedTitle: JSON.stringify(c.channel),
+      shortId: c.short_id,
+      hasAvatar: c.avatar_filename != null,
+      avatarExt: c.avatarExt,
+      status: c.status,
+    })),
+  });
 }
