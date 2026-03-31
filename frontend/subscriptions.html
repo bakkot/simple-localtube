@@ -3,8 +3,8 @@
 <head>
   <title>Subscriptions - LocalTube</title>
   <style>
-    ${commonCSS}
-    ${formPageCSS}
+    <# commonCSS>
+    <# formPageCSS>
     body { margin: 20px; }
     .form-container { max-width: 600px; margin: 20px auto; }
     .channel-list { display: flex; flex-direction: column; gap: 15px; }
@@ -31,7 +31,7 @@
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${topRightBlock}
+    <# topRightBlock>
   </div>
   <div class="form-container">
     <h1>Subscriptions</h1>
@@ -55,28 +55,28 @@
         <#foreach channel of channels>
           <div class="channel-item">
             <#if channel.hasAvatar>
-              <img class="channel-avatar" src="/media/avatars/${channel.shortId}.${channel.avatarExt}" alt="${channel.title}">
+              <img class="channel-avatar" src="/media/avatars/<# channel.shortId>.<# channel.avatarExt>" alt="<# channel.title>">
             <#else>
               <div class="channel-avatar" style="background: #ddd;"></div>
             </#if>
             <div class="channel-details">
               <div>
                 <#-- ${channel.short_id ? `
-                  <a href="/c/${channel.shortId}" class="channel-name">${channel.title}</a>
+                  <a href="/c/<# channel.shortId>" class="channel-name"><# channel.title></a>
                 ` : `
-                  <span>${channel.channel}</span>
+                  <span><# channel.channel></span>
                 `} -->
-                <a href="/c/${channel.shortId}" class="channel-name">${channel.title}</a>
+                <a href="/c/<# channel.shortId>" class="channel-name"><# channel.title></a>
               </div>
               <div>
-                <span class="channel-status status-${channel.status}">
-                  ${channel.status}
+                <span class="channel-status status-<# channel.status>">
+                  <# channel.status>
                 </span>
               </div>
-              <div class="channel-id">${channel.id}</div>
+              <div class="channel-id"><# channel.id></div>
             </div>
             <#if canSubscribe>
-              <button class="unsubscribe-btn" onclick="unsubscribe('${channel.id}', ${channel.escapedTitle}, event)">
+              <button class="unsubscribe-btn" onclick="unsubscribe('<# channel.id>', <# channel.escapedTitle>, event)">
                 Unsubscribe
               </button>
             </#if>
@@ -91,7 +91,7 @@
         const shiftPressed = event.shiftKey;
 
         if (!shiftPressed) {
-          const confirmed = confirm(`Are you sure you want to unsubscribe from "${"${"}channelName}"?\n\nTip: Hold Shift while clicking to bypass this confirmation.`);
+          const confirmed = confirm(`Are you sure you want to unsubscribe from "${channelName}"?\n\nTip: Hold Shift while clicking to bypass this confirmation.`);
           if (!confirmed) {
             return;
           }
@@ -161,7 +161,7 @@
             addMessage.className = 'message error';
           }
         } catch (err) {
-          addMessage.textContent = `Network error: ${"${"}err.message}. Please try again.`;
+          addMessage.textContent = `Network error: ${err.message}. Please try again.`;
           addMessage.className = 'message error';
         }
 

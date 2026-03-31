@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>${videoTitle} - LocalTube</title>
+  <title><# videoTitle> - LocalTube</title>
   <style>
-    ${commonCSS}
+    <# commonCSS>
     body { margin: 0;  }
     .video-section { background: #000; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 80vh; position: relative; }
     video { max-width: 100%; max-height: 80vh; height: auto; width: auto; }
@@ -21,14 +21,14 @@
   <div class="content-section">
     <div class="header">
       <a href="/" class="back-link">← Back to Home</a>
-      ${topRightBlock}
+      <# topRightBlock>
     </div>
   </div>
   <div class="video-section">
     <video controls autoplay>
-      <source src="/media/videos/${videoId}.${videoExt}" type="video/${videoExt}">
+      <source src="/media/videos/<# videoId>.<# videoExt>" type="video/<# videoExt>">
       <#foreach subtitle of subtitles>
-        <track kind="subtitles" src="/media/subtitles/${videoId}/${subtitle.lang}" srclang="${subtitle.lang}" label="${subtitle.lang}">
+        <track kind="subtitles" src="/media/subtitles/<# videoId>/<# subtitle.lang>" srclang="<# subtitle.lang>" label="<# subtitle.lang>">
       </#foreach>
     </video>
     <div class="subtitle-overlay"></div>
@@ -96,7 +96,7 @@
       if (lang === activeTrackLang) return;
       activeTrackLang = lang;
       if (!lang) { parsedCues = []; return; }
-      const res = await fetch('/media/subtitles/${videoId}/' + lang);
+      const res = await fetch('/media/subtitles/<# videoId>/' + lang);
       const text = await res.text();
       parsedCues = parseVTT(text);
     }
@@ -135,14 +135,14 @@
   <div class="content-section">
     <div class="video-container">
     <div class="video-info">
-      <div class="video-title">${videoTitle}</div>
+      <div class="video-title"><# videoTitle></div>
       <div class="channel-info">
         <#if hasAvatar>
-          <img class="channel-avatar" width=40 height=40 src="/media/avatars/${channelShortId}.${avatarExt}" alt="${channel}">
+          <img class="channel-avatar" width=40 height=40 src="/media/avatars/<# channelShortId>.<# avatarExt>" alt="<# channel>">
         </#if>
-        <a href="/c/${channelShortId}" class="channel-name">${channel}</a>
+        <a href="/c/<# channelShortId>" class="channel-name"><# channel></a>
       </div>
-      <div class="description">${videoDescription}</div>
+      <div class="description"><# videoDescription></div>
     </div>
   </div>
   </div>

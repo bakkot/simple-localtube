@@ -3,7 +3,7 @@
 <head>
   <title>LocalTube</title>
   <style>
-    ${commonCSS}
+    <# commonCSS>
     body { margin: 20px; }
     h1 { color: #333; margin: 0px; }
     .video-grid { margin-top: 20px; }
@@ -13,16 +13,16 @@
 <body>
   <div class="header">
     <h1>LocalTube</h1>
-    ${topRightBlock}
+    <# topRightBlock>
   </div>
   <div class="video-grid" id="video-grid">
     <#foreach video of videos>
-      ${video.html}
+      <# video.html>
     </#foreach>
   </div>
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
-    ${videoCardScript}
+    <# videoCardScript>
     createInfiniteScroll('/api/videos', true);
   </script>
 </body>

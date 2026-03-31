@@ -3,8 +3,8 @@
 <head>
   <title>Add User - LocalTube</title>
   <style>
-    ${commonCSS}
-    ${formPageCSS}
+    <# commonCSS>
+    <# formPageCSS>
     body { margin: 20px; }
     .form-container { max-width: 600px; margin: 20px auto; }
     .form-group { margin-bottom: 20px; }
@@ -26,7 +26,7 @@
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    ${topRightBlock}
+    <# topRightBlock>
   </div>
   <div class="form-container">
     <h1>Add New User</h1>
@@ -93,8 +93,8 @@
             <div class="channels-list">
               <#foreach channel of availableChannels>
                 <div class="channel-option">
-                  <input type="checkbox" id="channel-${channel.channel_id}" name="channels" value="${channel.channel_id}">
-                  <label for="channel-${channel.channel_id}">${channel.channel}</label>
+                  <input type="checkbox" id="channel-<# channel.channel_id>" name="channels" value="<# channel.channel_id>">
+                  <label for="channel-<# channel.channel_id>"><# channel.channel></label>
                 </div>
               </#foreach>
             </div>
@@ -110,8 +110,8 @@
             <div class="channels-list">
               <#foreach channel of availableChannels>
                 <div class="channel-option">
-                  <input type="checkbox" id="channel-${channel.channel_id}" name="channels" value="${channel.channel_id}">
-                  <label for="channel-${channel.channel_id}">${channel.channel}</label>
+                  <input type="checkbox" id="channel-<# channel.channel_id>" name="channels" value="<# channel.channel_id>">
+                  <label for="channel-<# channel.channel_id>"><# channel.channel></label>
                 </div>
               </#foreach>
             </div>

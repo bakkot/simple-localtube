@@ -83,11 +83,34 @@ function tokenize(template: string): Token[] {
   }
 
   while (i < template.length) {
-    if (template.startsWith('${', i)) {
+    if (template.startsWith('<#--', i)) {
+      flushText();
+      const start = i;
+      const end = template.indexOf('-->', i + 4);
+      if (end === -1) fail('Unterminated comment', start);
+      tokens.push({ type: 'comment', value: template.slice(i + 4, end), offset: start });
+      i = end + 3;
+      textStart = i;
+    } else if (template.startsWith('</#', i)) {
+      flushText();
+      const start = i;
+      const end = template.indexOf('>', i + 3);
+      if (end === -1) fail('Unterminated close tag', start);
+      const tag = template.slice(i + 3, end).trim();
+      if (tag === 'if') {
+        tokens.push({ type: 'if_close', offset: start });
+      } else if (tag === 'foreach') {
+        tokens.push({ type: 'foreach_close', offset: start });
+      } else {
+        fail(`Unknown close tag: </#${tag}>`, start);
+      }
+      i = end + 1;
+      textStart = i;
+    } else if (template.startsWith('<# ', i)) {
       flushText();
       const start = i;
       let j = i + 2;
-      // skip whitespace
+      // skip whitespace (at least one space guaranteed by startsWith check)
       while (j < template.length && template[j] === ' ') j++;
       const quote = template[j];
       if (quote === '"' || quote === "'") {
@@ -115,44 +138,21 @@ function tokenize(template: string): Token[] {
         }
         if (j >= template.length || template[j] !== quote) fail('Unterminated string literal', strStart);
         j++; // skip closing quote
-        // skip whitespace then expect }
+        // skip whitespace then expect >
         while (j < template.length && template[j] === ' ') j++;
-        if (j >= template.length || template[j] !== '}') fail('Unterminated interpolation', start);
+        if (j >= template.length || template[j] !== '>') fail('Unterminated interpolation', start);
         tokens.push({ type: 'interpolation', expr: { literal: value }, offset: start });
         i = j + 1;
         textStart = i;
       } else {
-        const end = template.indexOf('}', i + 2);
+        const end = template.indexOf('>', j);
         if (end === -1) fail('Unterminated interpolation', start);
-        const raw = template.slice(i + 2, end).trim();
+        const raw = template.slice(j, end).trim();
         if (raw === 'true' || raw === 'false') fail('Cannot use boolean literal in interpolation', start);
         tokens.push({ type: 'interpolation', expr: parseExpr(raw, template, start), offset: start });
         i = end + 1;
         textStart = i;
       }
-    } else if (template.startsWith('<#--', i)) {
-      flushText();
-      const start = i;
-      const end = template.indexOf('-->', i + 4);
-      if (end === -1) fail('Unterminated comment', start);
-      tokens.push({ type: 'comment', value: template.slice(i + 4, end), offset: start });
-      i = end + 3;
-      textStart = i;
-    } else if (template.startsWith('</#', i)) {
-      flushText();
-      const start = i;
-      const end = template.indexOf('>', i + 3);
-      if (end === -1) fail('Unterminated close tag', start);
-      const tag = template.slice(i + 3, end).trim();
-      if (tag === 'if') {
-        tokens.push({ type: 'if_close', offset: start });
-      } else if (tag === 'foreach') {
-        tokens.push({ type: 'foreach_close', offset: start });
-      } else {
-        fail(`Unknown close tag: </#${tag}>`, start);
-      }
-      i = end + 1;
-      textStart = i;
     } else if (template.startsWith('<#', i)) {
       flushText();
       const start = i;
