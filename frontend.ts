@@ -4,6 +4,7 @@ import type { VideoWithChannel } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
 import type { Permissions } from './user-db.ts';
 import { nameExt, type ChannelID, type SubscriptionFile } from './util.ts';
+import { parse as parseTemplate, apply as applyTemplate } from './frontend/tinymarker.ts';
 
 const templates = path.join(import.meta.dirname, 'frontend');
 
@@ -266,60 +267,15 @@ export function renderChannelPage(channel: any, videos: VideoWithChannel[], user
     .replace('__TITLE__', channel.channel);
 }
 
-const addUserTemplate = fs.readFileSync(path.join(templates, 'add-user.html'), 'utf8');
-export function renderAddUserPage(username: string, permissions: Permissions, availableChannels: any[]): string {
-  return addUserTemplate
-    .replace('__COMMON_CSS__', commonCSS)
-    .replace('__FORM_PAGE_CSS__', formPageCSS)
-    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
-    .replace('__DISABLE_CAN_SUBSCRIBE__', permissions.allowedChannels !== 'all' ? 'disabled' : '')
-    .replace('__SUB_MANAGEMENT_DISCLAIMER__', permissions.allowedChannels !== 'all' ? `
-        <p style="color: #666; font-size: 14px; margin-top: 10px;">Subscription management is only available for users with access to all channels.</p>
-      ` : '')
-    .replace('__CHANNEL_PERMISSIONS__', permissions.allowedChannels === 'all' ? `
-        <div class="radio-group">
-          <div class="radio-option">
-            <input type="radio" id="perm-all" name="permissions" value="all" required>
-            <label for="perm-all">Access to all channels</label>
-          </div>
-          <div class="radio-option">
-            <input type="radio" id="perm-allowlist" name="permissions" value="allowlist" required>
-            <label for="perm-allowlist">Access to selected channels only</label>
-          </div>
-        </div>
-
-        <div class="channels-section" id="channelsSection">
-          <div class="channel-controls">
-            <button type="button" onclick="selectAllChannels()">Enable All</button>
-            <button type="button" onclick="deselectAllChannels()">Disable All</button>
-          </div>
-          <div class="channels-list">
-            ${availableChannels.map(channel => `
-              <div class="channel-option">
-                <input type="checkbox" id="channel-${channel.channel_id}" name="channels" value="${channel.channel_id}">
-                <label for="channel-${channel.channel_id}">${channel.channel}</label>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-        ` : `
-        <input type="hidden" name="permissions" value="allowlist">
-        <p>Select channels to grant access to:</p>
-        <div class="channels-section visible">
-          <div class="channel-controls">
-            <button type="button" onclick="selectAllChannels()">Enable All</button>
-            <button type="button" onclick="deselectAllChannels()">Disable All</button>
-          </div>
-          <div class="channels-list">
-            ${availableChannels.map(channel => `
-              <div class="channel-option">
-                <input type="checkbox" id="channel-${channel.channel_id}" name="channels" value="${channel.channel_id}">
-                <label for="channel-${channel.channel_id}">${channel.channel}</label>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-        `)
+const addUserTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'add-user.html'), 'utf8'));
+export function renderAddUserPage(username: string, permissions: Permissions, availableChannels: { channel_id: ChannelID; channel: string }[]): string {
+  return applyTemplate(addUserTemplate, {
+    commonCSS,
+    formPageCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+    hasAllChannelsPermission: permissions.allowedChannels === 'all',
+    availableChannels,
+  });
 }
 
 const settingsTemplate = fs.readFileSync(path.join(templates, 'settings.html'), 'utf8');

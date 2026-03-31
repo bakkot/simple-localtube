@@ -70,4 +70,10 @@ handle missing avatars etc (placeholder)
 - test w/ pinchflat, have sample lifecycle script
 - placeholder avatar
 
-yt-dlp --proxy http://192.168.50.26:811
+
+
+tinymarker
+
+affordance for adding specific videos
+
+ability to modify derived account's can-view-channels permissions
