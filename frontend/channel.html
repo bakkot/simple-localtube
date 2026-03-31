@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>__TITLE__ - LocalTube</title>
+  <title>${channel} - LocalTube</title>
   <style>
-    __COMMON_CSS__
+    ${commonCSS}
     body { margin: 20px; }
     .channel-header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 20px; margin-bottom: 20px; }
     .channel-info { display: flex; align-items: center; }
@@ -15,18 +15,30 @@
 <body>
   <div class="header">
     <a href="/" class="back-link">← Back to Home</a>
-    __TOP_RIGHT_BLOCK__
+    ${topRightBlock}
   </div>
   <div class="channel-header">
-    __CHANNEL_INFO__
+    <div class="channel-info">
+      <#if hasAvatar>
+        <img class="channel-avatar" width=80 height=80 src="/media/avatars/${shortId}.${avatarExt}" alt="${channel}">
+      </#if>
+      <div class="channel-details">
+        <h1>${channel}</h1>
+        <#if hasDescription>
+          <div class="channel-description">${description}</div>
+        </#if>
+      </div>
+    </div>
   </div>
   <div class="video-grid" id="video-grid">
-    __VIDEOS__
+    <#foreach video of videos>
+      ${video.html}
+    </#foreach>
   </div>
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
-    __VIDEO_CARD_SCRIPT__
-    createInfiniteScroll('/api/channel/__SHORT_ID__/videos', false);
+    ${videoCardScript}
+    createInfiniteScroll('/api/channel/${shortId}/videos', false);
   </script>
 </body>
 </html>

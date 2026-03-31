@@ -335,6 +335,12 @@ export function parse(template: string): ParsedTemplate {
         });
         break;
       }
+
+      default: {
+        token satisfies never;
+        // @ts-expect-error
+        throw new Error(`unknown token type ${token.type}`);
+      }
     }
   }
 
@@ -348,7 +354,7 @@ export function parse(template: string): ParsedTemplate {
 }
 
 export type DataModel = {
-  [key: string]: string | boolean | DataModel[];
+  [key: string]: string | boolean | null | undefined | DataModel[];
 };
 
 export function apply(parsedTemplate: ParsedTemplate, data: DataModel): string {
@@ -359,14 +365,14 @@ export function apply(parsedTemplate: ParsedTemplate, data: DataModel): string {
   }
 
   function requireExpr(expr: Expr, offset: number): string | boolean | DataModel[] {
-    let value: string | boolean | DataModel[] | undefined;
+    let value: DataModel[string];
     if (typeof expr === 'string') {
       value = data[expr];
     } else {
       const [base, prop] = expr;
       value = loopVars.get(base)![prop];
     }
-    if (value === undefined) {
+    if (value == null) {
       const name = typeof expr === 'string' ? expr : expr.join('.');
       fail(`Missing value for "${name}"`, offset);
     }
@@ -379,11 +385,13 @@ export function apply(parsedTemplate: ParsedTemplate, data: DataModel): string {
     let result = '';
     for (const node of nodes) {
       switch (node.type) {
-        case 'text':
+        case 'text': {
           result += node.value;
           break;
-        case 'comment':
+        }
+        case 'comment': {
           break;
+        }
         case 'interpolation': {
           const value = requireExpr(node.expr, node.offset);
           if (typeof value !== 'string') throw new Error('unreachable');
@@ -400,7 +408,7 @@ export function apply(parsedTemplate: ParsedTemplate, data: DataModel): string {
             if (typeof raw !== 'boolean') throw new Error('unreachable');
             let value = raw;
             if (branch.condition.negated) value = !value;
-          if (value) {
+            if (value) {
               result += renderNodes(branch.body);
               break;
             }
@@ -417,6 +425,11 @@ export function apply(parsedTemplate: ParsedTemplate, data: DataModel): string {
           }
           loopVars.delete(node.item);
           break;
+        }
+        default: {
+          node satisfies never;
+          // @ts-expect-error
+          throw new Error(`unknown type ${node.type}`);
         }
       }
     }
@@ -436,6 +449,7 @@ function validateData(schema: DataModelKind, data: DataModel, path: string) {
   for (const [key, expectedType] of Object.entries(schema)) {
     if (!(key in data)) continue;
     const value = data[key];
+    if (value == null) continue;
     const fullPath = path ? `${path}.${key}` : key;
     if (typeof expectedType === 'string') {
       if (typeof value !== expectedType) {

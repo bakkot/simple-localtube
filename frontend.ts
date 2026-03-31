@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { VideoWithChannel } from './media-db.ts';
+import type { Channel, VideoWithChannel } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
 import type { Permissions } from './user-db.ts';
 import { nameExt, type ChannelID, type SubscriptionFile } from './util.ts';
@@ -42,6 +42,8 @@ function renderVideoCard(video: VideoWithChannel, showChannel: boolean = true): 
 }
 
 const videoCardScript = `
+"use strict";
+
 ${formatDuration.toString()}
 
 ${formatDate.toString()}
@@ -52,19 +54,19 @@ ${nameExt.toString()}
 
 function createInfiniteScroll(apiUrl, showChannel) {
   let offset = document.getElementById('video-grid').children.length;
-  let loading = false;
-  let exhausted = false;
+  let state = 'idle'; // idle | loading | exhausted | errored
 
   function loadMoreVideos() {
-    if (loading || exhausted) return;
-    loading = true;
+    if (state !== 'idle') return;
+    state = 'loading';
     document.getElementById('loading').style.display = 'block';
 
+    // todo async
     fetch(apiUrl + '?offset=' + offset + '&limit=30')
       .then(response => response.json())
       .then(videos => {
         if (videos.length === 0) {
-          exhausted = true;
+          state = 'exhausted';
           document.getElementById('loading').textContent = 'No more videos';
           return;
         }
@@ -76,18 +78,20 @@ function createInfiniteScroll(apiUrl, showChannel) {
 
         offset += videos.length;
         if (videos.length < 30) {
-          exhausted = true;
+          state = 'exhausted';
           document.getElementById('loading').textContent = 'No more videos';
           return;
         }
       })
       .catch(error => {
         console.error('Error loading videos:', error);
+        state = 'errored';
         document.getElementById('loading').textContent = 'Error loading videos';
       })
       .finally(() => {
-        loading = false;
-        if (!exhausted) document.getElementById('loading').style.display = 'none';
+        if (state !== 'errored') document.getElementById('loading').style.display = 'none';
+        if (state === 'exhausted') return;
+        setTimeout(() => { state = 'idle'; }, 1000); // avoid hammering too hard
       });
   }
 
@@ -191,80 +195,77 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
     </script>`;
 }
 
-const notAllowedTemplate = fs.readFileSync(path.join(templates, 'not-allowed.html'), 'utf8');
+// TODO fix styling to use form page CSS
+const notAllowedTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'not-allowed.html'), 'utf8'));
 export function renderNotAllowed(username: string, permissions: Permissions): string {
-  return notAllowedTemplate
-    .replace('__COMMON_CSS__', commonCSS)
-    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
+  return applyTemplate(notAllowedTemplate, {
+    commonCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+  });
 }
 
-const setupTemplate = fs.readFileSync(path.join(templates, 'setup.html'), 'utf8');
+const setupTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'setup.html'), 'utf8'));
 export function renderSetupPage(): string {
-  return setupTemplate
-    .replace('__COMMON_CSS__', commonCSS)
-    .replace('__FORM_PAGE_CSS__', formPageCSS);
+  return applyTemplate(setupTemplate, {
+    commonCSS,
+    formPageCSS,
+  });
 }
 
-const loginTemplate = fs.readFileSync(path.join(templates, 'login.html'), 'utf8');
+const loginTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'login.html'), 'utf8'));
 export function renderLoginPage(): string {
-  return loginTemplate
-    .replace('__COMMON_CSS__', commonCSS)
-    .replace('__FORM_PAGE_CSS__', formPageCSS);
+  return applyTemplate(loginTemplate, {
+    commonCSS,
+    formPageCSS,
+  });
 }
 
-const homeTemplate = fs.readFileSync(path.join(templates, 'home.html'), 'utf8');
+const homeTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'home.html'), 'utf8'));
 export function renderHomePage(username: string, permissions: Permissions, videos: VideoWithChannel[]): string {
-  return homeTemplate
-    .replace('__COMMON_CSS__', commonCSS)
-    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
-    .replace('__VIDEOS__', videos.map(video => renderVideoCard(video, true)).join(''))
-    .replace('__VIDEO_CARD_SCRIPT__', videoCardScript);
+  return applyTemplate(homeTemplate, {
+    commonCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+    videos: videos.map(video => ({ html: renderVideoCard(video, true) })),
+    videoCardScript,
+  });
 }
 
-const videoTemplate = fs.readFileSync(path.join(templates, 'video.html'), 'utf8');
+const videoTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'video.html'), 'utf8'));
 export function renderVideoPage(video: VideoWithChannel, username: string, permissions: Permissions): string {
   const videoExt = nameExt(video.video_filename).ext;
   const avatarExt = video.avatar_filename == null ? null : nameExt(video.avatar_filename).ext;
 
-  return videoTemplate
-    .replace('__COMMON_CSS__', commonCSS)
-    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
-    .replaceAll('__VIDEO__TITLE__', video.title)
-    .replace('__VIDEO__DESCRIPTION__', video.description)
-    .replace('__VIDEO_ID__', video.video_id)
-    .replace('__VIDEO_ELEMENT__', `
-      <video controls autoplay>
-        <source src="/media/videos/${video.video_id}.${videoExt}" type="video/${videoExt === 'mp4' ? 'mp4' : 'webm'}">
-        ${Object.entries(video.subtitles).map(([lang, _]) =>
-          `<track kind="subtitles" src="/media/subtitles/${video.video_id}/${lang}" srclang="${lang}" label="${lang}">`
-        ).join('\n      ')}
-      </video>`)
-    .replace('__CHANNEL_INFO__', `
-      <div class="channel-info">
-        ${video.avatar_filename ? `<img class="channel-avatar" width=40 height=40 src="/media/avatars/${video.channel_short_id}.${avatarExt}" alt="${video.channel}">` : ''}
-        <a href="/c/${video.channel_short_id}" class="channel-name">${video.channel}</a>
-      </div>`)
+  return applyTemplate(videoTemplate, {
+    commonCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+    videoTitle: video.title,
+    videoDescription: video.description,
+    videoId: video.video_id,
+    hasAvatar: video.avatar_filename != null,
+    videoExt,
+    avatarExt,
+    channelShortId: video.channel_short_id,
+    channel: video.channel,
+    subtitles: Object.keys(video.subtitles).map(k => ({ lang: k }))
+  });
 }
 
-const channelTemplate = fs.readFileSync(path.join(templates, 'channel.html'), 'utf8');
-export function renderChannelPage(channel: any, videos: VideoWithChannel[], username: string, permissions: Permissions): string {
+const channelTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'channel.html'), 'utf8'));
+export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], username: string, permissions: Permissions): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
 
-  return channelTemplate
-    .replace('__COMMON_CSS__', commonCSS)
-    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
-    .replace('__CHANNEL_INFO__', `
-      <div class="channel-info">
-        ${channel.avatar_filename ? `<img class="channel-avatar" width=80 height=80 src="/media/avatars/${channel.short_id}.${avatarExt}" alt="${channel.channel}">` : ''}
-        <div class="channel-details">
-          <h1>${channel.channel}</h1>
-          ${channel.description ? `<div class="channel-description">${channel.description}</div>` : ''}
-        </div>
-      </div>`)
-    .replace('__VIDEOS__', videos.map(video => renderVideoCard(video, false)).join(''))
-    .replace('__VIDEO_CARD_SCRIPT__', videoCardScript)
-    .replace('__SHORT_ID__', channel.short_id)
-    .replace('__TITLE__', channel.channel);
+  return applyTemplate(channelTemplate, {
+    commonCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+    videoCardScript,
+    videos: videos.map(video => ({ html: renderVideoCard(video, false) })),
+    hasAvatar: channel.avatar_filename != null,
+    shortId: channel.short_id,
+    channel: channel.channel,
+    avatarExt,
+    hasDescription: channel.description == null,
+    description: channel.description,
+  });
 }
 
 const addUserTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'add-user.html'), 'utf8'));
@@ -278,12 +279,13 @@ export function renderAddUserPage(username: string, permissions: Permissions, av
   });
 }
 
-const settingsTemplate = fs.readFileSync(path.join(templates, 'settings.html'), 'utf8');
+const settingsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'settings.html'), 'utf8'));
 export function renderSettingsPage(username: string, permissions: Permissions): string {
-  return settingsTemplate
-    .replace('__COMMON_CSS__', commonCSS)
-    .replace('__FORM_PAGE_CSS__', formPageCSS)
-    .replace('__TOP_RIGHT_BLOCK__', renderTopRightBlock(username, permissions))
+  return applyTemplate(settingsTemplate, {
+    commonCSS,
+    formPageCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+  });
 }
 
 // const subscriptionsTemplate = fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8');
