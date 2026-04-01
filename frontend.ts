@@ -363,7 +363,7 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
     avatarExt,
     channelShortId: video.channel_short_id,
     channel: video.channel_title,
-    subtitles: Object.keys(video.subtitles).map(k => ({ lang: k }))
+    subtitles: Object.keys(video.subtitles_files).map(k => ({ lang: k }))
   });
 }
 

@@ -229,7 +229,7 @@ app.get('/media/thumbs/:video_id', async (req: Request, res: Response): Promise<
 
 app.get('/media/subtitles/:video_id/:lang', async (req: Request, res: Response): Promise<void> => {
   const video = getVideoById(req.params.video_id as VideoID);
-  const subtitlePath = video?.subtitles[req.params.lang];
+  const subtitlePath = video?.subtitles_files[req.params.lang];
   if (!subtitlePath) {
     res.status(404).send('not found');
     return;

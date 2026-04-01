@@ -38,7 +38,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
   }
   const upload_timestamp = Math.floor(new Date(upload_date.slice(0, 4) + '-' + upload_date.slice(4, 6) + '-' + upload_date.slice(6) + 'T00:00:00Z').getTime() / 1000);
 
-  let subtitles: Record<string, string> = {
+  let subtitles_files: Record<string, string> = {
     // @ts-expect-error
     __proto__: null,
   };
@@ -53,7 +53,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
       thumb_filename = file;
     } else if (ext === 'vtt' && name.startsWith('subs.')) {
       let split = name.split('.');
-      subtitles[split.slice(1).join('.')] = path.join(dir, file);
+      subtitles_files[split.slice(1).join('.')] = path.join(dir, file);
     }
   }
 
@@ -66,7 +66,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
     thumb_filename: thumb_filename == null ? null :path.join(dir, thumb_filename),
     duration_seconds: duration,
     upload_timestamp,
-    subtitles,
+    subtitles_files,
   };
 }
 

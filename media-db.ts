@@ -34,7 +34,7 @@ if (existing.length === 0) {
         thumb_filename TEXT,
         duration_seconds INTEGER,
         upload_timestamp INTEGER NOT NULL,
-        subtitles TEXT NOT NULL,
+        subtitles_files TEXT NOT NULL,
         FOREIGN KEY (channel_id) REFERENCES channels(channel_id)
     ) STRICT;
 
@@ -120,8 +120,8 @@ let addChannelStmt = db.prepare(`
 `);
 
 let addVideoStmt = db.prepare(`
-  INSERT INTO videos (video_id, channel_id, title, description, video_filename, thumb_filename, duration_seconds, upload_timestamp, subtitles)
-  VALUES (:video_id, :channel_id, :title, :description, :video_filename, :thumb_filename, :duration_seconds, :upload_timestamp, :subtitles)
+  INSERT INTO videos (video_id, channel_id, title, description, video_filename, thumb_filename, duration_seconds, upload_timestamp, subtitles_files)
+  VALUES (:video_id, :channel_id, :title, :description, :video_filename, :thumb_filename, :duration_seconds, :upload_timestamp, :subtitles_files)
   ON CONFLICT(video_id) DO UPDATE SET
   channel_id = CASE
     WHEN :channel_id IS NOT NULL AND :channel_id != '' THEN :channel_id
@@ -151,9 +151,9 @@ let addVideoStmt = db.prepare(`
     WHEN :upload_timestamp IS NOT NULL THEN :upload_timestamp
     ELSE videos.upload_timestamp
   END,
-  subtitles = CASE
-    WHEN :subtitles IS NOT NULL AND :subtitles != '' THEN :subtitles
-    ELSE videos.subtitles
+  subtitles_files = CASE
+    WHEN :subtitles_files IS NOT NULL AND :subtitles_files != '' THEN :subtitles_files
+    ELSE videos.subtitles_files
   END
 `);
 
@@ -245,7 +245,7 @@ export interface Video {
   thumb_filename: string | null;
   duration_seconds: number;
   upload_timestamp: number;
-  subtitles: Record<string, string>; // map langcode -> path to .vtt file on disk
+  subtitles_files: Record<string, string>; // map langcode -> path to .vtt file on disk
 }
 
 export interface VideoWithChannel extends Video {
@@ -276,7 +276,7 @@ export function addVideo(video: Video): void {
     ':thumb_filename': video.thumb_filename,
     ':duration_seconds': video.duration_seconds,
     ':upload_timestamp': video.upload_timestamp,
-    ':subtitles': JSON.stringify(video.subtitles),
+    ':subtitles_files': JSON.stringify(video.subtitles_files),
   });
 }
 
@@ -298,7 +298,7 @@ export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', l
     const rows = getRecentVideosStmt.all(limit, offset) as any[];
     return rows.map(row => ({
       ...row,
-      subtitles: JSON.parse(row.subtitles)
+      subtitles_files: JSON.parse(row.subtitles_files)
     }));
   }
   if (channelIds.size === 0) return [];
@@ -317,7 +317,7 @@ export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', l
   const rows = stmt.all(...channelIds, limit, offset) as any[];
   return rows.map(row => ({
     ...row,
-    subtitles: JSON.parse(row.subtitles)
+    subtitles_files: JSON.parse(row.subtitles_files)
   }));
 }
 
@@ -326,7 +326,7 @@ export function getVideoById(videoId: VideoID): VideoWithChannel | null {
   if (!row) return null;
   return {
     ...row,
-    subtitles: JSON.parse(row.subtitles),
+    subtitles_files: JSON.parse(row.subtitles_files),
   };
 }
 
@@ -342,7 +342,7 @@ export function getVideosByChannel(channelId: ChannelID, limit: number = 30, off
   const rows = getVideosByChannelStmt.all(channelId, limit, offset) as any[];
   return rows.map(row => ({
     ...row,
-    subtitles: JSON.parse(row.subtitles)
+    subtitles_files: JSON.parse(row.subtitles_files)
   }));
 }
 
