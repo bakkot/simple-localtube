@@ -215,9 +215,9 @@ export function readSubscriptionsFile(subscriptionsFile: string): SubscriptionFi
     return result;
   }
 
-  const data: Record<string, unknown> = JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(subscriptionsFile, 'utf8')) as Record<string, unknown>;
 
-  if (!Array.isArray(data.subscribing) || !Array.isArray(data.subscribed) || !data.titles || typeof data.titles !== 'object') {
+  if (!data || typeof data !== 'object' || !Array.isArray(data.subscribing) || !Array.isArray(data.subscribed) || !data.titles || typeof data.titles !== 'object') {
     throw new Error(`malformed subscriptions file at ${subscriptionsFile}`);
   }
   // yes recreating the whole object is wasteful

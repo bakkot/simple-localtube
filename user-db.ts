@@ -51,11 +51,15 @@ if (existing.length === 0) {
   throw new Error(`${USER_DB_PATH} exists but does not contain the data we expect`);
 }
 
+type KeysAsStrings = {
+  pepper: string;
+  hmacKey: string;
+}
 if (!fs.existsSync(KEYS_PATH)) {
   const pepper = randomBytes(32);
   const hmacKey = randomBytes(32);
 
-  const keysData = {
+  const keysData: KeysAsStrings = {
     pepper: pepper.toString('base64'),
     hmacKey: hmacKey.toString('base64')
   };
@@ -64,7 +68,7 @@ if (!fs.existsSync(KEYS_PATH)) {
   console.log('Generated new keys.json file');
 }
 
-const keysData = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8'));
+const keysData = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8')) as KeysAsStrings;
 let keys: Keys = {
   pepper: Buffer.from(keysData.pepper, 'base64'),
   hmacKey: Buffer.from(keysData.hmacKey, 'base64')
@@ -104,8 +108,16 @@ async function verifyPassword(password: string, storedHash: Buffer, salt: Buffer
   return computedHash.equals(storedHash);
 }
 
+type BearTokenPayload = {
+  username: string;
+  timestamp: number;
+}
+type BearerToken = {
+  payloadStr: string;
+  signature: string;
+};
 function generateBearerToken(username: string): string {
-  const payload = {
+  const payload: BearTokenPayload = {
     username,
     timestamp: Date.now()
   };
@@ -115,19 +127,19 @@ function generateBearerToken(username: string): string {
     .update(payloadStr)
     .digest('base64');
 
-  const token = {
+  const token: BearerToken = {
     payloadStr,
-    signature
+    signature,
   };
 
   return Buffer.from(JSON.stringify(token)).toString('base64');
 }
 
 export function decodeBearerToken(tokenStr: string): { username: string; timestamp: number } {
-  let tokenData;
+  let tokenData: BearerToken;
   try {
     const tokenJson = Buffer.from(tokenStr, 'base64').toString('utf8');
-    tokenData = JSON.parse(tokenJson);
+    tokenData = JSON.parse(tokenJson) as BearerToken;
   } catch (error) {
     throw new Error('Invalid token format');
   }
@@ -144,22 +156,27 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
     throw new Error('Invalid token signature');
   }
 
-  let payload;
+  let payload: BearTokenPayload;
   try {
-    payload = JSON.parse(tokenData.payloadStr);
+    payload = JSON.parse(tokenData.payloadStr) as BearTokenPayload;
   } catch (error) {
     throw new Error('Invalid payload JSON');
   }
 
-  if (typeof payload.username !== 'string' || typeof payload.timestamp !== 'number') {
+  if (!payload || typeof payload !== 'object' || typeof payload.username !== 'string' || typeof payload.timestamp !== 'number') {
     throw new Error('Invalid token payload structure');
   }
 
-  return payload;
+  return payload as { username: string; timestamp: number };
 }
 
+type SerializedPermissions = {
+  allowedChannels: 'all' | ChannelID[];
+  createUser: boolean;
+  canSubscribe: boolean;
+}
 function parsePermissions(permissionsString: string): Permissions {
-  let { allowedChannels, createUser, canSubscribe } = JSON.parse(permissionsString);
+  let { allowedChannels, createUser, canSubscribe } = JSON.parse(permissionsString) as SerializedPermissions;
   if (allowedChannels !== 'all' && !Array.isArray(allowedChannels) || typeof createUser != 'boolean') {
     throw new Error('malformed permissions');
   }
@@ -175,7 +192,7 @@ function serializePermissions(permissions: Permissions): string {
     allowedChannels: permissions.allowedChannels === 'all' ? 'all' : [...permissions.allowedChannels],
     createUser: permissions.createUser,
     canSubscribe: permissions.canSubscribe,
-  });
+  } satisfies SerializedPermissions);
 }
 
 export async function addUser(

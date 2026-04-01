@@ -7,6 +7,7 @@ import { spawnSync, exec as execCb } from 'node:child_process';
 import { getLatestVideoUrls, hasChannel, hasVideo } from './get-channel-video-ids.ts';
 import { channelFromDisk, videoFromDisk } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
+import type { AddChannelAPI, AddVideoAPI, HealthcheckAPI } from '../server-api.ts';
 
 const execAsync = promisify(execCb);
 
@@ -77,7 +78,7 @@ function writeStatus() {
 
 
 try {
-  const up = await (await fetch(server + '/public-api/healthcheck')).json();
+  const up = await (await fetch(server + '/public-api/healthcheck')).json() as HealthcheckAPI;
   if (up !== true) throw new Error();
 } catch {
   console.error(`${server} doesn't appear to be running`);
@@ -121,7 +122,7 @@ async function addChannelIfNotExists(channelId: ChannelID) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(channel),
     });
-    const result = await res.json();
+    const result = await res.json() as AddChannelAPI;
     if (result !== true) throw result;
   } catch (e) {
     throw new Error(`failed to add channel ${channelId}: ${e instanceof Error ? e.message : e}`);
@@ -227,7 +228,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(video),
     });
-    const result = await res.json();
+    const result = await res.json() as AddVideoAPI;
     if (result !== true) throw result;
   } catch (e) {
     throw new Error(`failed to add video ${channelId}/${videoId}: ${e instanceof Error ? e.message : e}`);

@@ -4,7 +4,15 @@ import { nameExt, vttToText, type ChannelID, type VideoID } from './util.ts';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
+import type { ChannelDataJSON } from './get-channel-meta.ts';
+import type { HealthcheckAPI } from './server-api.ts';
 
+type VideoDataJSON = {
+  fulltitle: string;
+  description: string;
+  duration: number;
+  upload_date: string;
+}
 export async function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: VideoID, fetchMissingMetadata?: ((channelId: ChannelID, videoId: VideoID) => Promise<void>)): Promise<Video | null> {
   let dir = path.join(mediaDir, channelId, videoId);
   let contents = await fsp.readdir(dir);
@@ -32,7 +40,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
     description,
     duration,
     upload_date
-  } = JSON.parse(await fsp.readFile(path.join(dir, 'data.json'), 'utf8'));
+  } = JSON.parse(await fsp.readFile(path.join(dir, 'data.json'), 'utf8')) as VideoDataJSON;
   if (typeof title !== 'string' || typeof description !== 'string' || typeof duration !== 'number' || typeof upload_date !== 'string' || upload_date.length !== 8) {
     throw new Error(`malformed data.json for ${channelId}/${videoId}`);
   }
@@ -81,7 +89,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
 
 export async function channelFromDisk(mediaDir: string, channelId: ChannelID): Promise<Channel> {
   let dir = path.join(mediaDir, channelId);
-  let { channel, description, uploader_id } = JSON.parse(await fsp.readFile(path.join(dir, 'data.json'), 'utf8'));
+  let { channel, description, uploader_id } = JSON.parse(await fsp.readFile(path.join(dir, 'data.json'), 'utf8')) as ChannelDataJSON;
   if (typeof channel !== 'string' || description != null && typeof description !== 'string' || typeof uploader_id !== 'string') {
     throw new Error(`missing data for ${channelId}`);
   }
@@ -118,7 +126,7 @@ async function addVideoOnline(video: Video, channel: Channel, serverUrl: string)
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json() as Error;
     throw new Error(`Failed to add video ${video.video_id}: ${error.message}`);
   }
 }
@@ -187,7 +195,7 @@ export async function rescan(mediaDir: string) {
 
 export async function rescanOnline(mediaDir: string, serverUrl: string = 'http://localhost:3000') {
   try {
-    const up = await (await fetch(serverUrl + '/public-api/healthcheck')).json();
+    const up = await (await fetch(serverUrl + '/public-api/healthcheck')).json() as HealthcheckAPI;
     if (up !== true) throw new Error();
   } catch {
     throw new Error(`${serverUrl} doesn't appear to be running`);

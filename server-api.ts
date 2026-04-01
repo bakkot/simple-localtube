@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getUserPermissions, hasAnyUsers } from './user-db.ts';
-import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID } from './util.ts';
+import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID, readSubscriptionsFile, assertChannelId } from './util.ts';
 import { addChannel, addVideo, getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, search, type Channel, type ChannelSort, type Video } from './media-db.ts';
 import { readFileSync, writeFileSync } from 'fs';
 import { subscriptionsFile } from './server.ts';
@@ -78,7 +78,7 @@ async function addSubscription(channelId: ChannelID, title: string): Promise<voi
   }
 
   using _lockfile = await lock(subscriptionsFile);
-  const subscriptionsData = JSON.parse(readFileSync(subscriptionsFile, 'utf8'));
+  const subscriptionsData = readSubscriptionsFile(subscriptionsFile);
 
   const subscribing = subscriptionsData.subscribing || [];
   const subscribed = subscriptionsData.subscribed || [];
@@ -100,14 +100,14 @@ async function removeSubscription(channelId: ChannelID): Promise<void> {
   }
 
   using _lockfile = await lock(subscriptionsFile);
-  const subscriptionsData = JSON.parse(readFileSync(subscriptionsFile, 'utf8'));
+  const subscriptionsData = readSubscriptionsFile(subscriptionsFile);
 
   const subscribing = subscriptionsData.subscribing || [];
   const subscribed = subscriptionsData.subscribed || [];
   const titles = subscriptionsData.titles || {};
 
   if (!subscribing.includes(channelId) && !subscribed.includes(channelId)) {
-    throw new Error('Channel is not in subscriptions');
+    throw new Error(`Channel ${channelId} is not in subscriptions`);
   }
 
   subscriptionsData.subscribing = subscribing.filter((id: string) => id !== channelId);
@@ -118,7 +118,16 @@ async function removeSubscription(channelId: ChannelID): Promise<void> {
   writeFileSync(subscriptionsFile, JSON.stringify(subscriptionsData, null, 2));
 }
 
-
+export type HealthcheckAPI = boolean;
+export type AddChannelAPI = boolean;
+export type AddVideoAPI = boolean;
+export type AddUserAPIRequest = {
+  username: string;
+  password: string;
+  allowedChannels: 'all' | ChannelID[];
+  createUser: boolean;
+  canSubscribe: boolean;
+}
 export function addAPIs(app: Express) {
   app.post('/api/setup', async (req: Request, res: Response): Promise<void> => {
     try {
@@ -127,12 +136,7 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      const { username, password } = req.body;
-
-      if (!username || !password) {
-        res.status(400).json({ message: 'Username and password are required' });
-        return;
-      }
+      const { username, password } = req.body as { username: unknown; password: unknown };
 
       if (typeof username !== 'string' || typeof password !== 'string') {
         res.status(400).json({ message: 'Username and password must be strings' });
@@ -167,12 +171,7 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      const { username, password, allowedChannels, createUser, canSubscribe } = req.body;
-
-      if (!username || !password || !allowedChannels || createUser === undefined || canSubscribe === undefined) {
-        res.status(400).json({ message: 'Username, password, allowedChannels, createUser, and canSubscribe are required' });
-        return;
-      }
+      const { username, password, allowedChannels, createUser, canSubscribe } = req.body as AddUserAPIRequest;
 
       if (typeof username !== 'string' || typeof password !== 'string' || typeof createUser !== 'boolean' || typeof canSubscribe !== 'boolean') {
         res.status(400).json({ message: 'Username and password must be strings, createUser and canSubscribe must be boolean' });
@@ -192,7 +191,13 @@ export function addAPIs(app: Express) {
           res.status(400).json({ message: 'allowedChannels must be "all" or an array of channel IDs' });
           return;
         }
-        channelPermissions = new Set(allowedChannels) as Set<ChannelID>;
+        try {
+          allowedChannels.forEach(assertChannelId);
+        } catch (e: unknown) {
+          res.status(400).json({ message: (e as Error).message });
+          return;
+        }
+        channelPermissions = new Set(allowedChannels);
       }
 
       const requestedPermissions = {
@@ -224,12 +229,7 @@ export function addAPIs(app: Express) {
 
   app.post('/api/change-password', async (req: Request, res: Response): Promise<void> => {
     try {
-      const { currentPassword, newPassword } = req.body;
-
-      if (!currentPassword || !newPassword) {
-        res.status(400).json({ message: 'Current password and new password are required' });
-        return;
-      }
+      const { currentPassword, newPassword } = req.body as { currentPassword: unknown; newPassword: unknown };
 
       if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
         res.status(400).json({ message: 'Passwords must be strings' });
@@ -306,9 +306,9 @@ export function addAPIs(app: Express) {
 
   app.post('/public-api/login', async (req: Request, res: Response): Promise<void> => {
     try {
-      const { username, password } = req.body;
+      const { username, password } = req.body as { username: string, password: string };
 
-      if (!username || !password) {
+      if (typeof username !== 'string' || typeof password !== 'string') {
         res.status(400).json({ message: 'Username and password required' });
         return;
       }
@@ -349,7 +349,7 @@ export function addAPIs(app: Express) {
   });
 
   app.get('/public-api/healthcheck', (req: Request, res: Response): void => {
-    res.json(true);
+    res.json(true satisfies HealthcheckAPI);
   });
 
   app.post('/api/add-subscription', async (req: Request, res: Response): Promise<void> => {
@@ -363,10 +363,10 @@ export function addAPIs(app: Express) {
 
       // TODO 403 if no subscriptions file configured
 
-      const { channelId } = req.body;
+      const { channelId } = req.body as { channelId: unknown };
 
-      if (!channelId || typeof channelId !== 'string') {
-        res.status(400).json({ message: 'Channel input is required and must be a string' });
+      if (typeof channelId !== 'string') {
+        res.status(400).json({ message: 'Channel input must be a string' });
         return;
       }
 
@@ -389,7 +389,7 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      const { channelId } = req.body;
+      const { channelId } = req.body as { channelId: unknown };
 
       if (!channelId || typeof channelId !== 'string') {
         res.status(400).json({ message: 'Channel ID is required and must be a string' });
@@ -435,7 +435,7 @@ export function addAPIs(app: Express) {
       addVideo(video);
       console.log(`added ${JSON.stringify(video.title)} from API`);
 
-      res.json(true);
+      res.json(true satisfies AddVideoAPI);
     } catch (error) {
       console.error('Add video error:', error);
       let msg = error instanceof Error ? error.message : '';
@@ -479,7 +479,7 @@ export function addAPIs(app: Express) {
 
       console.log(`added ${JSON.stringify(channel.channel)} from API`);
 
-      res.json(true);
+      res.json(true satisfies AddChannelAPI);
     } catch (error) {
       console.error('Add video error:', error);
       let msg = error instanceof Error ? error.message : '';

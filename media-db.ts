@@ -354,13 +354,17 @@ export function resetMediaInDb() {
   resetChannels.run();
 }
 
+function parseSubtitles<T extends { subtitles_files: string }>(row: T): T & { subtitles_files: Record<string, string> } {
+  return {
+    ...row,
+    subtitles_files: JSON.parse(row.subtitles_files) as Record<string, string>,
+  };
+}
+
 export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', limit: number = 30, offset: number = 0): VideoWithChannel[] {
   if (channelIds === 'all') {
     const rows = getRecentVideosStmt.all(limit, offset) as VideoWithChannelRow[];
-    return rows.map(row => ({
-      ...row,
-      subtitles_files: JSON.parse(row.subtitles_files)
-    }));
+    return rows.map(parseSubtitles);
   }
   if (channelIds.size === 0) return [];
 
@@ -376,19 +380,13 @@ export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', l
   `);
 
   const rows = stmt.all(...channelIds, limit, offset) as VideoWithChannelRow[];
-  return rows.map(row => ({
-    ...row,
-    subtitles_files: JSON.parse(row.subtitles_files)
-  }));
+  return rows.map(parseSubtitles);
 }
 
 export function getVideoById(videoId: VideoID): VideoWithChannel | null {
   const row = getVideoByIdStmt.get(videoId) as VideoWithChannelRow | undefined;
   if (!row) return null;
-  return {
-    ...row,
-    subtitles_files: JSON.parse(row.subtitles_files),
-  };
+  return parseSubtitles(row);
 }
 
 export function getChannelById(channelId: ChannelID): Channel | null {
@@ -401,10 +399,7 @@ export function getChannelByShortId(shortId: string): Channel | null {
 
 export function getVideosByChannel(channelId: ChannelID, limit: number = 30, offset: number = 0): VideoWithChannel[] {
   const rows = getVideosByChannelStmt.all(channelId, limit, offset) as VideoWithChannelRow[];
-  return rows.map(row => ({
-    ...row,
-    subtitles_files: JSON.parse(row.subtitles_files)
-  }));
+  return rows.map(parseSubtitles);
 }
 
 export function getAllChannels(): { channel_id: ChannelID; channel_title: string }[] {
@@ -519,10 +514,7 @@ export function search(query: string, allowedChannels: Set<ChannelID> | 'all', l
     videoRows = searchVideosFilteredStmt(placeholders).all(ftsStr, ...allowedChannels, limit, offset) as VideoWithChannelRow[];
   }
 
-  let videos: VideoWithChannel[] = videoRows.map(row => ({
-    ...row,
-    subtitles_files: JSON.parse(row.subtitles_files),
-  }));
+  let videos = videoRows.map(parseSubtitles);
 
   return { channels, videos };
 }

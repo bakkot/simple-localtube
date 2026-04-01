@@ -53,11 +53,11 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
   }
 
   // Validate auth cookie
-  const authCookie = req.cookies?.auth;
+  const authCookie = req.cookies?.auth as unknown;
   let isAuthenticated = false;
   let username: string | undefined;
 
-  if (authCookie) {
+  if (typeof authCookie === 'string') {
     try {
       const payload = decodeBearerToken(authCookie);
       username = payload.username;
@@ -106,8 +106,8 @@ app.get('/setup', (req: Request, res: Response): void => {
 
 app.get('/login', (req: Request, res: Response): void => {
   // Check if user is already authenticated
-  const authCookie = req.cookies?.auth;
-  if (authCookie) {
+  const authCookie = req.cookies?.auth as unknown;
+  if (typeof authCookie === 'string') {
     try {
       const payload = decodeBearerToken(authCookie);
       getUserPermissions(payload.username); // This will throw if user doesn't exist

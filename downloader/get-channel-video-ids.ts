@@ -11,11 +11,11 @@ const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call
 const YT_DLP_PAUSE_MS = 2000; // Pause between yt-dlp calls
 
 export async function hasVideo(server: string, videoId: VideoID): Promise<boolean> {
-  return (await fetch(`${server}/public-api/has-video?video_id=${videoId}`)).json();
+  return (await fetch(`${server}/public-api/has-video?video_id=${videoId}`)).json() as Promise<boolean>;
 }
 
 export async function hasChannel(server: string, channelId: ChannelID): Promise<boolean> {
-  return (await fetch(`${server}/public-api/has-channel?channel_id=${channelId}`)).json();
+  return (await fetch(`${server}/public-api/has-channel?channel_id=${channelId}`)).json() as Promise<boolean>;
 }
 
 export async function getLatestVideoUrls(server: string, channelId: ChannelID, all=false): Promise<VideoID[]> {

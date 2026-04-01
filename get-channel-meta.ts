@@ -9,8 +9,14 @@ import { fetchTo, getTemp, move, type ChannelID } from './util.ts';
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, 'yt-dlp');
 
+type Thumbnail = { id: string; url: string; width: number; height: number };
+export type ChannelDataJSON = {
+  thumbnails: Thumbnail[];
+  channel: string;
+  description: string | null;
+  uploader_id: string;
+};
 export async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID) {
-  // Build the full path for the current entry
   const fullPath = path.join(mediaDir, channelId);
   let jsonPath = path.join(fullPath, 'data.json');
   if (fs.existsSync(jsonPath)) {
@@ -37,9 +43,8 @@ export async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID
     throw new Error(`fetching info resulted in unexpected files: ${JSON.stringify(files)}`);
   }
   let tempJsonPath = path.join(tempDir.path, files[0]);
-  let contents = JSON.parse(fs.readFileSync(tempJsonPath, 'utf8'));
+  let contents = JSON.parse(fs.readFileSync(tempJsonPath, 'utf8')) as ChannelDataJSON;
 
-  type Thumbnail = { id: string; url: string; width: number; height: number };
   let avatar = contents.thumbnails.find((t: Thumbnail) => t.id === 'avatar_uncropped');
   let bannerUncropped = contents.thumbnails.find((t: Thumbnail) => t.id === 'banner_uncropped');
   let banner = contents.thumbnails.reduce((acc: Thumbnail | null, t: Thumbnail) => t.width == null || t.width / t.height <= 2 ? acc : acc == null ? t : t.width < acc.width ? acc : t, null);
