@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Channels - LocalTube</title>
+  <style>
+    <# commonCSS>
+    body { margin: 20px; }
+    h1 { color: #333; margin: 0; display: inline; }
+    .back-link-inline { margin-left: 16px; }
+    .channels-grid { display: grid; grid-template-columns: repeat(auto-fit, 320px); gap: 20px; justify-content: center; margin-top: 20px; }
+    .channel-card { display: flex; align-items: center; gap: 14px; background: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-decoration: none; color: inherit; }
+    .channel-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+    .channel-card-avatar { width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; }
+    .channel-card-placeholder { width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; background: #ddd; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #999; }
+    .channel-card-info { min-width: 0; }
+    .channel-card-title { font-weight: bold; color: #333; margin: 0 0 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .channel-card-meta { color: #999; font-size: 12px; }
+    .sort-bar { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+    .sort-bar label { color: #666; font-size: 14px; }
+    .sort-bar select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; background: white; }
+    .empty-state { text-align: center; color: #666; margin-top: 60px; font-size: 1.1em; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Channels</h1>
+    <a href="/" class="back-link back-link-inline">← Home</a>
+    <# topRightBlock>
+  </div>
+  <div class="sort-bar">
+    <label for="sort-select">Sort by:</label>
+    <select id="sort-select">
+      <option value="recent">Most recent</option>
+      <option value="oldest">Least recent</option>
+      <option value="a-z">A → Z</option>
+      <option value="z-a">Z → A</option>
+    </select>
+  </div>
+  <div class="channels-grid" id="channels-grid">
+    <#foreach channel of channels>
+      <# channel.html>
+    </#foreach>
+  </div>
+  <#if noChannels>
+    <div class="empty-state">
+      <p>No channels to display.</p>
+    </div>
+  </#if>
+  <div class="loading" id="loading" style="display: none;">Loading more channels...</div>
+  <script>
+    <# channelCardScript>
+  </script>
+</body>
+</html>
