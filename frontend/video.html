@@ -98,10 +98,11 @@
     async function loadSubtitles(lang) {
       if (lang === activeTrackLang) return;
       activeTrackLang = lang;
-      if (!lang) { parsedCues = []; return; }
+      if (!lang) { parsedCues = []; renderKaraoke(); return; }
       const res = await fetch('/media/subtitles/<# videoId>/' + lang);
       const text = await res.text();
       parsedCues = parseVTT(text);
+      renderKaraoke();
     }
 
     function renderKaraoke() {
