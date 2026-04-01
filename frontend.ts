@@ -55,44 +55,43 @@ ${nameExt.toString()}
 function createInfiniteScroll(apiUrl, showChannel) {
   let offset = document.getElementById('video-grid').children.length;
   let state = 'idle'; // idle | loading | exhausted | errored
+  const loadingEle = document.getElementById('loading');
 
-  function loadMoreVideos() {
+  async function loadMoreVideos() {
     if (state !== 'idle') return;
     state = 'loading';
-    document.getElementById('loading').style.display = 'block';
+    loadingEle.style.display = 'block';
 
-    // todo async
-    fetch(apiUrl + '?offset=' + offset + '&limit=30')
-      .then(response => response.json())
-      .then(videos => {
-        if (videos.length === 0) {
-          state = 'exhausted';
-          document.getElementById('loading').textContent = 'No more videos';
-          return;
-        }
+    try {
+      const response = await fetch(apiUrl + '?offset=' + offset + '&limit=30');
+      const videos = await response.json();
 
-        const grid = document.getElementById('video-grid');
-        videos.forEach(video => {
-          grid.insertAdjacentHTML('beforeend', renderVideoCard(video, showChannel));
-        });
+      if (videos.length === 0) {
+        state = 'exhausted';
+        loadingEle.textContent = 'No more videos';
+        return;
+      }
 
-        offset += videos.length;
-        if (videos.length < 30) {
-          state = 'exhausted';
-          document.getElementById('loading').textContent = 'No more videos';
-          return;
-        }
-      })
-      .catch(error => {
-        console.error('Error loading videos:', error);
-        state = 'errored';
-        document.getElementById('loading').textContent = 'Error loading videos';
-      })
-      .finally(() => {
-        if (state !== 'errored') document.getElementById('loading').style.display = 'none';
-        if (state === 'exhausted') return;
-        setTimeout(() => { state = 'idle'; }, 1000); // avoid hammering too hard
+      const grid = document.getElementById('video-grid');
+      videos.forEach(video => {
+        grid.insertAdjacentHTML('beforeend', renderVideoCard(video, showChannel));
       });
+
+      offset += videos.length;
+      if (videos.length < 30) {
+        state = 'exhausted';
+        loadingEle.textContent = 'No more videos';
+        return;
+      }
+    } catch (error) {
+      console.error('Error loading videos:', error);
+      state = 'errored';
+      loadingEle.textContent = 'Error loading videos';
+    } finally {
+      if (state !== 'errored') loadingEle.style.display = 'none';
+      if (state === 'exhausted') return;
+      setTimeout(() => { state = 'idle'; }, 1000);
+    }
   }
 
   window.addEventListener('scroll', () => {

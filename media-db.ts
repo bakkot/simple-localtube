@@ -21,7 +21,8 @@ if (existing.length === 0) {
         avatar_filename TEXT,
         banner_filename TEXT,
         banner_uncropped_filename TEXT,
-        latest_upload_timestamp INTEGER
+        latest_upload_timestamp INTEGER,
+        video_count INTEGER NOT NULL DEFAULT 0
     ) STRICT;
 
     CREATE TABLE videos (
@@ -47,36 +48,40 @@ if (existing.length === 0) {
     -- Channel indexes
     CREATE INDEX idx_channels_latest ON channels(latest_upload_timestamp DESC);
     CREATE INDEX idx_channels_title ON channels(channel_title);
+    CREATE INDEX idx_channels_video_count ON channels(video_count DESC);
 
-    -- Triggers to keep latest_upload_timestamp in sync
+    -- Triggers
     CREATE TRIGGER trg_videos_after_insert AFTER INSERT ON videos
     BEGIN
         UPDATE channels
-        SET latest_upload_timestamp = NEW.upload_timestamp
-        WHERE channel_id = NEW.channel_id
-          AND (latest_upload_timestamp IS NULL OR latest_upload_timestamp < NEW.upload_timestamp);
+        SET video_count = video_count + 1,
+            latest_upload_timestamp = MAX(COALESCE(latest_upload_timestamp, 0), NEW.upload_timestamp)
+        WHERE channel_id = NEW.channel_id;
     END;
 
     CREATE TRIGGER trg_videos_after_delete AFTER DELETE ON videos
     BEGIN
         UPDATE channels
-        SET latest_upload_timestamp = (
-            SELECT MAX(upload_timestamp) FROM videos WHERE channel_id = OLD.channel_id
-        )
+        SET video_count = video_count - 1,
+            latest_upload_timestamp = (
+                SELECT MAX(upload_timestamp) FROM videos WHERE channel_id = OLD.channel_id
+            )
         WHERE channel_id = OLD.channel_id;
     END;
 
     CREATE TRIGGER trg_videos_after_update AFTER UPDATE OF upload_timestamp, channel_id ON videos
     BEGIN
         UPDATE channels
-        SET latest_upload_timestamp = (
-            SELECT MAX(upload_timestamp) FROM videos WHERE channel_id = OLD.channel_id
-        )
+        SET video_count = video_count - 1,
+            latest_upload_timestamp = (
+                SELECT MAX(upload_timestamp) FROM videos WHERE channel_id = OLD.channel_id
+            )
         WHERE channel_id = OLD.channel_id;
         UPDATE channels
-        SET latest_upload_timestamp = (
-            SELECT MAX(upload_timestamp) FROM videos WHERE channel_id = NEW.channel_id
-        )
+        SET video_count = video_count + 1,
+            latest_upload_timestamp = (
+                SELECT MAX(upload_timestamp) FROM videos WHERE channel_id = NEW.channel_id
+            )
         WHERE channel_id = NEW.channel_id;
     END;
   `);
