@@ -8,6 +8,8 @@
     h1 { color: #333; margin: 0; display: inline; }
     .back-link-inline { margin-left: 16px; }
     .section-title { color: #333; margin: 24px 0 12px; }
+    .section-divider { border: none; border-top: 1px solid #ddd; margin: 28px 0 4px; }
+    .match-label { color: #999; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; }
     .channels-grid { display: grid; grid-template-columns: repeat(auto-fit, 320px); gap: 20px; justify-content: center; }
     .channel-card { display: flex; align-items: center; gap: 14px; background: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-decoration: none; color: inherit; }
     .channel-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
@@ -41,10 +43,29 @@
       </#foreach>
     </div>
   </#if>
-  <#if hasVideos>
+  <#if hasTitleVideos>
     <h2 class="section-title">Videos</h2>
-    <div class="video-grid" id="video-grid">
-      <#foreach video of videos>
+    <p class="match-label">Matching title</p>
+    <div class="video-grid">
+      <#foreach video of titleVideos>
+        <# video.html>
+      </#foreach>
+    </div>
+  </#if>
+  <#if hasDescVideos>
+    <hr class="section-divider">
+    <p class="match-label">Matching description</p>
+    <div class="video-grid">
+      <#foreach video of descVideos>
+        <# video.html>
+      </#foreach>
+    </div>
+  </#if>
+  <#if hasSubsVideos>
+    <hr class="section-divider">
+    <p class="match-label">Matching subtitles</p>
+    <div class="video-grid">
+      <#foreach video of subsVideos>
         <# video.html>
       </#foreach>
     </div>

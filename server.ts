@@ -132,7 +132,7 @@ app.get('/', (req, res) => {
 app.get('/search', (req, res) => {
   const q = (req.query.q as string || '').trim();
   const permissions = getUserPermissions(req.username!);
-  const results = q ? search(q, permissions.allowedChannels) : { channels: [], videos: [] };
+  const results = q ? search(q, permissions.allowedChannels) : { channels: [], videosByTitle: [], videosByDescription: [], videosBySubtitles: [] };
   res.send(renderSearchPage(req.username!, permissions, q, results));
 });
 

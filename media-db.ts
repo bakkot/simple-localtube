@@ -441,82 +441,100 @@ export function getChannelsForUser(allowedChannels: Set<ChannelID> | 'all'): { c
 }
 
 let searchVideosStmt = db.prepare(`
-  SELECT v.*, c.channel_title, c.short_id as channel_short_id,
-    bm25(videos_fts, 10.0, 5.0, 1.0) as rank
+  SELECT v.*, c.channel_title, c.short_id as channel_short_id
   FROM videos_fts fts
   JOIN videos v ON v.rowid = fts.rowid
   JOIN channels c ON v.channel_id = c.channel_id
   WHERE videos_fts MATCH ?
-  ORDER BY rank
-  LIMIT ? OFFSET ?
+  ORDER BY bm25(videos_fts)
+  LIMIT ?
 `);
 
 let searchVideosFilteredStmt = (placeholders: string) => db!.prepare(`
-  SELECT v.*, c.channel_title, c.short_id as channel_short_id,
-    bm25(videos_fts, 10.0, 5.0, 1.0) as rank
+  SELECT v.*, c.channel_title, c.short_id as channel_short_id
   FROM videos_fts fts
   JOIN videos v ON v.rowid = fts.rowid
   JOIN channels c ON v.channel_id = c.channel_id
   WHERE videos_fts MATCH ?
     AND v.channel_id IN (${placeholders})
-  ORDER BY rank
-  LIMIT ? OFFSET ?
+  ORDER BY bm25(videos_fts)
+  LIMIT ?
 `);
 
 let searchChannelsStmt = db.prepare(`
-  SELECT ch.*,
-    bm25(channels_fts, 5.0, 1.0) as rank
+  SELECT ch.*
   FROM channels_fts fts
   JOIN channels ch ON ch.rowid = fts.rowid
   WHERE channels_fts MATCH ?
-  ORDER BY rank
-  LIMIT ? OFFSET ?
+  ORDER BY bm25(channels_fts)
+  LIMIT ?
 `);
 
 let searchChannelsFilteredStmt = (placeholders: string) => db!.prepare(`
-  SELECT ch.*,
-    bm25(channels_fts, 5.0, 1.0) as rank
+  SELECT ch.*
   FROM channels_fts fts
   JOIN channels ch ON ch.rowid = fts.rowid
   WHERE channels_fts MATCH ?
     AND ch.channel_id IN (${placeholders})
-  ORDER BY rank
-  LIMIT ? OFFSET ?
+  ORDER BY bm25(channels_fts)
+  LIMIT ?
 `);
 
 export interface SearchResults {
   channels: Channel[];
-  videos: VideoWithChannel[];
+  videosByTitle: VideoWithChannel[];
+  videosByDescription: VideoWithChannel[];
+  videosBySubtitles: VideoWithChannel[];
 }
 
-export function search(query: string, allowedChannels: Set<ChannelID> | 'all', limit: number = 30, offset: number = 0, prefix: boolean = false): SearchResults {
-  let ftsQuery = query.trim();
-  if (!ftsQuery) return { channels: [], videos: [] };
-
-  let tokens = ftsQuery.split(/\s+/).filter(Boolean);
-  let ftsTokens = tokens.map((t, i) => {
+function buildFtsStr(query: string, prefix: boolean): string {
+  let tokens = query.split(/\s+/).filter(Boolean);
+  return tokens.map((t, i) => {
     let escaped = '"' + t.replace(/"/g, '""') + '"';
     if (prefix && i === tokens.length - 1) escaped += ' *';
     return escaped;
-  });
-  let ftsStr = ftsTokens.join(' ');
+  }).join(' ');
+}
 
-  let channels: Channel[];
-  let videoRows: VideoWithChannelRow[];
-
+function searchVideosByColumn(column: string, ftsStr: string, allowedChannels: Set<ChannelID> | 'all', limit: number): VideoWithChannel[] {
+  let matchStr = `${column} : ${ftsStr}`;
+  let rows: VideoWithChannelRow[];
   if (allowedChannels === 'all') {
-    channels = searchChannelsStmt.all(ftsStr, limit, offset) as unknown as Channel[];
-    videoRows = searchVideosStmt.all(ftsStr, limit, offset) as VideoWithChannelRow[];
+    rows = searchVideosStmt.all(matchStr, limit) as VideoWithChannelRow[];
   } else {
-    if (allowedChannels.size === 0) return { channels: [], videos: [] };
     let placeholders = [...allowedChannels].map(() => '?').join(',');
-    channels = searchChannelsFilteredStmt(placeholders).all(ftsStr, ...allowedChannels, limit, offset) as unknown as Channel[];
-    videoRows = searchVideosFilteredStmt(placeholders).all(ftsStr, ...allowedChannels, limit, offset) as VideoWithChannelRow[];
+    rows = searchVideosFilteredStmt(placeholders).all(matchStr, ...allowedChannels, limit) as VideoWithChannelRow[];
+  }
+  return rows.map(parseSubtitles);
+}
+
+export function search(query: string, allowedChannels: Set<ChannelID> | 'all', limit: number = 30, prefix: boolean = false): SearchResults {
+  let ftsQuery = query.trim();
+  if (!ftsQuery) return { channels: [], videosByTitle: [], videosByDescription: [], videosBySubtitles: [] };
+  if (allowedChannels !== 'all' && allowedChannels.size === 0) return { channels: [], videosByTitle: [], videosByDescription: [], videosBySubtitles: [] };
+
+  let ftsStr = buildFtsStr(ftsQuery, prefix);
+
+  let channelMatchStr = `channel_title : ${ftsStr}`;
+  let channels: Channel[];
+  if (allowedChannels === 'all') {
+    channels = searchChannelsStmt.all(channelMatchStr, limit) as unknown as Channel[];
+  } else {
+    let placeholders = [...allowedChannels].map(() => '?').join(',');
+    channels = searchChannelsFilteredStmt(placeholders).all(channelMatchStr, ...allowedChannels, limit) as unknown as Channel[];
   }
 
-  let videos = videoRows.map(parseSubtitles);
+  let videosByTitle = searchVideosByColumn('title', ftsStr, allowedChannels, limit);
 
-  return { channels, videos };
+  let titleIds = new Set(videosByTitle.map(v => v.video_id));
+  let videosByDescription = searchVideosByColumn('description', ftsStr, allowedChannels, limit)
+    .filter(v => !titleIds.has(v.video_id));
+
+  let titleOrDescIds = new Set([...titleIds, ...videosByDescription.map(v => v.video_id)]);
+  let videosBySubtitles = searchVideosByColumn('subtitles_text', ftsStr, allowedChannels, limit)
+    .filter(v => !titleOrDescIds.has(v.video_id));
+
+  return { channels, videosByTitle, videosByDescription, videosBySubtitles };
 }
 
 export function closeDb(): void {

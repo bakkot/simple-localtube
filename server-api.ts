@@ -275,14 +275,13 @@ export function addAPIs(app: Express) {
   app.get('/api/search', (req: Request, res: Response): void => {
     const q = (req.query.q as string || '').trim();
     if (!q) {
-      res.json({ channels: [], videos: [] });
+      res.json({ channels: [], videosByTitle: [], videosByDescription: [], videosBySubtitles: [] });
       return;
     }
-    const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
     const allowedChannels = getUserPermissions(req.username!).allowedChannels;
     const prefix = req.query.prefix === '1' || req.query.prefix === 'true';
-    res.json(search(q, allowedChannels, limit, offset, prefix));
+    res.json(search(q, allowedChannels, limit, prefix));
   });
 
   app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => {

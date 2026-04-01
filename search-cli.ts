@@ -15,40 +15,35 @@ if (!query) {
 let tokens = query.trim().split(/\s+/).filter(Boolean);
 let ftsStr = tokens.map(t => '"' + t.replace(/"/g, '""') + '"').join(' ');
 
-// --- Channels ---
+// --- Channels (title only) ---
 const channelRows = db.prepare(`
   SELECT
     ch.channel_id,
     ch.channel_title,
     ch.short_id,
     highlight(channels_fts, 0, '>>>', '<<<') as title_highlight,
-    highlight(channels_fts, 1, '>>>', '<<<') as desc_highlight,
-    bm25(channels_fts, 5.0, 1.0) as rank
+    bm25(channels_fts) as rank
   FROM channels_fts fts
   JOIN channels ch ON ch.rowid = fts.rowid
   WHERE channels_fts MATCH ?
   ORDER BY rank
   LIMIT 20
-`).all(ftsStr) as any[];
+`).all(`channel_title : ${ftsStr}`) as any[];
 
 if (channelRows.length > 0) {
   console.log(`\n=== CHANNELS (${channelRows.length} results) ===\n`);
   for (const row of channelRows) {
     console.log(`  ${row.channel_title}  [${row.short_id}]`);
     console.log(`  score: ${row.rank.toFixed(4)}`);
-    let titleMatched = row.title_highlight.includes('>>>');
-    let descMatched = row.desc_highlight && row.desc_highlight.includes('>>>');
-    console.log(`  matched in: ${[titleMatched && 'title', descMatched && 'description'].filter(Boolean).join(', ')}`);
-    if (titleMatched) console.log(`    title: ${row.title_highlight}`);
-    if (descMatched) console.log(`    desc:  ${truncate(row.desc_highlight, 200)}`);
+    console.log(`    title: ${row.title_highlight}`);
     console.log();
   }
 } else {
   console.log('\n=== CHANNELS: no results ===\n');
 }
 
-// --- Videos ---
-const videoRows = db.prepare(`
+// --- Videos by tier ---
+const videoStmt = db.prepare(`
   SELECT
     v.video_id,
     v.title,
@@ -57,38 +52,44 @@ const videoRows = db.prepare(`
     highlight(videos_fts, 0, '>>>', '<<<') as title_highlight,
     highlight(videos_fts, 1, '>>>', '<<<') as desc_highlight,
     highlight(videos_fts, 2, '>>>', '<<<') as subs_highlight,
-    bm25(videos_fts, 10.0, 5.0, 1.0) as rank
+    bm25(videos_fts) as rank
   FROM videos_fts fts
   JOIN videos v ON v.rowid = fts.rowid
   JOIN channels c ON v.channel_id = c.channel_id
   WHERE videos_fts MATCH ?
   ORDER BY rank
   LIMIT 30
-`).all(ftsStr) as any[];
+`);
 
-if (videoRows.length > 0) {
-  console.log(`=== VIDEOS (${videoRows.length} results) ===\n`);
-  for (const row of videoRows) {
+const tiers = [
+  { column: 'title', label: 'TITLE MATCHES', highlightKey: 'title_highlight' },
+  { column: 'description', label: 'DESCRIPTION MATCHES', highlightKey: 'desc_highlight' },
+  { column: 'subtitles_text', label: 'SUBTITLE MATCHES', highlightKey: 'subs_highlight' },
+] as const;
+
+let seenIds = new Set<string>();
+
+for (const tier of tiers) {
+  const rows = videoStmt.all(`${tier.column} : ${ftsStr}`) as any[];
+  const unique = rows.filter(r => !seenIds.has(r.video_id));
+
+  console.log(`=== VIDEOS — ${tier.label} (${unique.length} results) ===\n`);
+  for (const row of unique) {
+    seenIds.add(row.video_id);
     console.log(`  ${row.title}`);
     console.log(`  channel: ${row.channel_title}  |  id: ${row.video_id}  |  score: ${row.rank.toFixed(4)}`);
-    let titleMatched = row.title_highlight.includes('>>>');
-    let descMatched = row.desc_highlight.includes('>>>');
-    let subsMatched = row.subs_highlight.includes('>>>');
-    console.log(`  matched in: ${[titleMatched && 'title', descMatched && 'description', subsMatched && 'subtitles'].filter(Boolean).join(', ')}`);
-    if (titleMatched) console.log(`    title: ${row.title_highlight}`);
-    if (descMatched) console.log(`    desc:  ${truncate(row.desc_highlight, 200)}`);
-    if (subsMatched) console.log(`    subs:  ${truncate(row.subs_highlight, 200)}`);
+    let highlight = row[tier.highlightKey];
+    if (highlight && highlight.includes('>>>')) {
+      console.log(`    ${tier.column}: ${truncate(highlight, 200)}`);
+    }
     console.log();
   }
-} else {
-  console.log('=== VIDEOS: no results ===\n');
 }
 
 db.close();
 
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
-  // Try to cut near a highlight marker so we show useful context
   let markerPos = s.indexOf('>>>');
   if (markerPos > max / 2) {
     s = '...' + s.slice(markerPos - 40);

@@ -493,8 +493,12 @@ export function renderSearchPage(username: string, permissions: Permissions, que
     query,
     hasChannels: results.channels.length > 0,
     channels: results.channels.map(channel => ({ html: renderChannelCard(channel) })),
-    hasVideos: results.videos.length > 0,
-    videos: results.videos.map(video => ({ html: renderVideoCard(video, true) })),
-    noResults: results.channels.length === 0 && results.videos.length === 0,
+    hasTitleVideos: results.videosByTitle.length > 0,
+    titleVideos: results.videosByTitle.map(video => ({ html: renderVideoCard(video, true) })),
+    hasDescVideos: results.videosByDescription.length > 0,
+    descVideos: results.videosByDescription.map(video => ({ html: renderVideoCard(video, true) })),
+    hasSubsVideos: results.videosBySubtitles.length > 0,
+    subsVideos: results.videosBySubtitles.map(video => ({ html: renderVideoCard(video, true) })),
+    noResults: results.channels.length === 0 && results.videosByTitle.length === 0 && results.videosByDescription.length === 0 && results.videosBySubtitles.length === 0,
   });
 }
