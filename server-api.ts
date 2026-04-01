@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getUserPermissions, hasAnyUsers } from './user-db.ts';
 import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID, readSubscriptionsFile, assertChannelId } from './util.ts';
-import { addChannel, addVideo, getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, search, type Channel, type ChannelSort, type Video } from './media-db.ts';
+import { addChannel, addVideo, getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { readFileSync, writeFileSync } from 'fs';
 import { subscriptionsFile } from './server.ts';
 
@@ -272,16 +272,23 @@ export function addAPIs(app: Express) {
     res.json(channels);
   });
 
+  const validSearchTiers = new Set<SearchTier>(['channels', 'title', 'description', 'subtitles']);
   app.get('/api/search', (req: Request, res: Response): void => {
     const q = (req.query.q as string || '').trim();
     if (!q) {
-      res.json({ channels: [], videosByTitle: [], videosByDescription: [], videosBySubtitles: [] });
+      res.json([]);
       return;
     }
     const limit = parseInt(req.query.limit as string) || 30;
+    const offset = parseInt(req.query.offset as string) || 0;
     const allowedChannels = getUserPermissions(req.username!).allowedChannels;
     const prefix = req.query.prefix === '1' || req.query.prefix === 'true';
-    res.json(search(q, allowedChannels, limit, prefix));
+    const tier = req.query.tier as SearchTier;
+    if (!validSearchTiers.has(tier)) {
+      res.status(400).json({ message: 'tier parameter required: channels, title, description, or subtitles' });
+      return;
+    }
+    res.json(searchByTier(q, tier, allowedChannels, limit, offset, prefix));
   });
 
   app.get('/api/channel/:short_id/videos', (req: Request, res: Response): void => {

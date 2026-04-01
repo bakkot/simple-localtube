@@ -484,8 +484,146 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
   });
 }
 
+const searchScript = `
+"use strict";
+
+${formatDuration.toString()}
+
+${formatDate.toString()}
+
+${renderVideoCard.toString()}
+
+${nameExt.toString()}
+
+${formatLastUpdated.toString()}
+
+${renderChannelCard.toString()}
+
+{
+  const state = JSON.parse(document.getElementById('search-state').textContent);
+  const tiers = ['channels', 'title', 'description', 'subtitles'];
+  const tierLabels = { title: 'Matching title', description: 'Matching description', subtitles: 'Matching subtitles' };
+  const container = document.getElementById('search-results');
+  const loadingEle = document.getElementById('loading');
+  const noResultsEle = document.getElementById('no-results');
+  let seenVideoIds = new Set(state.seenVideoIds);
+  let offsets = state.offsets;
+  let exhausted = state.exhausted;
+  let currentTierIdx = tiers.findIndex(t => !exhausted[t]);
+  let loadState = 'idle';
+  let videosHeadingShown = state.videosHeadingShown;
+
+  function ensureTierSection(tier) {
+    let gridId = tier + '-grid';
+    let existing = document.getElementById(gridId);
+    if (existing) return existing;
+
+    if (tier !== 'channels') {
+      if (!videosHeadingShown) {
+        container.insertAdjacentHTML('beforeend', '<h2 class="section-title">Videos</h2>');
+        videosHeadingShown = true;
+      }
+      if (tier !== 'title') {
+        container.insertAdjacentHTML('beforeend', '<hr class="section-divider">');
+      }
+      container.insertAdjacentHTML('beforeend',
+        '<p class="match-label">' + tierLabels[tier] + '</p>' +
+        '<div class="video-grid" id="' + gridId + '"></div>');
+    } else {
+      container.insertAdjacentHTML('beforeend',
+        '<h2 class="section-title">Channels</h2>' +
+        '<div class="channels-grid" id="' + gridId + '"></div>');
+    }
+    return document.getElementById(gridId);
+  }
+
+  async function loadMore() {
+    if (loadState !== 'idle' || currentTierIdx < 0 || currentTierIdx >= tiers.length) return;
+    loadState = 'loading';
+    loadingEle.style.display = 'block';
+
+    try {
+      while (currentTierIdx < tiers.length) {
+        let tier = tiers[currentTierIdx];
+        if (exhausted[tier]) { currentTierIdx++; continue; }
+
+        let url = '/api/search?q=' + encodeURIComponent(state.query) +
+          '&tier=' + tier + '&offset=' + offsets[tier] + '&limit=30';
+        let resp = await fetch(url);
+        let items = await resp.json();
+        offsets[tier] += items.length;
+
+        if (items.length < 30) {
+          exhausted[tier] = true;
+        }
+
+        let grid = ensureTierSection(tier);
+        if (tier === 'channels') {
+          items.forEach(function(ch) { grid.insertAdjacentHTML('beforeend', renderChannelCard(ch)); });
+          if (items.length > 0) break;
+        } else {
+          let added = 0;
+          items.forEach(function(v) {
+            if (!seenVideoIds.has(v.video_id)) {
+              seenVideoIds.add(v.video_id);
+              grid.insertAdjacentHTML('beforeend', renderVideoCard(v, true));
+              added++;
+            }
+          });
+          if (added > 0) break;
+        }
+
+        if (exhausted[tier]) currentTierIdx++;
+      }
+
+      if (noResultsEle) noResultsEle.style.display = 'none';
+
+      if (currentTierIdx >= tiers.length || tiers.every(function(t) { return exhausted[t]; })) {
+        loadState = 'exhausted';
+        if (container.children.length === 0 && noResultsEle) {
+          noResultsEle.style.display = '';
+        }
+        loadingEle.textContent = container.children.length === 0 ? '' : 'No more results';
+        return;
+      }
+    } catch (error) {
+      console.error('Error loading search results:', error);
+      loadState = 'errored';
+      loadingEle.textContent = 'Error loading results';
+      return;
+    } finally {
+      if (loadState === 'loading') {
+        loadingEle.style.display = 'none';
+        setTimeout(function() { loadState = 'idle'; }, 300);
+      }
+    }
+  }
+
+  window.addEventListener('scroll', function() {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+      loadMore();
+    }
+  });
+
+  loadMore();
+}
+`;
+
 const searchTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'search.html'), 'utf8'));
 export function renderSearchPage(username: string, permissions: Permissions, query: string, results: SearchResults): string {
+  let allVideoIds = [
+    ...results.videosByTitle.map(v => v.video_id),
+    ...results.videosByDescription.map(v => v.video_id),
+    ...results.videosBySubtitles.map(v => v.video_id),
+  ];
+  let videosHeadingShown = results.videosByTitle.length > 0 || results.videosByDescription.length > 0 || results.videosBySubtitles.length > 0;
+  let searchState = JSON.stringify({
+    query,
+    offsets: results.offsets,
+    exhausted: results.exhausted,
+    seenVideoIds: allVideoIds,
+    videosHeadingShown,
+  });
   return applyTemplate(searchTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
@@ -493,12 +631,15 @@ export function renderSearchPage(username: string, permissions: Permissions, que
     query,
     hasChannels: results.channels.length > 0,
     channels: results.channels.map(channel => ({ html: renderChannelCard(channel) })),
+    hasAnyVideos: videosHeadingShown,
     hasTitleVideos: results.videosByTitle.length > 0,
     titleVideos: results.videosByTitle.map(video => ({ html: renderVideoCard(video, true) })),
     hasDescVideos: results.videosByDescription.length > 0,
     descVideos: results.videosByDescription.map(video => ({ html: renderVideoCard(video, true) })),
     hasSubsVideos: results.videosBySubtitles.length > 0,
     subsVideos: results.videosBySubtitles.map(video => ({ html: renderVideoCard(video, true) })),
-    noResults: results.channels.length === 0 && results.videosByTitle.length === 0 && results.videosByDescription.length === 0 && results.videosBySubtitles.length === 0,
+    noResults: results.channels.length === 0 && !videosHeadingShown,
+    searchState,
+    searchScript,
   });
 }

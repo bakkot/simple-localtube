@@ -17,7 +17,7 @@ organize files more generally
 has-channel should be channel-info
   null, or name
 
-
+figure out why http://localhost:3000/media/thumbs/lJLP2bcXDqY.mp4 has .mp4 extn (maybe just search results bug idk)
 
 rename scan.ts to something else, move it under scripts
 split out all the scan logic to its own folder w/ docs

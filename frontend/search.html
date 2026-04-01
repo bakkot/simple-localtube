@@ -30,45 +30,52 @@
     <# searchBar>
     <# topRightBlock>
   </div>
-  <#if noResults>
-    <div class="empty-state">
-      <p>No results found.</p>
-    </div>
-  </#if>
-  <#if hasChannels>
-    <h2 class="section-title">Channels</h2>
-    <div class="channels-grid">
-      <#foreach channel of channels>
-        <# channel.html>
-      </#foreach>
-    </div>
-  </#if>
-  <#if hasTitleVideos>
-    <h2 class="section-title">Videos</h2>
-    <p class="match-label">Matching title</p>
-    <div class="video-grid">
-      <#foreach video of titleVideos>
-        <# video.html>
-      </#foreach>
-    </div>
-  </#if>
-  <#if hasDescVideos>
-    <hr class="section-divider">
-    <p class="match-label">Matching description</p>
-    <div class="video-grid">
-      <#foreach video of descVideos>
-        <# video.html>
-      </#foreach>
-    </div>
-  </#if>
-  <#if hasSubsVideos>
-    <hr class="section-divider">
-    <p class="match-label">Matching subtitles</p>
-    <div class="video-grid">
-      <#foreach video of subsVideos>
-        <# video.html>
-      </#foreach>
-    </div>
-  </#if>
+  <div id="no-results" class="empty-state" <#if noResults><#else>style="display:none"</#if>>
+    <p>No results found.</p>
+  </div>
+  <div id="search-results">
+    <#if hasChannels>
+      <h2 class="section-title">Channels</h2>
+      <div class="channels-grid" id="channels-grid">
+        <#foreach channel of channels>
+          <# channel.html>
+        </#foreach>
+      </div>
+    </#if>
+    <#if hasAnyVideos>
+      <h2 class="section-title">Videos</h2>
+    </#if>
+    <#if hasTitleVideos>
+      <p class="match-label">Matching title</p>
+      <div class="video-grid" id="title-grid">
+        <#foreach video of titleVideos>
+          <# video.html>
+        </#foreach>
+      </div>
+    </#if>
+    <#if hasDescVideos>
+      <hr class="section-divider">
+      <p class="match-label">Matching description</p>
+      <div class="video-grid" id="description-grid">
+        <#foreach video of descVideos>
+          <# video.html>
+        </#foreach>
+      </div>
+    </#if>
+    <#if hasSubsVideos>
+      <hr class="section-divider">
+      <p class="match-label">Matching subtitles</p>
+      <div class="video-grid" id="subtitles-grid">
+        <#foreach video of subsVideos>
+          <# video.html>
+        </#foreach>
+      </div>
+    </#if>
+  </div>
+  <div class="loading" id="loading" style="display: none;">Loading more results...</div>
+  <script type="application/json" id="search-state"><# searchState></script>
+  <script>
+    <# searchScript>
+  </script>
 </body>
 </html>
