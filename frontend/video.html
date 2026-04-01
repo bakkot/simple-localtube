@@ -191,10 +191,11 @@
           showModal(newSpeed + 'x', 500);
           break;
         }
-        case ' ':
+        case ' ': {
           e.preventDefault();
           if (video.paused) { video.play(); } else { video.pause(); }
           break;
+        }
         case '?':
           showModal(`
             <table style="margin: auto; background: rgba(0,0,0,.5)"><tbody>
@@ -208,7 +209,7 @@
           `, 3000);
           break;
       }
-    });
+    }, { capture: true });
   </script>
   <div class="content-section">
     <div class="video-container">
