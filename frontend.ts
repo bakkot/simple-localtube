@@ -225,6 +225,7 @@ export function renderHomePage(username: string, permissions: Permissions, video
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
     videos: videos.map(video => ({ html: renderVideoCard(video, true) })),
+    noVideos: videos.length === 0,
     videoCardScript,
   });
 }

@@ -7,6 +7,7 @@
     body { margin: 20px; }
     h1 { color: #333; margin: 0px; }
     .video-grid { margin-top: 20px; }
+    .empty-state { text-align: center; color: #666; margin-top: 60px; font-size: 1.1em; }
     .video-title { margin-bottom: 8px; }
   </style>
 </head>
@@ -20,6 +21,11 @@
       <# video.html>
     </#foreach>
   </div>
+  <#if noVideos>
+    <div class="empty-state">
+      <p>No videos to display. Either no videos have been added yet, or your account doesn't have access to any channels.</p>
+    </div>
+  </#if>
   <div class="loading" id="loading" style="display: none;">Loading more videos...</div>
   <script>
     <# videoCardScript>
