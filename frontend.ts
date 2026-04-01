@@ -102,17 +102,29 @@ function createInfiniteScroll(apiUrl, showChannel) {
 }
 `;
 
+function formatLastUpdated(timestamp: number | null): string {
+  if (timestamp == null) return '';
+  const date = new Date(timestamp * 1000);
+  const now = new Date();
+  const msPerDay = 86400000;
+  if (now.getTime() - date.getTime() > msPerDay) {
+    return date.toLocaleDateString();
+  }
+  return date.toLocaleString();
+}
+
 function renderChannelCard(channel: Channel): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
   const avatar = avatarExt
     ? `<img class="channel-card-avatar" width=64 height=64 src="/media/avatars/${channel.short_id}.${avatarExt}" alt="${channel.channel_title}">`
     : `<div class="channel-card-placeholder">${channel.channel_title[0] || '?'}</div>`;
+  const updated = channel.latest_upload_timestamp ? ` · ${formatLastUpdated(channel.latest_upload_timestamp)}` : '';
   return `
     <a href="/c/${channel.short_id}" class="channel-card">
       ${avatar}
       <div class="channel-card-info">
         <div class="channel-card-title">${channel.channel_title}</div>
-        <div class="channel-card-meta">${channel.video_count} video${channel.video_count === 1 ? '' : 's'}</div>
+        <div class="channel-card-meta">${channel.video_count} video${channel.video_count === 1 ? '' : 's'}${updated}</div>
       </div>
     </a>`;
 }
@@ -121,6 +133,8 @@ const channelCardScript = `
 "use strict";
 
 ${nameExt.toString()}
+
+${formatLastUpdated.toString()}
 
 ${renderChannelCard.toString()}
 
