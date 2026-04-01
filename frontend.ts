@@ -138,10 +138,12 @@ ${formatLastUpdated.toString()}
 
 ${renderChannelCard.toString()}
 
-function createChannelInfiniteScroll(apiUrl) {
-  let offset = document.getElementById('channels-grid').children.length;
-  let state = 'idle';
+{
+  const grid = document.getElementById('channels-grid');
   const loadingEle = document.getElementById('loading');
+  let sort = 'recent';
+  let offset = grid.children.length;
+  let state = 'idle';
 
   async function loadMore() {
     if (state !== 'idle') return;
@@ -149,7 +151,7 @@ function createChannelInfiniteScroll(apiUrl) {
     loadingEle.style.display = 'block';
 
     try {
-      const response = await fetch(apiUrl + '?offset=' + offset + '&limit=30');
+      const response = await fetch('/api/channels?sort=' + sort + '&offset=' + offset + '&limit=30');
       const channels = await response.json();
 
       if (channels.length === 0) {
@@ -158,7 +160,6 @@ function createChannelInfiniteScroll(apiUrl) {
         return;
       }
 
-      const grid = document.getElementById('channels-grid');
       channels.forEach(channel => {
         grid.insertAdjacentHTML('beforeend', renderChannelCard(channel));
       });
@@ -185,9 +186,26 @@ function createChannelInfiniteScroll(apiUrl) {
       loadMore();
     }
   });
-}
 
-createChannelInfiniteScroll('/api/channels');
+  document.getElementById('sort-select').addEventListener('change', async function() {
+    sort = this.value;
+    offset = 0;
+    state = 'idle';
+    grid.innerHTML = '';
+    loadingEle.style.display = 'none';
+    loadingEle.textContent = 'Loading more channels...';
+
+    const response = await fetch('/api/channels?sort=' + sort + '&offset=0&limit=30');
+    const channels = await response.json();
+    channels.forEach(channel => {
+      grid.insertAdjacentHTML('beforeend', renderChannelCard(channel));
+    });
+    offset = channels.length;
+    if (channels.length < 30) {
+      state = 'exhausted';
+    }
+  });
+}
 `;
 
 const commonCSS = `

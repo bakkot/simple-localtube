@@ -209,11 +209,20 @@ let getAllChannelsStmt = db.prepare(`
   SELECT channel_id, channel_title FROM channels ORDER BY channel_title
 `);
 
-let getRecentChannelsStmt = db.prepare(`
-  SELECT * FROM channels
-  ORDER BY latest_upload_timestamp DESC
-  LIMIT ? OFFSET ?
-`);
+const channelSortOrders = {
+  'recent': 'latest_upload_timestamp DESC',
+  'oldest': 'latest_upload_timestamp ASC',
+  'a-z': 'channel_title ASC',
+  'z-a': 'channel_title DESC',
+} as const;
+export type ChannelSort = keyof typeof channelSortOrders;
+
+const channelSortStmts = Object.fromEntries(
+  Object.entries(channelSortOrders).map(([key, order]) => [
+    key,
+    db!.prepare(`SELECT * FROM channels ORDER BY ${order} LIMIT ? OFFSET ?`),
+  ])
+) as Record<ChannelSort, ReturnType<DatabaseSync['prepare']>>;
 
 export interface Channel {
   channel_id: ChannelID;
@@ -341,17 +350,18 @@ export function getAllChannels(): { channel_id: ChannelID; channel_title: string
   return getAllChannelsStmt.all() as { channel_id: ChannelID; channel_title: string }[];
 }
 
-export function getRecentChannels(allowedChannels: Set<ChannelID> | 'all', limit: number = 30, offset: number = 0): Channel[] {
+export function getChannelsSorted(allowedChannels: Set<ChannelID> | 'all', sort: ChannelSort = 'recent', limit: number = 30, offset: number = 0): Channel[] {
   if (allowedChannels === 'all') {
-    return getRecentChannelsStmt.all(limit, offset) as unknown as Channel[];
+    return channelSortStmts[sort].all(limit, offset) as unknown as Channel[];
   }
   if (allowedChannels.size === 0) return [];
 
   const placeholders = [...allowedChannels].map(() => '?').join(',');
+  const order = channelSortOrders[sort];
   const stmt = db!.prepare(`
     SELECT * FROM channels
     WHERE channel_id IN (${placeholders})
-    ORDER BY latest_upload_timestamp DESC
+    ORDER BY ${order}
     LIMIT ? OFFSET ?
   `);
   return stmt.all(...allowedChannels, limit, offset) as unknown as Channel[];

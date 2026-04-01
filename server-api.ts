@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getUserPermissions, hasAnyUsers } from './user-db.ts';
 import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID } from './util.ts';
-import { addChannel, addVideo, getChannelById, getChannelByShortId, getRecentChannels, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, type Channel, type Video } from './media-db.ts';
+import { addChannel, addVideo, getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, type Channel, type ChannelSort, type Video } from './media-db.ts';
 import { readFileSync, writeFileSync } from 'fs';
 import { subscriptionsFile } from './server.ts';
 
@@ -257,12 +257,14 @@ export function addAPIs(app: Express) {
     res.json(videos);
   });
 
+  const validSorts = new Set<ChannelSort>(['recent', 'oldest', 'a-z', 'z-a']);
   app.get('/api/channels', (req: Request, res: Response): void => {
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
+    const sort: ChannelSort = validSorts.has(req.query.sort as ChannelSort) ? req.query.sort as ChannelSort : 'recent';
 
     const allowedChannels = getUserPermissions(req.username!).allowedChannels;
-    const channels = getRecentChannels(allowedChannels, limit, offset);
+    const channels = getChannelsSorted(allowedChannels, sort, limit, offset);
 
     res.json(channels);
   });
