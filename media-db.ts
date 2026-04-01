@@ -209,6 +209,12 @@ let getAllChannelsStmt = db.prepare(`
   SELECT channel_id, channel_title FROM channels ORDER BY channel_title
 `);
 
+let getRecentChannelsStmt = db.prepare(`
+  SELECT * FROM channels
+  ORDER BY latest_upload_timestamp DESC
+  LIMIT ? OFFSET ?
+`);
+
 export interface Channel {
   channel_id: ChannelID;
   channel_title: string;
@@ -217,6 +223,8 @@ export interface Channel {
   avatar_filename: string | null;
   banner_filename: string | null;
   banner_uncropped_filename: string | null;
+  latest_upload_timestamp: number | null;
+  video_count: number;
 }
 
 export interface Video {
@@ -331,6 +339,22 @@ export function getVideosByChannel(channelId: ChannelID, limit: number = 30, off
 
 export function getAllChannels(): { channel_id: ChannelID; channel_title: string }[] {
   return getAllChannelsStmt.all() as { channel_id: ChannelID; channel_title: string }[];
+}
+
+export function getRecentChannels(allowedChannels: Set<ChannelID> | 'all', limit: number = 30, offset: number = 0): Channel[] {
+  if (allowedChannels === 'all') {
+    return getRecentChannelsStmt.all(limit, offset) as unknown as Channel[];
+  }
+  if (allowedChannels.size === 0) return [];
+
+  const placeholders = [...allowedChannels].map(() => '?').join(',');
+  const stmt = db!.prepare(`
+    SELECT * FROM channels
+    WHERE channel_id IN (${placeholders})
+    ORDER BY latest_upload_timestamp DESC
+    LIMIT ? OFFSET ?
+  `);
+  return stmt.all(...allowedChannels, limit, offset) as unknown as Channel[];
 }
 
 export function getChannelsForUser(allowedChannels: Set<ChannelID> | 'all'): { channel_id: ChannelID; channel_title: string }[] {

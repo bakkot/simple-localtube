@@ -102,6 +102,80 @@ function createInfiniteScroll(apiUrl, showChannel) {
 }
 `;
 
+function renderChannelCard(channel: Channel): string {
+  const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
+  const avatar = avatarExt
+    ? `<img class="channel-card-avatar" width=64 height=64 src="/media/avatars/${channel.short_id}.${avatarExt}" alt="${channel.channel_title}">`
+    : `<div class="channel-card-placeholder">${channel.channel_title[0] || '?'}</div>`;
+  return `
+    <a href="/c/${channel.short_id}" class="channel-card">
+      ${avatar}
+      <div class="channel-card-info">
+        <div class="channel-card-title">${channel.channel_title}</div>
+        <div class="channel-card-meta">${channel.video_count} video${channel.video_count === 1 ? '' : 's'}</div>
+      </div>
+    </a>`;
+}
+
+const channelCardScript = `
+"use strict";
+
+${nameExt.toString()}
+
+${renderChannelCard.toString()}
+
+function createChannelInfiniteScroll(apiUrl) {
+  let offset = document.getElementById('channels-grid').children.length;
+  let state = 'idle';
+  const loadingEle = document.getElementById('loading');
+
+  async function loadMore() {
+    if (state !== 'idle') return;
+    state = 'loading';
+    loadingEle.style.display = 'block';
+
+    try {
+      const response = await fetch(apiUrl + '?offset=' + offset + '&limit=30');
+      const channels = await response.json();
+
+      if (channels.length === 0) {
+        state = 'exhausted';
+        loadingEle.textContent = 'No more channels';
+        return;
+      }
+
+      const grid = document.getElementById('channels-grid');
+      channels.forEach(channel => {
+        grid.insertAdjacentHTML('beforeend', renderChannelCard(channel));
+      });
+
+      offset += channels.length;
+      if (channels.length < 30) {
+        state = 'exhausted';
+        loadingEle.textContent = 'No more channels';
+        return;
+      }
+    } catch (error) {
+      console.error('Error loading channels:', error);
+      state = 'errored';
+      loadingEle.textContent = 'Error loading channels';
+    } finally {
+      if (state !== 'errored') loadingEle.style.display = 'none';
+      if (state === 'exhausted') return;
+      setTimeout(() => { state = 'idle'; }, 1000);
+    }
+  }
+
+  window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+      loadMore();
+    }
+  });
+}
+
+createChannelInfiniteScroll('/api/channels');
+`;
+
 const commonCSS = `
   body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; }
   .header { position: relative; }
@@ -161,6 +235,7 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
         <!-- icons from Feather: https://github.com/feathericons/feather/blob/593b3bf516087d07d362280b34ec1a5383e71572/LICENSE -->
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-settings"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         <div class="settings-dropdown">
+          <a href="/channels">Channels</a>
           <a href="/settings">Settings</a>
           <a href="/subscriptions">Subscriptions</a>
           ${permissions.createUser ? '<a href="/add-user">Add User</a>' : ''}
@@ -227,6 +302,17 @@ export function renderHomePage(username: string, permissions: Permissions, video
     videos: videos.map(video => ({ html: renderVideoCard(video, true) })),
     noVideos: videos.length === 0,
     videoCardScript,
+  });
+}
+
+const channelsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'channels.html'), 'utf8'));
+export function renderChannelsPage(username: string, permissions: Permissions, channels: Channel[]): string {
+  return applyTemplate(channelsTemplate, {
+    commonCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+    channels: channels.map(channel => ({ html: renderChannelCard(channel) })),
+    noChannels: channels.length === 0,
+    channelCardScript,
   });
 }
 

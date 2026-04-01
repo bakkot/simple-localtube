@@ -91,6 +91,8 @@ export async function channelFromDisk(mediaDir: string, channelId: ChannelID): P
     avatar_filename: avatar == null ? null : path.join(dir, avatar),
     banner_filename: banner == null ? null : path.join(dir, banner),
     banner_uncropped_filename: bannerUncropped == null ? null : path.join(dir, bannerUncropped),
+    latest_upload_timestamp: null,
+    video_count: 0,
   };
 }
 

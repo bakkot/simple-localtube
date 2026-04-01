@@ -3,10 +3,10 @@ import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getRecentChannels, addVideo, addChannel, type Video, type Channel, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID, readSubscriptionsFile } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
-import { renderSetupPage, renderLoginPage, renderHomePage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage } from './frontend.ts';
+import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
 // Extend Request interface to include username
@@ -127,6 +127,12 @@ app.get('/', (req, res) => {
   const videos = getRecentVideosForChannels(permissions.allowedChannels, 30);
 
   res.send(renderHomePage(req.username!, permissions, videos));
+});
+
+app.get('/channels', (req, res) => {
+  const permissions = getUserPermissions(req.username!);
+  const channels = getRecentChannels(permissions.allowedChannels, 30);
+  res.send(renderChannelsPage(req.username!, permissions, channels));
 });
 
 // Video player page
