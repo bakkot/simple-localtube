@@ -400,7 +400,7 @@ export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], 
     shortId: channel.short_id,
     channelTitle: channel.channel_title,
     avatarExt,
-    hasDescription: channel.description == null,
+    hasDescription: channel.description != null,
     description: channel.description,
   });
 }
