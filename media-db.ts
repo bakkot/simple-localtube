@@ -35,6 +35,7 @@ if (existing.length === 0) {
         duration_seconds INTEGER,
         upload_timestamp INTEGER NOT NULL,
         subtitles_files TEXT NOT NULL,
+        subtitles_text TEXT NOT NULL DEFAULT '',
         FOREIGN KEY (channel_id) REFERENCES channels(channel_id)
     ) STRICT;
 
@@ -120,8 +121,8 @@ let addChannelStmt = db.prepare(`
 `);
 
 let addVideoStmt = db.prepare(`
-  INSERT INTO videos (video_id, channel_id, title, description, video_filename, thumb_filename, duration_seconds, upload_timestamp, subtitles_files)
-  VALUES (:video_id, :channel_id, :title, :description, :video_filename, :thumb_filename, :duration_seconds, :upload_timestamp, :subtitles_files)
+  INSERT INTO videos (video_id, channel_id, title, description, video_filename, thumb_filename, duration_seconds, upload_timestamp, subtitles_files, subtitles_text)
+  VALUES (:video_id, :channel_id, :title, :description, :video_filename, :thumb_filename, :duration_seconds, :upload_timestamp, :subtitles_files, :subtitles_text)
   ON CONFLICT(video_id) DO UPDATE SET
   channel_id = CASE
     WHEN :channel_id IS NOT NULL AND :channel_id != '' THEN :channel_id
@@ -154,6 +155,10 @@ let addVideoStmt = db.prepare(`
   subtitles_files = CASE
     WHEN :subtitles_files IS NOT NULL AND :subtitles_files != '' THEN :subtitles_files
     ELSE videos.subtitles_files
+  END,
+  subtitles_text = CASE
+    WHEN :subtitles_text IS NOT NULL AND :subtitles_text != '' THEN :subtitles_text
+    ELSE videos.subtitles_text
   END
 `);
 
@@ -246,6 +251,7 @@ export interface Video {
   duration_seconds: number;
   upload_timestamp: number;
   subtitles_files: Record<string, string>; // map langcode -> path to .vtt file on disk
+  subtitles_text: string;
 }
 
 export interface VideoWithChannel extends Video {
@@ -277,6 +283,7 @@ export function addVideo(video: Video): void {
     ':duration_seconds': video.duration_seconds,
     ':upload_timestamp': video.upload_timestamp,
     ':subtitles_files': JSON.stringify(video.subtitles_files),
+    ':subtitles_text': video.subtitles_text,
   });
 }
 

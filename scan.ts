@@ -57,6 +57,20 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
     }
   }
 
+  let subtitles_text = '';
+  for (let vttPath of Object.values(subtitles_files)) {
+    let vtt = await fsp.readFile(vttPath, 'utf8');
+    let lines = vtt.split('\n');
+    let textLines: string[] = [];
+    for (let line of lines) {
+      line = line.trim();
+      if (line === '' || line === 'WEBVTT' || line.includes('-->') || /^\d+$/.test(line)) continue;
+      textLines.push(line.replace(/<[^>]+>/g, ''));
+    }
+    if (subtitles_text) subtitles_text += '\n';
+    subtitles_text += textLines.join('\n');
+  }
+
   return {
     video_id: videoId,
     channel_id: channelId,
@@ -67,6 +81,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
     duration_seconds: duration,
     upload_timestamp,
     subtitles_files,
+    subtitles_text,
   };
 }
 
