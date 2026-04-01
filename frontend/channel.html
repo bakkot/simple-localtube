@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title><# channel> - LocalTube</title>
+  <title><# channelTitle> - LocalTube</title>
   <style>
     <# commonCSS>
     body { margin: 20px; }
@@ -20,10 +20,10 @@
   <div class="channel-header">
     <div class="channel-info">
       <#if hasAvatar>
-        <img class="channel-avatar" width=80 height=80 src="/media/avatars/<# shortId>.<# avatarExt>" alt="<# channel>">
+        <img class="channel-avatar" width=80 height=80 src="/media/avatars/<# shortId>.<# avatarExt>" alt="<# channelTitle>">
       </#if>
       <div class="channel-details">
-        <h1><# channel></h1>
+        <h1><# channelTitle></h1>
         <#if hasDescription>
           <div class="channel-description"><# description></div>
         </#if>

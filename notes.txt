@@ -1,14 +1,3 @@
-- can't be stateless when subscribing because might already have a video
-- have a "subscribing" state while fetching list of urls
-
-when downloading a video, save to a temp dir and move+update table only when finished, empty this dir on startup
-
-when subscribe, fetch whole playlist of URLs, and then exclude those already in table/wip-set
-
-once URL of video is known it goes in a WIP set, in memory and on disk (and maybe also a JSON file? so can reconstruct w/o db), and subscribing transitions to subscribed
-
-when checking for new videos, also have to check WIP set; presence there counts
-
 clean up console.log
 
 audit JSON.parse, and other `any`s
@@ -20,13 +9,13 @@ document minimum node version
 
 ban `any`, fix existing uses
 
-speed control, subtitles, etc
-
 fetch-videos needs a `--verbose`
 
 fetch-videos maybe doesn't need the server running (just save the files? or update the sql directly?)
 
 ensure all fetchs are encapsulated in their own utilities
+
+organize files more generally
 
 has-channel should be channel-info
   null, or name
@@ -38,7 +27,6 @@ a 'list of channels' page
 rename scan.ts to something else, move it under scripts
 split out all the scan logic to its own folder w/ docs
 
-add add-user link
 
 FTS5
 one version with descriptions
@@ -46,13 +34,7 @@ one with subs
 one with both
 one with neither
 
-channel id from short ID:
-./yt-dlp --playlist-items 0 -O playlist:channel_url https://www.youtube.com/@NileRed
-or:
-document.querySelector('link[rel=canonical]').href on channel page
-
-
-todo consistency for node:foo vs foo
+todo consistency for node:foo vs foo + lint
 
 should be a different port
 
@@ -70,10 +52,8 @@ handle missing avatars etc (placeholder)
 - test w/ pinchflat, have sample lifecycle script
 - placeholder avatar
 
-
-
-tinymarker
-
 affordance for adding specific videos
 
 ability to modify derived account's can-view-channels permissions
+
+all outstanding todos

@@ -35,7 +35,7 @@ function renderVideoCard(video: VideoWithChannel, showChannel: boolean = true): 
       </a>
       <div class="video-info">
         <a href="/v/${video.video_id}" class="video-title">${video.title}</a>
-        ${showChannel ? `<div><a href="/c/${video.channel_short_id}" class="channel-name">${video.channel}</a></div>` : ''}
+        ${showChannel ? `<div><a href="/c/${video.channel_short_id}" class="channel-name">${video.channel_title}</a></div>` : ''}
         <div class="upload-date">${formatDate(video.upload_timestamp)}</div>
       </div>
     </div>`;
@@ -245,7 +245,7 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
     videoExt,
     avatarExt,
     channelShortId: video.channel_short_id,
-    channel: video.channel,
+    channel: video.channel_title,
     subtitles: Object.keys(video.subtitles).map(k => ({ lang: k }))
   });
 }
@@ -263,7 +263,7 @@ export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], 
     videos: videos.map(video => ({ html: renderVideoCard(video, false) })),
     hasAvatar: channel.avatar_filename != null,
     shortId: channel.short_id,
-    channel: channel.channel,
+    channelTitle: channel.channel_title,
     avatarExt,
     hasDescription: channel.description == null,
     description: channel.description,
@@ -271,7 +271,7 @@ export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], 
 }
 
 const addUserTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'add-user.html'), 'utf8'));
-export function renderAddUserPage(username: string, permissions: Permissions, availableChannels: { channel_id: ChannelID; channel: string }[]): string {
+export function renderAddUserPage(username: string, permissions: Permissions, availableChannels: { channel_id: ChannelID; channel_title: string }[]): string {
   return applyTemplate(addUserTemplate, {
     commonCSS,
     formPageCSS,
@@ -317,7 +317,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       const storedTitle = titles[channelId] || 'Unknown Channel';
       channelInfos.push({
         channel_id: channelId,
-        channel: storedTitle,
+        channel_title: storedTitle,
         short_id: null, // No short_id available
         description: null,
         avatar_filename: null,
@@ -329,7 +329,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
     }
   }
 
-  channelInfos.sort((a, b) => a.channel.localeCompare(b.channel));
+  channelInfos.sort((a, b) => a.channel_title.localeCompare(b.channel_title));
 
   return applyTemplate(subscriptionsTemplate, {
     commonCSS,
@@ -338,9 +338,9 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
     canSubscribe: permissions.canSubscribe,
     channelInfosIsEmpty: channelInfos.length === 0,
     channels: channelInfos.map(c => ({
-      title: c.channel,
+      title: c.channel_title,
       id: c.channel_id,
-      escapedTitle: JSON.stringify(c.channel),
+      escapedTitle: JSON.stringify(c.channel_title),
       shortId: c.short_id,
       hasAvatar: c.avatar_filename != null,
       avatarExt: c.avatarExt,

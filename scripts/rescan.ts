@@ -19,7 +19,7 @@ let { values, positionals } = parseArgs({
 });
 
 if (positionals.length !== 1) {
-  console.log(`Usage: node scan.ts [--online] [--server=url] path-to-media-dir
+  console.log(`Usage: node rescan.ts [--online] [--server=url] path-to-media-dir
   --online: Use API endpoints instead of direct database access
   --server: Server URL for use with --online (default: ${defaultUrl})
 

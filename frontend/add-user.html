@@ -94,7 +94,7 @@
               <#foreach channel of availableChannels>
                 <div class="channel-option">
                   <input type="checkbox" id="channel-<# channel.channel_id>" name="channels" value="<# channel.channel_id>">
-                  <label for="channel-<# channel.channel_id>"><# channel.channel></label>
+                  <label for="channel-<# channel.channel_id>"><# channel.channel_title></label>
                 </div>
               </#foreach>
             </div>

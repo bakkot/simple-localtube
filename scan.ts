@@ -9,8 +9,12 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
   let dir = path.join(mediaDir, channelId, videoId);
   let contents = await fsp.readdir(dir);
   let vids = contents.filter(c => c === 'video.mp4' || c === 'video.webm');
+  if (vids.length === 0) {
+    console.error(`skipping ${channelId}/${videoId} because of missing video`);
+    return null;
+  }
   if (vids.length !== 1) {
-    throw new Error(`${channelId}/${videoId} does not contain a video`);
+    throw new Error(`${channelId}/${videoId} contains both a .mp4 and a .webm?`);
   }
   if (!contents.includes('data.json')) {
     if (fetchMissingMetadata) {
@@ -82,7 +86,7 @@ export async function channelFromDisk(mediaDir: string, channelId: ChannelID): P
   return {
     channel_id: channelId,
     short_id: uploader_id,
-    channel,
+    channel_title: channel,
     description: description ?? null,
     avatar_filename: avatar == null ? null : path.join(dir, avatar),
     banner_filename: banner == null ? null : path.join(dir, banner),

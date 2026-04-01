@@ -376,7 +376,10 @@ export function addAPIs(app: Express) {
   });
 
 
-
+  // TODO probably this should not be public
+  // for the downloader, maybe spin up a separate server on a separate port?
+  // or of course just write to the db directly, it's probably fine
+  // ditto add-channel
   app.post('/public-api/add-video', async (req: Request, res: Response): Promise<void> => {
     try {
       const video = req.body as Video;
@@ -398,8 +401,6 @@ export function addAPIs(app: Express) {
         res.status(400).json({ message: `Trying to add video for unknown channel ${video.channel_id}` });
         return;
       }
-
-      // TODO adding video which agrees with existing data should not error
 
       addVideo(video);
       console.log(`added ${JSON.stringify(video.title)} from API`);
