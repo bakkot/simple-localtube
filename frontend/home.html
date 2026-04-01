@@ -5,7 +5,9 @@
   <style>
     <# commonCSS>
     body { margin: 20px; }
-    h1 { color: #333; margin: 0px; }
+    h1 { color: #333; margin: 0px; display: inline; }
+    .channels-link { color: #1976d2; text-decoration: none; margin-left: 16px; font-size: 16px; vertical-align: middle; }
+    .channels-link:hover { text-decoration: underline; }
     .video-grid { margin-top: 20px; }
     .empty-state { text-align: center; color: #666; margin-top: 60px; font-size: 1.1em; }
     .video-title { margin-bottom: 8px; }
@@ -13,7 +15,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>LocalTube</h1>
+    <h1>LocalTube</h1> <a href="/channels" class="channels-link">Channels</a>
     <# topRightBlock>
   </div>
   <div class="video-grid" id="video-grid">
