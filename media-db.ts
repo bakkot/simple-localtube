@@ -306,6 +306,8 @@ export interface Video {
   subtitles_text: string;
 }
 
+type VideoWithChannelRow = Omit<VideoWithChannel, 'subtitles_files'> & { subtitles_files: string };
+
 export interface VideoWithChannel extends Video {
   channel_title: string;
   channel_short_id: string;
@@ -354,7 +356,7 @@ export function resetMediaInDb() {
 
 export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', limit: number = 30, offset: number = 0): VideoWithChannel[] {
   if (channelIds === 'all') {
-    const rows = getRecentVideosStmt.all(limit, offset) as any[];
+    const rows = getRecentVideosStmt.all(limit, offset) as VideoWithChannelRow[];
     return rows.map(row => ({
       ...row,
       subtitles_files: JSON.parse(row.subtitles_files)
@@ -373,7 +375,7 @@ export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', l
     LIMIT ? OFFSET ?
   `);
 
-  const rows = stmt.all(...channelIds, limit, offset) as any[];
+  const rows = stmt.all(...channelIds, limit, offset) as VideoWithChannelRow[];
   return rows.map(row => ({
     ...row,
     subtitles_files: JSON.parse(row.subtitles_files)
@@ -381,7 +383,7 @@ export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', l
 }
 
 export function getVideoById(videoId: VideoID): VideoWithChannel | null {
-  const row = getVideoByIdStmt.get(videoId) as any;
+  const row = getVideoByIdStmt.get(videoId) as VideoWithChannelRow | undefined;
   if (!row) return null;
   return {
     ...row,
@@ -398,7 +400,7 @@ export function getChannelByShortId(shortId: string): Channel | null {
 }
 
 export function getVideosByChannel(channelId: ChannelID, limit: number = 30, offset: number = 0): VideoWithChannel[] {
-  const rows = getVideosByChannelStmt.all(channelId, limit, offset) as any[];
+  const rows = getVideosByChannelStmt.all(channelId, limit, offset) as VideoWithChannelRow[];
   return rows.map(row => ({
     ...row,
     subtitles_files: JSON.parse(row.subtitles_files)
@@ -505,16 +507,16 @@ export function search(query: string, allowedChannels: Set<ChannelID> | 'all', l
   let ftsStr = ftsTokens.join(' ');
 
   let channels: Channel[];
-  let videoRows: any[];
+  let videoRows: VideoWithChannelRow[];
 
   if (allowedChannels === 'all') {
     channels = searchChannelsStmt.all(ftsStr, limit, offset) as unknown as Channel[];
-    videoRows = searchVideosStmt.all(ftsStr, limit, offset) as any[];
+    videoRows = searchVideosStmt.all(ftsStr, limit, offset) as VideoWithChannelRow[];
   } else {
     if (allowedChannels.size === 0) return { channels: [], videos: [] };
     let placeholders = [...allowedChannels].map(() => '?').join(',');
     channels = searchChannelsFilteredStmt(placeholders).all(ftsStr, ...allowedChannels, limit, offset) as unknown as Channel[];
-    videoRows = searchVideosFilteredStmt(placeholders).all(ftsStr, ...allowedChannels, limit, offset) as any[];
+    videoRows = searchVideosFilteredStmt(placeholders).all(ftsStr, ...allowedChannels, limit, offset) as VideoWithChannelRow[];
   }
 
   let videos: VideoWithChannel[] = videoRows.map(row => ({

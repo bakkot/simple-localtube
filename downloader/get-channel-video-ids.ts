@@ -78,10 +78,12 @@ export async function getLatestVideoUrls(server: string, channelId: ChannelID, a
         // console.log('Reached end of playlist in this batch.');
         break;
       }
-    } catch (error: any) {
-      console.error(`Error executing yt-dlp for ${channelId} (${startIndex}-${endIndex}):`, error?.message || error);
-      if (error.stderr) {
-        console.error(`yt-dlp stderr: ${error.stderr}`);
+    } catch (error) {
+      let message = error instanceof Error ? error.message : String(error);
+      let stderr = (error as { stderr?: string }).stderr;
+      console.error(`Error executing yt-dlp for ${channelId} (${startIndex}-${endIndex}):`, message);
+      if (stderr) {
+        console.error(`yt-dlp stderr: ${stderr}`);
       }
       throw error;
     }

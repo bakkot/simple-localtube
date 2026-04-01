@@ -18,8 +18,8 @@ for await (const entry of openedDir) {
   console.log(entry.name);
   try {
     await fetchMetaForChannel(dir, entry.name as ChannelID);
-  } catch (e: any) {
-    if (e?.message.includes('This channel does not exist.')) {
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('This channel does not exist.')) {
       console.error(`channel ${entry.name} does not exist`);
     } else {
       throw e;

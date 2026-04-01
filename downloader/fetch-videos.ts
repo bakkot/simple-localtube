@@ -123,8 +123,8 @@ async function addChannelIfNotExists(channelId: ChannelID) {
     });
     const result = await res.json();
     if (result !== true) throw result;
-  } catch (e: any) {
-    throw new Error(`failed to add channel ${channelId}: ${e?.message}`);
+  } catch (e) {
+    throw new Error(`failed to add channel ${channelId}: ${e instanceof Error ? e.message : e}`);
   }
 }
 
@@ -229,8 +229,8 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
     });
     const result = await res.json();
     if (result !== true) throw result;
-  } catch (e: any) {
-    throw new Error(`failed to add video ${channelId}/${videoId}: ${e?.message}`);
+  } catch (e) {
+    throw new Error(`failed to add video ${channelId}/${videoId}: ${e instanceof Error ? e.message : e}`);
   }
 }
 

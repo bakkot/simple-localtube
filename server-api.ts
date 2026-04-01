@@ -147,9 +147,10 @@ export function addAPIs(app: Express) {
       });
 
       res.json({ message: 'Administrator account created successfully' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Setup error:', error);
-      if (error.message === 'User already exists') {
+      let msg = error instanceof Error ? error.message : '';
+      if (msg === 'User already exists') {
         res.status(409).json({ message: 'Username already exists' });
       } else {
         res.status(500).json({ message: 'Internal server error' });
@@ -208,12 +209,13 @@ export function addAPIs(app: Express) {
       await addUser(username, password, requestedPermissions);
 
       res.json({ message: 'User created successfully' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Add user error:', error);
-      if (error.message === 'User already exists') {
+      let msg = error instanceof Error ? error.message : '';
+      if (msg === 'User already exists') {
         res.status(409).json({ message: 'Username already exists' });
-      } else if (error.message.includes('Channel') && error.message.includes('does not exist')) {
-        res.status(400).json({ message: error.message });
+      } else if (msg.includes('Channel') && msg.includes('does not exist')) {
+        res.status(400).json({ message: msg });
       } else {
         res.status(500).json({ message: 'Internal server error' });
       }
@@ -237,9 +239,10 @@ export function addAPIs(app: Express) {
       await changePassword(req.username!, currentPassword, newPassword);
 
       res.json({ message: 'Password changed successfully' });
-    } catch (error: any) {
+    } catch (error) {
       // console.error('Change password error:', error);
-      if (error.message === 'Current password is incorrect') {
+      let msg = error instanceof Error ? error.message : '';
+      if (msg === 'Current password is incorrect') {
         res.status(403).json({ message: 'Current password is incorrect' });
       } else {
         res.status(500).json({ message: 'Internal server error' });
@@ -370,9 +373,10 @@ export function addAPIs(app: Express) {
       const { channelId: resolvedChannelId, title } = await resolveChannelInput(channelId.trim());
       await addSubscription(resolvedChannelId, title);
       res.json({ message: 'Subscription added successfully' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Add subscription error:', error);
-      res.status(500).json({ message: 'Failed to add subscription: ' + error.message });
+      let msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ message: 'Failed to add subscription: ' + msg });
     }
   });
 
@@ -394,9 +398,10 @@ export function addAPIs(app: Express) {
 
       await removeSubscription(channelId as ChannelID);
       res.json({ message: 'Unsubscribed successfully' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Unsubscribe error:', error);
-      res.status(500).json({ message: 'Failed to unsubscribe: ' + error.message });
+      let msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ message: 'Failed to unsubscribe: ' + msg });
     }
   });
 
@@ -431,14 +436,15 @@ export function addAPIs(app: Express) {
       console.log(`added ${JSON.stringify(video.title)} from API`);
 
       res.json(true);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Add video error:', error);
-      if (error.message.includes('UNIQUE constraint failed')) {
-        if (error.message.includes('videos.video_id')) {
+      let msg = error instanceof Error ? error.message : '';
+      if (msg.includes('UNIQUE constraint failed')) {
+        if (msg.includes('videos.video_id')) {
           res.status(409).json({ message: 'Video with this ID already exists' });
-        } else if (error.message.includes('channels.channel_id')) {
+        } else if (msg.includes('channels.channel_id')) {
           res.status(409).json({ message: 'Channel with this ID already exists' });
-        } else if (error.message.includes('channels.short_id')) {
+        } else if (msg.includes('channels.short_id')) {
           res.status(409).json({ message: 'Channel with this short ID already exists' });
         } else {
           res.status(409).json({ message: 'Duplicate entry detected' });
@@ -474,14 +480,15 @@ export function addAPIs(app: Express) {
       console.log(`added ${JSON.stringify(channel.channel)} from API`);
 
       res.json(true);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Add video error:', error);
-      if (error.message.includes('UNIQUE constraint failed')) {
-        if (error.message.includes('videos.video_id')) {
+      let msg = error instanceof Error ? error.message : '';
+      if (msg.includes('UNIQUE constraint failed')) {
+        if (msg.includes('videos.video_id')) {
           res.status(409).json({ message: 'Video with this ID already exists' });
-        } else if (error.message.includes('channels.channel_id')) {
+        } else if (msg.includes('channels.channel_id')) {
           res.status(409).json({ message: 'Channel with this ID already exists' });
-        } else if (error.message.includes('channels.short_id')) {
+        } else if (msg.includes('channels.short_id')) {
           res.status(409).json({ message: 'Channel with this short ID already exists' });
         } else {
           res.status(409).json({ message: 'Duplicate entry detected' });

@@ -39,9 +39,10 @@ export async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID
   let tempJsonPath = path.join(tempDir.path, files[0]);
   let contents = JSON.parse(fs.readFileSync(tempJsonPath, 'utf8'));
 
-  let avatar = contents.thumbnails.find((t: any) => t.id === 'avatar_uncropped');
-  let bannerUncropped = contents.thumbnails.find((t: any) => t.id === 'banner_uncropped');
-  let banner = contents.thumbnails.reduce((acc: any, t: any) => t.width == null || t.width / t.height <= 2 ? acc : acc == null ? t : t.width < acc.width ? acc : t, null);
+  type Thumbnail = { id: string; url: string; width: number; height: number };
+  let avatar = contents.thumbnails.find((t: Thumbnail) => t.id === 'avatar_uncropped');
+  let bannerUncropped = contents.thumbnails.find((t: Thumbnail) => t.id === 'banner_uncropped');
+  let banner = contents.thumbnails.reduce((acc: Thumbnail | null, t: Thumbnail) => t.width == null || t.width / t.height <= 2 ? acc : acc == null ? t : t.width < acc.width ? acc : t, null);
 
   let avatarName = avatar == null ? null : await fetchTo(avatar.url, tempDir.path, 'avatar');
   let bannerUncroppedName = bannerUncropped == null ? null : await fetchTo(bannerUncropped.url, tempDir.path, 'banner_uncropped');

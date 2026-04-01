@@ -65,8 +65,8 @@ export function nameExt(file: string): { name: string, ext: string } {
 export async function move(source: string, destination: string) {
   try {
     await fsp.rename(source, destination);
-  } catch (err: any) {
-    if (err?.code !== 'EXDEV') {
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') {
       throw err;
     }
     await fsp.copyFile(source, destination);
@@ -153,7 +153,7 @@ export async function fetchTo(url: string, targetDir: string, basename: string) 
 
   const filename = `${basename}${extension}`;
   const filepath = path.join(targetDir, filename);
-  await pipeline(stream.Readable.fromWeb(response.body! as any), fs.createWriteStream(filepath));
+  await pipeline(stream.Readable.fromWeb(response.body! as unknown as import('stream/web').ReadableStream), fs.createWriteStream(filepath));
 
   return filename;
 }
@@ -292,8 +292,8 @@ export async function lock(lockPath: string) {
         elapsedTime = Date.now() - startTime;
         continue;
       }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error;
       }
       // File doesn't exist, continue to try creating lock
@@ -304,8 +304,8 @@ export async function lock(lockPath: string) {
       await fsp.writeFile(lockFilePath, '', { flag: 'wx' });
       // Successfully created lock file
       break;
-    } catch (error: any) {
-      if (error.code === 'EEXIST') {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
         // Someone else got the lock, wait and try again
         await new Promise((resolve) => setTimeout(resolve, checkInterval));
         elapsedTime = Date.now() - startTime;
@@ -323,8 +323,8 @@ export async function lock(lockPath: string) {
   function release() {
     try {
       fs.unlinkSync(lockFilePath);
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error;
       }
       // If file doesn't exist, that's fine - it's already "released"
