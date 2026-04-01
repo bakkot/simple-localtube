@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Channel, VideoWithChannel } from './media-db.ts';
+import type { Channel, VideoWithChannel, SearchResults } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
 import type { Permissions } from './user-db.ts';
 import { nameExt, type ChannelID, type SubscriptionFile } from './util.ts';
@@ -240,6 +240,12 @@ const commonCSS = `
   .upload-date { color: #999; font-size: 12px; margin-top: 4px; }
   a { text-decoration: none; }
   .loading { text-align: center; padding: 30px 20px; color: #666; }
+  .search-bar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .search-bar form { display: flex; gap: 0; }
+  .search-bar input[type="text"] { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px 0 0 4px; font-size: 14px; width: 280px; }
+  .search-bar input[type="text"]:focus { outline: none; border-color: #1976d2; }
+  .search-bar button { padding: 6px 14px; background: #1976d2; color: white; border: 1px solid #1976d2; border-radius: 0 4px 4px 0; font-size: 14px; cursor: pointer; }
+  .search-bar button:hover { background: #1565c0; }
 `;
 
 const formPageCSS = `
@@ -300,6 +306,17 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
     </script>`;
 }
 
+function renderSearchBar(query: string = '') {
+  const escaped = query.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return `
+    <div class="search-bar">
+      <form action="/search" method="get">
+        <input type="text" name="q" placeholder="Search..." value="${escaped}">
+        <button type="submit">Search</button>
+      </form>
+    </div>`;
+}
+
 // TODO fix styling to use form page CSS
 const notAllowedTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'not-allowed.html'), 'utf8'));
 export function renderNotAllowed(username: string, permissions: Permissions): string {
@@ -330,6 +347,7 @@ export function renderHomePage(username: string, permissions: Permissions, video
   return applyTemplate(homeTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
+    searchBar: renderSearchBar(),
     videos: videos.map(video => ({ html: renderVideoCard(video, true) })),
     noVideos: videos.length === 0,
     videoCardScript,
@@ -463,5 +481,20 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       avatarExt: c.avatarExt,
       status: c.status,
     })),
+  });
+}
+
+const searchTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'search.html'), 'utf8'));
+export function renderSearchPage(username: string, permissions: Permissions, query: string, results: SearchResults): string {
+  return applyTemplate(searchTemplate, {
+    commonCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+    searchBar: renderSearchBar(query),
+    query,
+    hasChannels: results.channels.length > 0,
+    channels: results.channels.map(channel => ({ html: renderChannelCard(channel) })),
+    hasVideos: results.videos.length > 0,
+    videos: results.videos.map(video => ({ html: renderVideoCard(video, true) })),
+    noResults: results.channels.length === 0 && results.videos.length === 0,
   });
 }

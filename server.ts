@@ -3,10 +3,10 @@ import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
+import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID, readSubscriptionsFile } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
-import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage } from './frontend.ts';
+import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
 // Extend Request interface to include username
@@ -127,6 +127,13 @@ app.get('/', (req, res) => {
   const videos = getRecentVideosForChannels(permissions.allowedChannels, 30);
 
   res.send(renderHomePage(req.username!, permissions, videos));
+});
+
+app.get('/search', (req, res) => {
+  const q = (req.query.q as string || '').trim();
+  const permissions = getUserPermissions(req.username!);
+  const results = q ? search(q, permissions.allowedChannels) : { channels: [], videos: [] };
+  res.send(renderSearchPage(req.username!, permissions, q, results));
 });
 
 app.get('/channels', (req, res) => {

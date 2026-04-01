@@ -1,8 +1,5 @@
 clean up console.log
 
-audit JSON.parse, and other `any`s
-lint against any
-
 TODO provisioning accounts: some way to make an account in the "set a password" state (+UI)
 
 document minimum node version
@@ -20,8 +17,6 @@ organize files more generally
 has-channel should be channel-info
   null, or name
 
-a 'list of channels' page
-  w/ last updated
 
 
 rename scan.ts to something else, move it under scripts
