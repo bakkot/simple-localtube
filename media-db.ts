@@ -51,13 +51,32 @@ if (existing.length === 0) {
     CREATE INDEX idx_channels_title ON channels(channel_title);
     CREATE INDEX idx_channels_video_count ON channels(video_count DESC);
 
-    -- Triggers
+    -- FTS5 indexes
+    CREATE VIRTUAL TABLE videos_fts USING fts5(
+      title, description, subtitles_text,
+      content=videos, content_rowid=rowid
+    );
+
+    CREATE VIRTUAL TABLE channels_fts USING fts5(
+      channel_title, description,
+      content=channels, content_rowid=rowid
+    );
+
+    -- Triggers: video count / latest_upload_timestamp
     CREATE TRIGGER trg_videos_after_insert AFTER INSERT ON videos
     BEGIN
         UPDATE channels
         SET video_count = video_count + 1,
             latest_upload_timestamp = MAX(COALESCE(latest_upload_timestamp, 0), NEW.upload_timestamp)
         WHERE channel_id = NEW.channel_id;
+        INSERT INTO videos_fts(rowid, title, description, subtitles_text)
+        VALUES (NEW.rowid, NEW.title, NEW.description, NEW.subtitles_text);
+    END;
+
+    CREATE TRIGGER trg_videos_before_delete BEFORE DELETE ON videos
+    BEGIN
+        INSERT INTO videos_fts(videos_fts, rowid, title, description, subtitles_text)
+        VALUES ('delete', OLD.rowid, OLD.title, OLD.description, OLD.subtitles_text);
     END;
 
     CREATE TRIGGER trg_videos_after_delete AFTER DELETE ON videos
@@ -68,6 +87,12 @@ if (existing.length === 0) {
                 SELECT MAX(upload_timestamp) FROM videos WHERE channel_id = OLD.channel_id
             )
         WHERE channel_id = OLD.channel_id;
+    END;
+
+    CREATE TRIGGER trg_videos_before_update BEFORE UPDATE ON videos
+    BEGIN
+        INSERT INTO videos_fts(videos_fts, rowid, title, description, subtitles_text)
+        VALUES ('delete', OLD.rowid, OLD.title, OLD.description, OLD.subtitles_text);
     END;
 
     CREATE TRIGGER trg_videos_after_update AFTER UPDATE OF upload_timestamp, channel_id ON videos
@@ -84,9 +109,36 @@ if (existing.length === 0) {
                 SELECT MAX(upload_timestamp) FROM videos WHERE channel_id = NEW.channel_id
             )
         WHERE channel_id = NEW.channel_id;
+        INSERT INTO videos_fts(rowid, title, description, subtitles_text)
+        VALUES (NEW.rowid, NEW.title, NEW.description, NEW.subtitles_text);
+    END;
+
+    -- Triggers: channels FTS sync
+    CREATE TRIGGER trg_channels_fts_insert AFTER INSERT ON channels
+    BEGIN
+        INSERT INTO channels_fts(rowid, channel_title, description)
+        VALUES (NEW.rowid, NEW.channel_title, NEW.description);
+    END;
+
+    CREATE TRIGGER trg_channels_fts_before_delete BEFORE DELETE ON channels
+    BEGIN
+        INSERT INTO channels_fts(channels_fts, rowid, channel_title, description)
+        VALUES ('delete', OLD.rowid, OLD.channel_title, OLD.description);
+    END;
+
+    CREATE TRIGGER trg_channels_fts_before_update BEFORE UPDATE ON channels
+    BEGIN
+        INSERT INTO channels_fts(channels_fts, rowid, channel_title, description)
+        VALUES ('delete', OLD.rowid, OLD.channel_title, OLD.description);
+    END;
+
+    CREATE TRIGGER trg_channels_fts_after_update AFTER UPDATE ON channels
+    BEGIN
+        INSERT INTO channels_fts(rowid, channel_title, description)
+        VALUES (NEW.rowid, NEW.channel_title, NEW.description);
     END;
   `);
-} else if (!(new Set(existing)).isSubsetOf(new Set(['channels', 'videos']))) {
+} else if (!existing.includes('channels') || !existing.includes('videos')) {
   throw new Error(`${DB_PATH} exists but does not contain the data we expect`);
 }
 
@@ -389,6 +441,88 @@ export function getChannelsForUser(allowedChannels: Set<ChannelID> | 'all'): { c
   `);
 
   return stmt.all(...allowedChannels) as { channel_id: ChannelID; channel_title: string }[];
+}
+
+let searchVideosStmt = db.prepare(`
+  SELECT v.*, c.channel_title, c.short_id as channel_short_id,
+    bm25(videos_fts, 10.0, 5.0, 1.0) as rank
+  FROM videos_fts fts
+  JOIN videos v ON v.rowid = fts.rowid
+  JOIN channels c ON v.channel_id = c.channel_id
+  WHERE videos_fts MATCH ?
+  ORDER BY rank
+  LIMIT ? OFFSET ?
+`);
+
+let searchVideosFilteredStmt = (placeholders: string) => db!.prepare(`
+  SELECT v.*, c.channel_title, c.short_id as channel_short_id,
+    bm25(videos_fts, 10.0, 5.0, 1.0) as rank
+  FROM videos_fts fts
+  JOIN videos v ON v.rowid = fts.rowid
+  JOIN channels c ON v.channel_id = c.channel_id
+  WHERE videos_fts MATCH ?
+    AND v.channel_id IN (${placeholders})
+  ORDER BY rank
+  LIMIT ? OFFSET ?
+`);
+
+let searchChannelsStmt = db.prepare(`
+  SELECT ch.*,
+    bm25(channels_fts, 5.0, 1.0) as rank
+  FROM channels_fts fts
+  JOIN channels ch ON ch.rowid = fts.rowid
+  WHERE channels_fts MATCH ?
+  ORDER BY rank
+  LIMIT ? OFFSET ?
+`);
+
+let searchChannelsFilteredStmt = (placeholders: string) => db!.prepare(`
+  SELECT ch.*,
+    bm25(channels_fts, 5.0, 1.0) as rank
+  FROM channels_fts fts
+  JOIN channels ch ON ch.rowid = fts.rowid
+  WHERE channels_fts MATCH ?
+    AND ch.channel_id IN (${placeholders})
+  ORDER BY rank
+  LIMIT ? OFFSET ?
+`);
+
+export interface SearchResults {
+  channels: Channel[];
+  videos: VideoWithChannel[];
+}
+
+export function search(query: string, allowedChannels: Set<ChannelID> | 'all', limit: number = 30, offset: number = 0, prefix: boolean = false): SearchResults {
+  let ftsQuery = query.trim();
+  if (!ftsQuery) return { channels: [], videos: [] };
+
+  let tokens = ftsQuery.split(/\s+/).filter(Boolean);
+  let ftsTokens = tokens.map((t, i) => {
+    let escaped = '"' + t.replace(/"/g, '""') + '"';
+    if (prefix && i === tokens.length - 1) escaped += ' *';
+    return escaped;
+  });
+  let ftsStr = ftsTokens.join(' ');
+
+  let channels: Channel[];
+  let videoRows: any[];
+
+  if (allowedChannels === 'all') {
+    channels = searchChannelsStmt.all(ftsStr, limit, offset) as unknown as Channel[];
+    videoRows = searchVideosStmt.all(ftsStr, limit, offset) as any[];
+  } else {
+    if (allowedChannels.size === 0) return { channels: [], videos: [] };
+    let placeholders = [...allowedChannels].map(() => '?').join(',');
+    channels = searchChannelsFilteredStmt(placeholders).all(ftsStr, ...allowedChannels, limit, offset) as unknown as Channel[];
+    videoRows = searchVideosFilteredStmt(placeholders).all(ftsStr, ...allowedChannels, limit, offset) as any[];
+  }
+
+  let videos: VideoWithChannel[] = videoRows.map(row => ({
+    ...row,
+    subtitles_files: JSON.parse(row.subtitles_files),
+  }));
+
+  return { channels, videos };
 }
 
 export function closeDb(): void {
