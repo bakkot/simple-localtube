@@ -1,5 +1,5 @@
 import type { Channel, Video } from './media-db.ts';
-import { nameExt, type ChannelID, type VideoID } from './util.ts';
+import { nameExt, vttToText, type ChannelID, type VideoID } from './util.ts';
 
 import fs from 'fs';
 import fsp from 'fs/promises';
@@ -57,19 +57,13 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
     }
   }
 
-  let subtitles_text = '';
+  let subtitleTexts: string[] = [];
   for (let vttPath of Object.values(subtitles_files)) {
     let vtt = await fsp.readFile(vttPath, 'utf8');
-    let lines = vtt.split('\n');
-    let textLines: string[] = [];
-    for (let line of lines) {
-      line = line.trim();
-      if (line === '' || line === 'WEBVTT' || line.includes('-->') || /^\d+$/.test(line)) continue;
-      textLines.push(line.replace(/<[^>]+>/g, ''));
-    }
-    if (subtitles_text) subtitles_text += '\n';
-    subtitles_text += textLines.join('\n');
+    let text = vttToText(vtt);
+    if (text) subtitleTexts.push(text);
   }
+  let subtitles_text = subtitleTexts.join('\n');
 
   return {
     video_id: videoId,

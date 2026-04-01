@@ -239,6 +239,34 @@ export function readSubscriptionsFile(subscriptionsFile: string): SubscriptionFi
 }
 
 
+export function vttToText(vtt: string): string {
+  let lines = vtt.split('\n');
+  let textLines: string[] = [];
+  let inCuePayload = false;
+  let skipBlock = false;
+  for (let line of lines) {
+    line = line.trim();
+    if (line === '') {
+      inCuePayload = false;
+      skipBlock = false;
+      continue;
+    }
+    if (skipBlock) continue;
+    if (line.startsWith('WEBVTT') || line.startsWith('NOTE') || line.startsWith('STYLE') || line.startsWith('REGION')) {
+      skipBlock = true;
+      continue;
+    }
+    if (line.includes('-->')) {
+      inCuePayload = true;
+      continue;
+    }
+    if (inCuePayload) {
+      textLines.push(line.replace(/<[^>]+>/g, ''));
+    }
+  }
+  return textLines.join('\n');
+}
+
 export async function lock(lockPath: string) {
   const absolutePath = path.resolve(lockPath);
   const lockFilePath = `${absolutePath}.localtube-lock`;
