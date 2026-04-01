@@ -39,7 +39,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
   const upload_timestamp = Math.floor(new Date(upload_date.slice(0, 4) + '-' + upload_date.slice(4, 6) + '-' + upload_date.slice(6) + 'T00:00:00Z').getTime() / 1000);
 
   let subtitles_files: Record<string, string> = {
-    // @ts-expect-error
+    // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
     __proto__: null,
   };
   let thumb_filename = null;
@@ -188,7 +188,7 @@ export async function rescan(mediaDir: string) {
 export async function rescanOnline(mediaDir: string, serverUrl: string = 'http://localhost:3000') {
   try {
     const up = await (await fetch(serverUrl + '/public-api/healthcheck')).json();
-    if (up !== true) throw null;
+    if (up !== true) throw new Error();
   } catch {
     throw new Error(`${serverUrl} doesn't appear to be running`);
   }

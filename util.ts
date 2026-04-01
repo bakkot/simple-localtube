@@ -165,7 +165,7 @@ const imageMimeToExt: Record<string, string | undefined> = {
   'image/gif': '.gif',
   'image/webp': '.webp',
   'image/svg+xml': '.svg',
-  // @ts-expect-error
+  // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
   __proto__: null,
 };
 

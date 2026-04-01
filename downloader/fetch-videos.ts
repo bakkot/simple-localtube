@@ -55,7 +55,7 @@ if (tempdir == null) {
 
 try {
   if (!fs.lstatSync(mediaDir).isDirectory()) {
-    throw null;
+    throw new Error();
   }
 } catch {
   console.error(`${mediaDir} doesn't appear to be a directory`);
@@ -78,7 +78,7 @@ function writeStatus() {
 
 try {
   const up = await (await fetch(server + '/public-api/healthcheck')).json();
-  if (up !== true) throw null;
+  if (up !== true) throw new Error();
 } catch {
   console.error(`${server} doesn't appear to be running`);
   process.exit(1);

@@ -190,7 +190,7 @@ export async function addUser(
 
   if (permissions.allowedChannels !== 'all') {
     for (const channelId of permissions.allowedChannels) {
-      if (!isChannelInDb(channelId as ChannelID)) {
+      if (!isChannelInDb(channelId)) {
         throw new Error(`Channel '${channelId}' does not exist`);
       }
     }

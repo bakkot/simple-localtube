@@ -59,3 +59,5 @@ ability to modify derived account's can-view-channels permissions
 all outstanding todos
 
 tests with mock db, files, maybe using VFS?
+
+search within channel

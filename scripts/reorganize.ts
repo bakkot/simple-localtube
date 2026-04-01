@@ -22,7 +22,7 @@ for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
 function reorganize(dirPath: string) {
   const files = fs.readdirSync(dirPath);
 
-  // @ts-expect-error
+  // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
   const fileGroups: Record<string, string[]> = { __proto__: null };
 
   for (let file of files) {

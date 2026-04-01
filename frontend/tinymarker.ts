@@ -388,7 +388,7 @@ export function parse(template: string): ParsedTemplate {
 
       default: {
         token satisfies never;
-        // @ts-expect-error
+        // @ts-expect-error this is in case the types are wrong
         throw new Error(`unknown token type ${token.type}`);
       }
     }
@@ -481,7 +481,7 @@ export function apply(parsedTemplate: ParsedTemplate, data: DataModel): string {
         }
         default: {
           node satisfies never;
-          // @ts-expect-error
+        // @ts-expect-error this is in case the types are wrong
           throw new Error(`unknown type ${node.type}`);
         }
       }
