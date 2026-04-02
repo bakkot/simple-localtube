@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getUserPermissions, hasAnyUsers } from './user-db.ts';
+import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, hasAnyUsers } from './user-db.ts';
 import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID, readSubscriptionsFile, assertChannelId } from './util.ts';
 import { addChannel, addVideo, getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { readFileSync, writeFileSync } from 'fs';
@@ -164,9 +164,7 @@ export function addAPIs(app: Express) {
 
   app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => {
     try {
-      const userPermissions = getUserPermissions(req.username!);
-
-      if (!userPermissions.createUser) {
+      if (!req.permissions!.createUser) {
         res.status(403).json({ message: 'Not authorized to create users' });
         return;
       }
@@ -206,7 +204,7 @@ export function addAPIs(app: Express) {
         canSubscribe,
       };
 
-      if (!arePermissionsAtLeastAsRestrictive(requestedPermissions, userPermissions)) {
+      if (!arePermissionsAtLeastAsRestrictive(requestedPermissions, req.permissions!)) {
         res.status(403).json({ message: 'You cannot grant permissions that you do not have' });
         return;
       }
@@ -254,8 +252,7 @@ export function addAPIs(app: Express) {
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
 
-    const allowedChannels = getUserPermissions(req.username!).allowedChannels;
-    const videos = getRecentVideosForChannels(allowedChannels, limit, offset);
+    const videos = getRecentVideosForChannels(req.permissions!.allowedChannels, limit, offset);
 
     res.json(videos);
   });
@@ -266,8 +263,7 @@ export function addAPIs(app: Express) {
     const limit = parseInt(req.query.limit as string) || 30;
     const sort: ChannelSort = validSorts.has(req.query.sort as ChannelSort) ? req.query.sort as ChannelSort : 'recent';
 
-    const allowedChannels = getUserPermissions(req.username!).allowedChannels;
-    const channels = getChannelsSorted(allowedChannels, sort, limit, offset);
+    const channels = getChannelsSorted(req.permissions!.allowedChannels, sort, limit, offset);
 
     res.json(channels);
   });
@@ -281,7 +277,7 @@ export function addAPIs(app: Express) {
     }
     const limit = parseInt(req.query.limit as string) || 30;
     const offset = parseInt(req.query.offset as string) || 0;
-    let allowedChannels = getUserPermissions(req.username!).allowedChannels;
+    let allowedChannels = req.permissions!.allowedChannels;
     const channelId = req.query.channel as string | undefined;
     if (channelId) {
       if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
@@ -368,9 +364,7 @@ export function addAPIs(app: Express) {
 
   app.post('/api/add-subscription', async (req: Request, res: Response): Promise<void> => {
     try {
-      const userPermissions = getUserPermissions(req.username!);
-
-      if (!userPermissions.canSubscribe) {
+      if (!req.permissions!.canSubscribe) {
         res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
         return;
       }
@@ -396,9 +390,7 @@ export function addAPIs(app: Express) {
 
   app.post('/api/unsubscribe', async (req: Request, res: Response): Promise<void> => {
     try {
-      const userPermissions = getUserPermissions(req.username!);
-
-      if (!userPermissions.canSubscribe) {
+      if (!req.permissions!.canSubscribe) {
         res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
         return;
       }

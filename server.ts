@@ -5,7 +5,7 @@ import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID, readSubscriptionsFile } from './util.ts';
-import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive } from './user-db.ts';
+import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, type Permissions } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
@@ -14,6 +14,7 @@ declare global {
   namespace Express {
     interface Request {
       username?: string;
+      permissions?: Permissions;
     }
   }
 }
@@ -90,8 +91,9 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
     return;
   }
 
-  // Attach username to request for later use
+  // Attach username and permissions to request for later use
   req.username = username;
+  req.permissions = getUserPermissions(username!);
   next();
 });
 
@@ -123,21 +125,19 @@ app.get('/login', (req: Request, res: Response): void => {
 });
 
 app.get('/', (req, res) => {
-  const permissions = getUserPermissions(req.username!);
-  const videos = getRecentVideosForChannels(permissions.allowedChannels, 30);
+  const videos = getRecentVideosForChannels(req.permissions!.allowedChannels, 30);
 
-  res.send(renderHomePage(req.username!, permissions, videos));
+  res.send(renderHomePage(req.username!, req.permissions!, videos));
 });
 
 app.get('/search', (req, res) => {
   const q = (req.query.q as string || '').trim();
-  const permissions = getUserPermissions(req.username!);
   const channelId = req.query.channel as string | undefined;
-  let allowedChannels = permissions.allowedChannels;
+  let allowedChannels = req.permissions!.allowedChannels;
   let channel: Channel | null = null;
   if (channelId) {
     if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
-      res.send(renderNotAllowed(req.username!, permissions));
+      res.send(renderNotAllowed(req.username!, req.permissions!));
       return;
     }
     channel = getChannelById(channelId as ChannelID);
@@ -148,13 +148,12 @@ app.get('/search', (req, res) => {
     allowedChannels = new Set([channelId as ChannelID]);
   }
   const results = search(q, allowedChannels, 30, false, !!channelId);
-  res.send(renderSearchPage(req.username!, permissions, q, results, channel));
+  res.send(renderSearchPage(req.username!, req.permissions!, q, results, channel));
 });
 
 app.get('/channels', (req, res) => {
-  const permissions = getUserPermissions(req.username!);
-  const channels = getChannelsSorted(permissions.allowedChannels, 'recent', 30);
-  res.send(renderChannelsPage(req.username!, permissions, channels));
+  const channels = getChannelsSorted(req.permissions!.allowedChannels, 'recent', 30);
+  res.send(renderChannelsPage(req.username!, req.permissions!, channels));
 });
 
 // Video player page
@@ -165,13 +164,12 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     return;
   }
 
-  const permissions = getUserPermissions(req.username!);
   if (!canUserViewChannel(req.username!, video.channel_id)) {
-    res.send(renderNotAllowed(req.username!, permissions));
+    res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
   }
 
-  res.send(renderVideoPage(video, req.username!, permissions));
+  res.send(renderVideoPage(video, req.username!, req.permissions!));
 });
 
 // Channel page
@@ -182,33 +180,29 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
     return;
   }
 
-  const permissions = getUserPermissions(req.username!);
   if (!canUserViewChannel(req.username!, channel.channel_id)) {
-    res.send(renderNotAllowed(req.username!, permissions));
+    res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
   }
 
   const videos = getVideosByChannel(channel.channel_id, 30);
 
-  res.send(renderChannelPage(channel, videos, req.username!, permissions));
+  res.send(renderChannelPage(channel, videos, req.username!, req.permissions!));
 });
 
 app.get('/add-user', (req: Request, res: Response): void => {
-  const userPermissions = getUserPermissions(req.username!);
-
-  if (!userPermissions.createUser) {
-    res.send(renderNotAllowed(req.username!, userPermissions));
+  if (!req.permissions!.createUser) {
+    res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
   }
 
-  const availableChannels = getChannelsForUser(userPermissions.allowedChannels);
+  const availableChannels = getChannelsForUser(req.permissions!.allowedChannels);
 
-  res.send(renderAddUserPage(req.username!, userPermissions, availableChannels));
+  res.send(renderAddUserPage(req.username!, req.permissions!, availableChannels));
 });
 
 app.get('/settings', (req: Request, res: Response): void => {
-  const permissions = getUserPermissions(req.username!);
-  res.send(renderSettingsPage(req.username!, permissions));
+  res.send(renderSettingsPage(req.username!, req.permissions!));
 });
 
 app.get('/subscriptions', (req: Request, res: Response): void => {
@@ -225,8 +219,7 @@ app.get('/subscriptions', (req: Request, res: Response): void => {
     res.status(500).send('Error reading subscriptions file');
     return;
   }
-  const userPermissions = getUserPermissions(req.username!);
-  res.send(renderSubscriptionsPage(req.username!, userPermissions, subscriptionsData));
+  res.send(renderSubscriptionsPage(req.username!, req.permissions!, subscriptionsData));
 });
 
 app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<void> => {
