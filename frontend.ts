@@ -24,12 +24,13 @@ function formatDate(timestamp: number): string {
 }
 
 function renderVideoCard(video: VideoWithChannel, showChannel: boolean = true): string {
-  const ext = nameExt(video.video_filename).ext;
+  const thumbExt = video.thumb_filename ? nameExt(video.thumb_filename).ext : 'png';
+  // TODO fallback for missing thumbnails
   return `
     <div class="video-card">
       <a href="/v/${video.video_id}">
         <div class="thumb-container">
-          <img class="thumb" src="/media/thumbs/${video.video_id}.${ext}" alt="${video.title}">
+          <img class="thumb" src="/media/thumbs/${video.video_id}.${thumbExt}" alt="${video.title}">
           <span class="duration">${formatDuration(video.duration_seconds || 0)}</span>
         </div>
       </a>
