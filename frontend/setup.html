@@ -54,7 +54,7 @@
         if (response.ok) {
           message.textContent = 'Account created successfully! Redirecting to login...';
           message.className = 'success';
-          setTimeout(() => { window.location.href = '/login'; }, 1500);
+          setTimeout(() => { window.location.href = '/login'; }, 1000);
           return;
         } else {
           const error = await response.json();

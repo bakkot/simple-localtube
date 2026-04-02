@@ -21,6 +21,7 @@
     .channel-option { display: flex; align-items: center; gap: 8px; }
     .channel-option input[type="checkbox"] { margin: 0; }
     .form-button { width: 100%; }
+    .form-button:disabled { background: #999; cursor: not-allowed; opacity: 0.6; }
   </style>
 </head>
 <body>
@@ -111,7 +112,7 @@
               <#foreach channel of availableChannels>
                 <div class="channel-option">
                   <input type="checkbox" id="channel-<# channel.channel_id>" name="channels" value="<# channel.channel_id>">
-                  <label for="channel-<# channel.channel_id>"><# channel.channel></label>
+                  <label for="channel-<# channel.channel_id>"><# channel.channel_title></label>
                 </div>
               </#foreach>
             </div>
@@ -130,6 +131,8 @@
     const form = document.getElementById('addUserForm');
     const button = document.getElementById('createButton');
     const message = document.getElementById('message');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
 
     function updateChannelsVisibility() {
       if (!channelsSection) return; // it is always visible for restricted users
@@ -141,20 +144,47 @@
       }
     }
 
+    function updateButtonState() {
+      const reasons = [];
+      if (!usernameInput.value.trim()) reasons.push('Username is required');
+      if (!passwordInput.value) reasons.push('Password is required');
+
+      const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value ||
+                                 document.querySelector('input[name="permissions"][type="hidden"]')?.value;
+      if (!selectedPermission) reasons.push('Must choose channel permissions');
+
+      if (selectedPermission === 'allowlist') {
+        const checked = document.querySelectorAll('input[name="channels"]:checked');
+        if (checked.length === 0) reasons.push('Must make at least one channel viewable');
+      }
+
+      button.disabled = reasons.length > 0;
+      message.textContent = reasons.length > 0 ? reasons[0] : '';
+      message.className = reasons.length > 0 ? 'error' : '';
+    }
+
     permissionRadios.forEach(radio => {
-      radio.addEventListener('change', updateChannelsVisibility);
+      radio.addEventListener('change', () => { updateChannelsVisibility(); updateButtonState(); });
+    });
+
+    usernameInput.addEventListener('input', updateButtonState);
+    passwordInput.addEventListener('input', updateButtonState);
+    document.querySelectorAll('input[name="channels"]').forEach(cb => {
+      cb.addEventListener('change', updateButtonState);
     });
 
     function selectAllChannels() {
       document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
         checkbox.checked = true;
       });
+      updateButtonState();
     }
 
     function deselectAllChannels() {
       document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
         checkbox.checked = false;
       });
+      updateButtonState();
     }
 
     form.addEventListener('submit', async (e) => {
@@ -216,6 +246,7 @@
           message.className = 'success';
           form.reset();
           updateChannelsVisibility();
+          updateButtonState();
         } else {
           const error = await response.json();
           message.textContent = error.message || 'Failed to create user';
@@ -226,12 +257,13 @@
         message.className = 'error';
       }
 
-      button.disabled = false;
       button.textContent = 'Create User';
+      updateButtonState();
     });
 
-    // Initialize visibility
+    // Initialize visibility and button state
     updateChannelsVisibility();
+    updateButtonState();
   </script>
 </body>
 </html>
