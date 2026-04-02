@@ -27,7 +27,7 @@ const channelRows = db.prepare(`
   JOIN channels ch ON ch.rowid = fts.rowid
   WHERE channels_fts MATCH ?
   ORDER BY rank
-  LIMIT 20
+  -- LIMIT 20
 `).all(`channel_title : ${ftsStr}`) as any[];
 
 if (channelRows.length > 0) {
@@ -58,7 +58,7 @@ const videoStmt = db.prepare(`
   JOIN channels c ON v.channel_id = c.channel_id
   WHERE videos_fts MATCH ?
   ORDER BY rank
-  LIMIT 30
+  -- LIMIT 30
 `);
 
 const tiers = [
@@ -79,9 +79,9 @@ for (const tier of tiers) {
     console.log(`  ${row.title}`);
     console.log(`  channel: ${row.channel_title}  |  id: ${row.video_id}  |  score: ${row.rank.toFixed(4)}`);
     let highlight = row[tier.highlightKey];
-    if (highlight && highlight.includes('>>>')) {
-      console.log(`    ${tier.column}: ${truncate(highlight, 200)}`);
-    }
+    // if (highlight && highlight.includes('>>>')) {
+    //   console.log(`    ${tier.column}: ${truncate(highlight, 200)}`);
+    // }
     console.log();
   }
 }

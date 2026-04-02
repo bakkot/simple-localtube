@@ -563,23 +563,56 @@ export function search(query: string, allowedChannels: Set<ChannelID> | 'all', l
 
   let descFetched = remaining > 0;
   let descRaw = descFetched ? searchVideoResults('description', ftsStr, allowedChannels, limit, 0) : [];
-  let videosByDescription = descRaw.filter(v => !seenIds.has(v.video_id)).slice(0, remaining);
-  videosByDescription.forEach(v => seenIds.add(v.video_id));
-  let descExhausted = descFetched && descRaw.length < limit;
-  remaining -= videosByDescription.length;
+  let videosByDescription: VideoWithChannel[] = [];
+  let descOffset = 0;
+  let descExhausted = !descFetched;
+  if (descFetched) {
+    for (let i = 0; i < descRaw.length; i++) {
+      if (!seenIds.has(descRaw[i].video_id)) {
+        videosByDescription.push(descRaw[i]);
+        seenIds.add(descRaw[i].video_id);
+      }
+      if (videosByDescription.length === remaining) {
+        descOffset = i + 1;
+        break;
+      }
+    }
+    if (videosByDescription.length < remaining) {
+      descOffset = descRaw.length;
+      descExhausted = descRaw.length < limit;
+    }
+    remaining -= videosByDescription.length;
+  }
 
   let subsFetched = remaining > 0;
   let subsRaw = subsFetched ? searchVideoResults('subtitles_text', ftsStr, allowedChannels, limit, 0) : [];
-  let videosBySubtitles = subsRaw.filter(v => !seenIds.has(v.video_id)).slice(0, remaining);
-  let subsExhausted = subsFetched && subsRaw.length < limit;
+  let videosBySubtitles: VideoWithChannel[] = [];
+  let subsOffset = 0;
+  let subsExhausted = !subsFetched;
+  if (subsFetched) {
+    for (let i = 0; i < subsRaw.length; i++) {
+      if (!seenIds.has(subsRaw[i].video_id)) {
+        videosBySubtitles.push(subsRaw[i]);
+        seenIds.add(subsRaw[i].video_id);
+      }
+      if (videosBySubtitles.length === remaining) {
+        subsOffset = i + 1;
+        break;
+      }
+    }
+    if (videosBySubtitles.length < remaining) {
+      subsOffset = subsRaw.length;
+      subsExhausted = subsRaw.length < limit;
+    }
+  }
 
   return {
     channels, videosByTitle, videosByDescription, videosBySubtitles,
     offsets: {
       channels: channels.length,
       title: videosByTitle.length,
-      description: descRaw.length,
-      subtitles: subsRaw.length,
+      description: descOffset,
+      subtitles: subsOffset,
     },
     exhausted: {
       channels: channelsExhausted,
