@@ -1,10 +1,6 @@
 clean up console.log
 
-TODO provisioning accounts: some way to make an account in the "set a password" state (+UI)
-
 document minimum node version
-
-ban `any`, fix existing uses
 
 fetch-videos needs a `--verbose`
 
@@ -16,8 +12,6 @@ organize files more generally
 
 has-channel should be channel-info
   null, or name
-
-figure out why http://localhost:3000/media/thumbs/lJLP2bcXDqY.mp4 has .mp4 extn (maybe just search results bug idk)
 
 rename scan.ts to something else, move it under scripts
 split out all the scan logic to its own folder w/ docs
@@ -33,8 +27,6 @@ todo consistency for node:foo vs foo + lint
 
 should be a different port
 
-get some eslinting
-
 todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
 
 TODO add 'service' field from data.json's .webpage_url_domain (default youtube.com)
@@ -48,6 +40,12 @@ handle missing avatars etc (placeholder)
 - placeholder avatar
 
 affordance for adding specific videos
+  goes in the subscriptions file
+  ... maybe that file should be sqlite too...
+
+subs should be a flag not a string
+
+config for where db files live (just a folder for all of them)
 
 all outstanding todos
 

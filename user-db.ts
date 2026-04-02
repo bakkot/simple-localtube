@@ -32,7 +32,9 @@ export type Permissions = {
 };
 
 
-let db: DatabaseSync | undefined = new DatabaseSync(USER_DB_PATH);
+let db: DatabaseSync | undefined = new DatabaseSync(USER_DB_PATH, {
+  timeout: 1000,
+});
 
 
 const userPermissionsCache = new LRUCache<string, Permissions>(100);

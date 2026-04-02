@@ -5,10 +5,9 @@ import type { ChannelID, VideoID } from './util.ts';
 // TODO configurable
 const DB_PATH = path.join(import.meta.dirname, './youtube_data.sqlite');
 
-// TODO transactions!!
-// https://github.com/nodejs/node/blob/a0139e06a0754058ffd891f779be55584665f8a8/test/parallel/test-sqlite-transactions.js
-
-let db: DatabaseSync | undefined = new DatabaseSync(DB_PATH);
+let db: DatabaseSync | undefined = new DatabaseSync(DB_PATH{
+  timeout: 1000,
+});
 
 let existing = db.prepare('SELECT name FROM sqlite_master WHERE type=\'table\'').all().map(({ name }) => name);
 if (existing.length === 0) {
