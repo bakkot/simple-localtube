@@ -4,25 +4,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync, exec as execCb } from 'node:child_process';
-import { getLatestVideoUrls, hasChannel, hasVideo } from './get-channel-video-ids.ts';
+import { getLatestVideoUrls } from './get-channel-video-ids.ts';
 import { channelFromDisk, videoFromDisk } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
-import type { AddChannelAPI, AddVideoAPI, HealthcheckAPI } from '../server-api.ts';
+import { addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 
 const execAsync = promisify(execCb);
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, '..', 'yt-dlp');
 
-const defaultUrl = 'http://localhost:3000';
-
 let { values, positionals } = parseArgs({
   allowPositionals: true,
   allowNegative: true,
   options: {
-    server: {
-      type: 'string',
-      default: defaultUrl,
-    },
     tempdir: {
       type: 'string',
     },
@@ -30,8 +24,7 @@ let { values, positionals } = parseArgs({
 });
 
 if (positionals.length !== 2) {
-  console.log(`Usage: node fetch-videos.ts [--server=url] path-to-subscriptions.json path-to-media-dir
-  --server url    server URL (default: ${defaultUrl})
+  console.log(`Usage: node fetch-videos.ts path-to-subscriptions.json path-to-media-dir
   --tempdir dir   path for temporary files (default: path-to-media-dir)
                   the special value "OS_DEFAULT" will use your operating system's default
 
@@ -46,7 +39,7 @@ some-channel-id/some-video-id/video.mp4
 }
 
 let [subscriptionsFile, mediaDir] = positionals;
-let { server, tempdir } = values;
+let { tempdir } = values;
 if (tempdir == null) {
   // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
   tempdir = mediaDir;
@@ -77,14 +70,6 @@ function writeStatus() {
 }
 
 
-try {
-  const up = await (await fetch(server + '/public-api/healthcheck')).json() as HealthcheckAPI;
-  if (up !== true) throw new Error();
-} catch {
-  console.error(`${server} doesn't appear to be running`);
-  process.exit(1);
-}
-
 async function subscribe(channelId: ChannelID) {
   const channelDir = path.join(mediaDir, channelId);
   if (!fs.existsSync(channelDir)) {
@@ -92,45 +77,35 @@ async function subscribe(channelId: ChannelID) {
   }
   await addChannelIfNotExists(channelId);
 
-  const videoIds = await getLatestVideoUrls(server, channelId, true);
+  const videoIds = await getLatestVideoUrls(channelId, true);
   for (const videoId of videoIds) {
     await addVideoIfNotExists(channelId, videoId);
   }
 }
 
 async function updateExisting(channelId: ChannelID) {
-  if (!(await hasChannel(server, channelId))) {
-    throw new Error(`${channelId} is marked as subscribed but is not present in the server`);
+  if (!isChannelInDb(channelId)) {
+    throw new Error(`${channelId} is marked as subscribed but is not present in the database`);
   }
-  const videoIds = await getLatestVideoUrls(server, channelId);
+  const videoIds = await getLatestVideoUrls(channelId);
   for (const videoId of videoIds) {
     await addVideoIfNotExists(channelId, videoId);
   }
 }
 
 async function addChannelIfNotExists(channelId: ChannelID) {
-  if (await hasChannel(server, channelId)) return;
+  if (isChannelInDb(channelId)) return;
   const channelDir = path.join(mediaDir, channelId);
   const metaFile = path.join(channelDir, 'data.json');
   if (!fs.existsSync(metaFile)) {
     await fetchMetaForChannel(mediaDir, channelId);
   }
   const channel = await channelFromDisk(mediaDir, channelId);
-  try {
-    const res = await fetch(server + '/public-api/add-channel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(channel),
-    });
-    const result = await res.json() as AddChannelAPI;
-    if (result !== true) throw result;
-  } catch (e) {
-    throw new Error(`failed to add channel ${channelId}: ${e instanceof Error ? e.message : e}`);
-  }
+  addChannel(channel);
 }
 
 async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
-  if (await hasVideo(server, videoId)) return;
+  if (isVideoInDb(videoId)) return;
   const videoDir = path.join(mediaDir, channelId, videoId);
   if (!fs.existsSync(videoDir)) {
     fs.mkdirSync(videoDir, { recursive: true });
@@ -222,17 +197,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
   if (video == null) {
     throw new Error(`metadata did not exist after fetching for ${channelId}/${videoId}`);
   }
-  try {
-    const res = await fetch(server + '/public-api/add-video', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(video),
-    });
-    const result = await res.json() as AddVideoAPI;
-    if (result !== true) throw result;
-  } catch (e) {
-    throw new Error(`failed to add video ${channelId}/${videoId}: ${e instanceof Error ? e.message : e}`);
-  }
+  addVideo(video);
 }
 
 const subbed = new Set<ChannelID>();

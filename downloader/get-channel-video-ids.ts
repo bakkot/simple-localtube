@@ -1,7 +1,7 @@
 import { exec as execCb } from 'node:child_process';
 import { promisify } from 'node:util';
 import { toVideoID } from '../util.ts';
-// import { isVideoInDb } from './media-db.ts';
+import { isVideoInDb } from '../media-db.ts';
 import type { ChannelID, VideoID } from '../util.ts';
 
 const execAsync = promisify(execCb);
@@ -10,15 +10,7 @@ const YT_DLP_PATH = process.env.YT_DLP_PATH ?? './yt-dlp';
 const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call
 const YT_DLP_PAUSE_MS = 2000; // Pause between yt-dlp calls
 
-export async function hasVideo(server: string, videoId: VideoID): Promise<boolean> {
-  return (await fetch(`${server}/public-api/has-video?video_id=${videoId}`)).json() as Promise<boolean>;
-}
-
-export async function hasChannel(server: string, channelId: ChannelID): Promise<boolean> {
-  return (await fetch(`${server}/public-api/has-channel?channel_id=${channelId}`)).json() as Promise<boolean>;
-}
-
-export async function getLatestVideoUrls(server: string, channelId: ChannelID, all=false): Promise<VideoID[]> {
+export async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<VideoID[]> {
   const channelVideosUrl = `https://www.youtube.com/channel/${channelId}/videos`;
   // console.log(`Fetching latest videos for channel ${channelId} from ${channelVideosUrl}`);
 
@@ -60,7 +52,7 @@ export async function getLatestVideoUrls(server: string, channelId: ChannelID, a
           throw new Error('failed to read video ID from url ' + url);
         }
 
-        if (!(await hasVideo(server, videoId))) {
+        if (!isVideoInDb(videoId)) {
           newVideoIds.push(videoId);
         } else if (!all) {
           console.log(`Found known video ${videoId}. Stopping search.`);

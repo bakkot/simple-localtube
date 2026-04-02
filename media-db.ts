@@ -5,7 +5,7 @@ import type { ChannelID, VideoID } from './util.ts';
 // TODO configurable
 const DB_PATH = path.join(import.meta.dirname, './youtube_data.sqlite');
 
-let db: DatabaseSync | undefined = new DatabaseSync(DB_PATH{
+let db: DatabaseSync | undefined = new DatabaseSync(DB_PATH, {
   timeout: 1000,
 });
 
