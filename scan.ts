@@ -5,8 +5,6 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import type { ChannelDataJSON } from './get-channel-meta.ts';
-import type { HealthcheckAPI } from './server-api.ts';
-
 type VideoDataJSON = {
   fulltitle: string;
   description: string;
@@ -113,39 +111,20 @@ export async function channelFromDisk(mediaDir: string, channelId: ChannelID): P
   };
 }
 
-async function addVideoOnline(video: Video, channel: Channel, serverUrl: string): Promise<void> {
-  const response = await fetch(`${serverUrl}/public-api/add-video`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      video,
-      channel,
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json() as Error;
-    throw new Error(`Failed to add video ${video.video_id}: ${error.message}`);
-  }
-}
-
-let addChannel: ((channel: Channel) => void) | null = null;
-let addVideo: ((video: Video) => void) | null = null;
+let addChannelFn: ((channel: Channel) => void) | null = null;
+let addVideoFn: ((video: Video) => void) | null = null;
 async function addVideoOffline(video: Video, channel: Channel, addedChannels: Set<ChannelID>) {
-  if (addChannel == null || addVideo == null) {
-    // doing this here instead of at root because it opens the DB, which we don't want to do when not offline
-    ({ addChannel, addVideo } = await import('./media-db.ts'));
+  if (addChannelFn == null || addVideoFn == null) {
+    ({ addChannel: addChannelFn, addVideo: addVideoFn } = await import('./media-db.ts'));
   }
   if (!addedChannels.has(channel.channel_id)) {
-    addChannel(channel);
+    addChannelFn(channel);
     addedChannels.add(channel.channel_id);
   }
-  addVideo(video);
+  addVideoFn(video);
 }
 
-async function rescanMain(mediaDir: string, online: boolean = false, serverUrl: string = 'http://localhost:3000') {
+export async function rescan(mediaDir: string) {
   const channels = await fsp.readdir(mediaDir, { withFileTypes: true });
   let addedChannels = new Set<ChannelID>();
 
@@ -172,11 +151,7 @@ async function rescanMain(mediaDir: string, online: boolean = false, serverUrl: 
         let vid = await videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID);
         if (vid != null) {
           try {
-            if (online) {
-              await addVideoOnline(vid, channelData, serverUrl);
-            } else {
-              await addVideoOffline(vid, channelData, addedChannels);
-            }
+            await addVideoOffline(vid, channelData, addedChannels);
           } catch (error) {
             console.error(`Error adding video ${vid.video_id}:`, error);
           }
@@ -187,18 +162,4 @@ async function rescanMain(mediaDir: string, online: boolean = false, serverUrl: 
     console.error('Error while rescanning; operation may be incomplete.');
     throw e;
   }
-}
-
-export async function rescan(mediaDir: string) {
-  return rescanMain(mediaDir, false);
-}
-
-export async function rescanOnline(mediaDir: string, serverUrl: string = 'http://localhost:3000') {
-  try {
-    const up = await (await fetch(serverUrl + '/public-api/healthcheck')).json() as HealthcheckAPI;
-    if (up !== true) throw new Error();
-  } catch {
-    throw new Error(`${serverUrl} doesn't appear to be running`);
-  }
-  return rescanMain(mediaDir, true, serverUrl);
 }

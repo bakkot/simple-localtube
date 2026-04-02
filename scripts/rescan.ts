@@ -1,27 +1,12 @@
 import { parseArgs } from 'util';
-import { rescan, rescanOnline } from '../scan.ts';
+import { rescan } from '../scan.ts';
 
-const defaultUrl = 'http://localhost:3000';
-
-let { values, positionals } = parseArgs({
+let { positionals } = parseArgs({
   allowPositionals: true,
-  allowNegative: true,
-  options: {
-    online: {
-      type: 'boolean',
-      default: false,
-    },
-    server: {
-      type: 'string',
-      default: defaultUrl,
-    },
-  },
 });
 
 if (positionals.length !== 1) {
-  console.log(`Usage: node rescan.ts [--online] [--server=url] path-to-media-dir
-  --online: Use API endpoints instead of direct database access
-  --server: Server URL for use with --online (default: ${defaultUrl})
+  console.log(`Usage: node rescan.ts path-to-media-dir
 
 This expects media-dir to be organized like:
 
@@ -39,11 +24,5 @@ Only the data.json files and video.mp4 (or video.webm) are mandatory. data.json 
 }
 
 let mediaDir = positionals[0];
-
-if (values.online) {
-  console.log(`Scanning ${mediaDir} using online API at ${values.server}`);
-  await rescanOnline(mediaDir, values.server);
-} else {
-  console.log(`Scanning ${mediaDir} using direct database access`);
-  await rescan(mediaDir);
-}
+console.log(`Scanning ${mediaDir}`);
+await rescan(mediaDir);

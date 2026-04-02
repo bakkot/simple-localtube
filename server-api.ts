@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
 import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID, readSubscriptionsFile, assertChannelId } from './util.ts';
-import { addChannel, addVideo, getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
+import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { readFileSync, writeFileSync } from 'fs';
 import { subscriptionsFile } from './server.ts';
 
@@ -119,8 +119,6 @@ async function removeSubscription(channelId: ChannelID): Promise<void> {
 }
 
 export type HealthcheckAPI = boolean;
-export type AddChannelAPI = boolean;
-export type AddVideoAPI = boolean;
 export type AddUserAPIRequest = {
   username: string;
   password: string;
@@ -399,28 +397,6 @@ export function addAPIs(app: Express) {
     }
   });
 
-  app.get('/public-api/has-video', (req: Request, res: Response): void => {
-    const videoId = req.query.video_id as string;
-
-    if (!videoId) {
-      res.status(400).json({ message: 'video_id query parameter is required' });
-      return;
-    }
-
-    res.json(isVideoInDb(videoId as VideoID));
-  });
-
-  app.get('/public-api/has-channel', (req: Request, res: Response): void => {
-    const channelId = req.query.channel_id as string;
-
-    if (!channelId) {
-      res.status(400).json({ message: 'channel_id query parameter is required' });
-      return;
-    }
-
-    res.json(getChannelById(channelId as ChannelID) != null);
-  });
-
   app.get('/public-api/healthcheck', (req: Request, res: Response): void => {
     res.json(true satisfies HealthcheckAPI);
   });
@@ -475,96 +451,4 @@ export function addAPIs(app: Express) {
   });
 
 
-  // TODO probably this should not be public
-  // for the downloader, maybe spin up a separate server on a separate port?
-  // or of course just write to the db directly, it's probably fine
-  // ditto add-channel
-  app.post('/public-api/add-video', async (req: Request, res: Response): Promise<void> => {
-    try {
-      const video = req.body as Video;
-
-      if (!video) {
-        res.status(400).json({ message: 'add-video requires video data' });
-        return;
-      }
-
-      const requiredVideoFields = ['video_id', 'title', 'description', 'channel_id', 'video_filename', 'upload_timestamp'] as const;
-
-      for (const field of requiredVideoFields) {
-        if (video[field] == null) {
-          res.status(400).json({ message: `Video field '${field}' is required` });
-          return;
-        }
-      }
-      if (getChannelById(video.channel_id) == null) {
-        res.status(400).json({ message: `Trying to add video for unknown channel ${video.channel_id}` });
-        return;
-      }
-
-      addVideo(video);
-      console.log(`added ${JSON.stringify(video.title)} from API`);
-
-      res.json(true satisfies AddVideoAPI);
-    } catch (error) {
-      console.error('Add video error:', error);
-      let msg = error instanceof Error ? error.message : '';
-      if (msg.includes('UNIQUE constraint failed')) {
-        if (msg.includes('videos.video_id')) {
-          res.status(409).json({ message: 'Video with this ID already exists' });
-        } else if (msg.includes('channels.channel_id')) {
-          res.status(409).json({ message: 'Channel with this ID already exists' });
-        } else if (msg.includes('channels.short_id')) {
-          res.status(409).json({ message: 'Channel with this short ID already exists' });
-        } else {
-          res.status(409).json({ message: 'Duplicate entry detected' });
-        }
-      } else {
-        res.status(500).json({ message: 'Internal server error' });
-      }
-    }
-  });
-
-  app.post('/public-api/add-channel', async (req: Request, res: Response): Promise<void> => {
-    // TODO bail if exists
-    try {
-      const channel = req.body as Record<string, unknown>;
-
-      if (!channel) {
-        res.status(400).json({ message: 'add-channel requires channel data' });
-        return;
-      }
-
-      const requiredChannelFields = ['channel_id', 'channel', 'short_id'] as const;
-      for (const field of requiredChannelFields) {
-        if (channel[field] == null) {
-          res.status(400).json({ message: `Channel field '${field}' is required` });
-          return;
-        }
-      }
-      // TODO adding channel which agrees with existing data should not error
-
-      // TODO validate
-      addChannel(channel as unknown as Channel);
-
-      console.log(`added ${JSON.stringify(channel.channel)} from API`);
-
-      res.json(true satisfies AddChannelAPI);
-    } catch (error) {
-      console.error('Add video error:', error);
-      let msg = error instanceof Error ? error.message : '';
-      if (msg.includes('UNIQUE constraint failed')) {
-        if (msg.includes('videos.video_id')) {
-          res.status(409).json({ message: 'Video with this ID already exists' });
-        } else if (msg.includes('channels.channel_id')) {
-          res.status(409).json({ message: 'Channel with this ID already exists' });
-        } else if (msg.includes('channels.short_id')) {
-          res.status(409).json({ message: 'Channel with this short ID already exists' });
-        } else {
-          res.status(409).json({ message: 'Duplicate entry detected' });
-        }
-      } else {
-        res.status(500).json({ message: 'Internal server error' });
-      }
-    }
-  });
 }
