@@ -229,6 +229,10 @@ app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<
     res.status(404).send('Video not found');
     return;
   }
+  if (!canUserViewChannel(req.username!, video.channel_id)) {
+    res.status(403).send('Access denied');
+    return;
+  }
   res.sendFile(video.video_filename);
 });
 
@@ -237,6 +241,10 @@ app.get('/media/thumbs/:video_id', async (req: Request, res: Response): Promise<
   const video = getVideoById(videoId as VideoID);
   if (video?.thumb_filename == null) {
     res.status(404).send('not found');
+    return;
+  }
+  if (!canUserViewChannel(req.username!, video.channel_id)) {
+    res.status(403).send('Access denied');
     return;
   }
   res.sendFile(video.thumb_filename);
@@ -249,6 +257,10 @@ app.get('/media/subtitles/:video_id/:lang', async (req: Request, res: Response):
     res.status(404).send('not found');
     return;
   }
+  if (!canUserViewChannel(req.username!, video!.channel_id)) {
+    res.status(403).send('Access denied');
+    return;
+  }
   res.type('text/vtt').sendFile(subtitlePath);
 });
 
@@ -257,6 +269,10 @@ app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise
   const channel = getChannelByShortId(channelShortId);
   if (channel?.avatar_filename == null) {
     res.status(404).send('not found');
+    return;
+  }
+  if (!canUserViewChannel(req.username!, channel.channel_id)) {
+    res.status(403).send('Access denied');
     return;
   }
   res.sendFile(channel.avatar_filename);
