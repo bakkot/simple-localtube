@@ -565,7 +565,7 @@ export function search(query: string, allowedChannels: Set<ChannelID> | 'all', l
   let descRaw = descFetched ? searchVideoResults('description', ftsStr, allowedChannels, limit, 0) : [];
   let videosByDescription: VideoWithChannel[] = [];
   let descOffset = 0;
-  let descExhausted = !descFetched;
+  let descExhausted = false;
   if (descFetched) {
     for (let i = 0; i < descRaw.length; i++) {
       if (!seenIds.has(descRaw[i].video_id)) {
@@ -588,7 +588,7 @@ export function search(query: string, allowedChannels: Set<ChannelID> | 'all', l
   let subsRaw = subsFetched ? searchVideoResults('subtitles_text', ftsStr, allowedChannels, limit, 0) : [];
   let videosBySubtitles: VideoWithChannel[] = [];
   let subsOffset = 0;
-  let subsExhausted = !subsFetched;
+  let subsExhausted = false;
   if (subsFetched) {
     for (let i = 0; i < subsRaw.length; i++) {
       if (!seenIds.has(subsRaw[i].video_id)) {

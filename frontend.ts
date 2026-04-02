@@ -594,7 +594,9 @@ ${renderChannelCard.toString()}
     } finally {
       if (loadState === 'loading') {
         loadingEle.style.display = 'none';
-        setTimeout(function() { loadState = 'idle'; }, 300);
+        setTimeout(function() { loadState = 'idle'; }, 100);
+      } else {
+        setTimeout(function() { loadState = 'idle'; }, 1000);
       }
     }
   }
