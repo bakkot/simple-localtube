@@ -246,6 +246,7 @@ const commonCSS = `
   .search-bar input[type="text"]:focus { outline: none; border-color: #1976d2; }
   .search-bar button { padding: 6px 14px; background: #1976d2; color: white; border: 1px solid #1976d2; border-radius: 0 4px 4px 0; font-size: 14px; cursor: pointer; }
   .search-bar button:hover { background: #1565c0; }
+  .search-bar button + button { border-radius: 4px; margin-left: 6px; }
 `;
 
 const formPageCSS = `
@@ -306,17 +307,23 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
     </script>`;
 }
 
-function renderSearchBar(query: string = '', channelId?: ChannelID) {
+function renderSearchBar(query: string = '', channelId?: ChannelID, channelTitle?: string) {
   const escaped = query.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   const channelInput = channelId ? `<input type="hidden" name="channel" value="${channelId}">` : '';
-  const buttonText = channelId ? 'Search this channel' : 'Search';
+  const buttonText = channelId
+    ? (channelTitle ? `Search ${channelTitle}` : 'Search this channel')
+    : 'Search';
   const placeholder = channelId ? 'Search this channel...' : 'Search...';
+  const everywhereBtn = channelTitle
+    ? `<button type="submit" formaction="/search" onclick="this.form.querySelector('[name=channel]').disabled=true">Search everywhere</button>`
+    : '';
   return `
     <div class="search-bar">
       <form action="/search" method="get">
         ${channelInput}
         <input type="text" name="q" placeholder="${placeholder}" value="${escaped}">
         <button type="submit">${buttonText}</button>
+        ${everywhereBtn}
       </form>
     </div>`;
 }
@@ -638,7 +645,7 @@ export function renderSearchPage(username: string, permissions: Permissions, que
   return applyTemplate(searchTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
-    searchBar: renderSearchBar(query, channel?.channel_id),
+    searchBar: renderSearchBar(query, channel?.channel_id, channel?.channel_title),
     query,
     hasChannel: !!channel,
     channelTitle: channel?.channel_title,
