@@ -132,8 +132,23 @@ app.get('/', (req, res) => {
 app.get('/search', (req, res) => {
   const q = (req.query.q as string || '').trim();
   const permissions = getUserPermissions(req.username!);
-  const results = search(q, permissions.allowedChannels);
-  res.send(renderSearchPage(req.username!, permissions, q, results));
+  const channelId = req.query.channel as string | undefined;
+  let allowedChannels = permissions.allowedChannels;
+  let channel: Channel | null = null;
+  if (channelId) {
+    if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
+      res.send(renderNotAllowed(req.username!, permissions));
+      return;
+    }
+    channel = getChannelById(channelId as ChannelID);
+    if (!channel) {
+      res.status(404).send('Channel not found');
+      return;
+    }
+    allowedChannels = new Set([channelId as ChannelID]);
+  }
+  const results = search(q, allowedChannels, 30, false, !!channelId);
+  res.send(renderSearchPage(req.username!, permissions, q, results, channel));
 });
 
 app.get('/channels', (req, res) => {

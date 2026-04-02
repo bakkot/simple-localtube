@@ -54,5 +54,12 @@ ability to modify derived account's can-view-channels permissions
 all outstanding todos
 
 tests with mock db, files, maybe using VFS?
+  verify permissions in various cases e.g. search results
 
 search within channel
+
+express -> hono
+
+mode to build to single file inc. bundling frontend templates
+
+subs page not visible to people w/o permission

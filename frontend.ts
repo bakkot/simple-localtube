@@ -306,13 +306,17 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
     </script>`;
 }
 
-function renderSearchBar(query: string = '') {
+function renderSearchBar(query: string = '', channelId?: ChannelID) {
   const escaped = query.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const channelInput = channelId ? `<input type="hidden" name="channel" value="${channelId}">` : '';
+  const buttonText = channelId ? 'Search this channel' : 'Search';
+  const placeholder = channelId ? 'Search this channel...' : 'Search...';
   return `
     <div class="search-bar">
       <form action="/search" method="get">
-        <input type="text" name="q" placeholder="Search..." value="${escaped}">
-        <button type="submit">Search</button>
+        ${channelInput}
+        <input type="text" name="q" placeholder="${placeholder}" value="${escaped}">
+        <button type="submit">${buttonText}</button>
       </form>
     </div>`;
 }
@@ -394,6 +398,7 @@ export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], 
   return applyTemplate(channelTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
+    searchBar: renderSearchBar('', channel.channel_id),
     videoCardScript,
     videos: videos.map(video => ({ html: renderVideoCard(video, false) })),
     hasAvatar: channel.avatar_filename != null,
@@ -501,7 +506,8 @@ ${renderChannelCard.toString()}
 
 {
   const state = JSON.parse(document.getElementById('search-state').textContent);
-  const tiers = ['channels', 'title', 'description', 'subtitles'];
+  const showChannel = !state.channelId;
+  const tiers = state.channelId ? ['title', 'description', 'subtitles'] : ['channels', 'title', 'description', 'subtitles'];
   const tierLabels = { title: 'Matching title', description: 'Matching description', subtitles: 'Matching subtitles' };
   const container = document.getElementById('search-results');
   const loadingEle = document.getElementById('loading');
@@ -548,7 +554,8 @@ ${renderChannelCard.toString()}
         if (exhausted[tier]) { currentTierIdx++; continue; }
 
         let url = '/api/search?q=' + encodeURIComponent(state.query) +
-          '&tier=' + tier + '&offset=' + offsets[tier] + '&limit=30';
+          '&tier=' + tier + '&offset=' + offsets[tier] + '&limit=30' +
+          (state.channelId ? '&channel=' + encodeURIComponent(state.channelId) : '');
         let resp = await fetch(url);
         let items = await resp.json();
         offsets[tier] += items.length;
@@ -566,7 +573,7 @@ ${renderChannelCard.toString()}
           items.forEach(function(v) {
             if (!seenVideoIds.has(v.video_id)) {
               seenVideoIds.add(v.video_id);
-              grid.insertAdjacentHTML('beforeend', renderVideoCard(v, true));
+              grid.insertAdjacentHTML('beforeend', renderVideoCard(v, showChannel));
               added++;
             }
           });
@@ -612,7 +619,7 @@ ${renderChannelCard.toString()}
 `;
 
 const searchTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'search.html'), 'utf8'));
-export function renderSearchPage(username: string, permissions: Permissions, query: string, results: SearchResults): string {
+export function renderSearchPage(username: string, permissions: Permissions, query: string, results: SearchResults, channel?: Channel | null): string {
   let allVideoIds = [
     ...results.videosByTitle.map(v => v.video_id),
     ...results.videosByDescription.map(v => v.video_id),
@@ -621,25 +628,30 @@ export function renderSearchPage(username: string, permissions: Permissions, que
   let videosHeadingShown = results.videosByTitle.length > 0 || results.videosByDescription.length > 0 || results.videosBySubtitles.length > 0;
   let searchState = JSON.stringify({
     query,
+    channelId: channel?.channel_id || null,
     offsets: results.offsets,
     exhausted: results.exhausted,
     seenVideoIds: allVideoIds,
     videosHeadingShown,
   });
+  let showChannel = !channel;
   return applyTemplate(searchTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
-    searchBar: renderSearchBar(query),
+    searchBar: renderSearchBar(query, channel?.channel_id),
     query,
+    hasChannel: !!channel,
+    channelTitle: channel?.channel_title,
+    channelShortId: channel?.short_id,
     hasChannels: results.channels.length > 0,
-    channels: results.channels.map(channel => ({ html: renderChannelCard(channel) })),
+    channels: results.channels.map(ch => ({ html: renderChannelCard(ch) })),
     hasAnyVideos: videosHeadingShown,
     hasTitleVideos: results.videosByTitle.length > 0,
-    titleVideos: results.videosByTitle.map(video => ({ html: renderVideoCard(video, true) })),
+    titleVideos: results.videosByTitle.map(video => ({ html: renderVideoCard(video, showChannel) })),
     hasDescVideos: results.videosByDescription.length > 0,
-    descVideos: results.videosByDescription.map(video => ({ html: renderVideoCard(video, true) })),
+    descVideos: results.videosByDescription.map(video => ({ html: renderVideoCard(video, showChannel) })),
     hasSubsVideos: results.videosBySubtitles.length > 0,
-    subsVideos: results.videosBySubtitles.map(video => ({ html: renderVideoCard(video, true) })),
+    subsVideos: results.videosBySubtitles.map(video => ({ html: renderVideoCard(video, showChannel) })),
     noResults: results.channels.length === 0 && !videosHeadingShown,
     searchState,
     searchScript,

@@ -537,7 +537,7 @@ export interface SearchResults {
   exhausted: Record<SearchTier, boolean>;
 }
 
-export function search(query: string, allowedChannels: Set<ChannelID> | 'all', limit: number = 30, prefix: boolean = false): SearchResults {
+export function search(query: string, allowedChannels: Set<ChannelID> | 'all', limit: number = 30, prefix: boolean = false, skipChannels: boolean = false): SearchResults {
   let ftsQuery = query.trim();
   let empty: SearchResults = {
     channels: [], videosByTitle: [], videosByDescription: [], videosBySubtitles: [],
@@ -550,9 +550,13 @@ export function search(query: string, allowedChannels: Set<ChannelID> | 'all', l
   let ftsStr = buildFtsStr(ftsQuery, prefix);
   let remaining = limit;
 
-  let channels = searchChannelResults(ftsStr, allowedChannels, remaining, 0);
-  let channelsExhausted = channels.length < remaining;
-  remaining -= channels.length;
+  let channels: Channel[] = [];
+  let channelsExhausted = skipChannels;
+  if (!skipChannels) {
+    channels = searchChannelResults(ftsStr, allowedChannels, remaining, 0);
+    channelsExhausted = channels.length < remaining;
+    remaining -= channels.length;
+  }
 
   let titleRequested = remaining;
   let videosByTitle = titleRequested > 0 ? searchVideoResults('title', ftsStr, allowedChannels, titleRequested, 0) : [];

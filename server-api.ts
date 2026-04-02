@@ -281,7 +281,15 @@ export function addAPIs(app: Express) {
     }
     const limit = parseInt(req.query.limit as string) || 30;
     const offset = parseInt(req.query.offset as string) || 0;
-    const allowedChannels = getUserPermissions(req.username!).allowedChannels;
+    let allowedChannels = getUserPermissions(req.username!).allowedChannels;
+    const channelId = req.query.channel as string | undefined;
+    if (channelId) {
+      if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
+        res.status(403).json({ message: 'Access denied' });
+        return;
+      }
+      allowedChannels = new Set([channelId as ChannelID]);
+    }
     const prefix = req.query.prefix === '1' || req.query.prefix === 'true';
     const tier = req.query.tier as SearchTier;
     if (!validSearchTiers.has(tier)) {

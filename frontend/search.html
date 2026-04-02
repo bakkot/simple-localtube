@@ -26,7 +26,11 @@
 <body>
   <div class="header">
     <h1>Search</h1>
-    <a href="/" class="back-link back-link-inline">← Home</a>
+    <#if hasChannel>
+      <a href="/c/<# channelShortId>" class="back-link back-link-inline">← <# channelTitle></a>
+    <#else>
+      <a href="/" class="back-link back-link-inline">← Home</a>
+    </#if>
     <# searchBar>
     <# topRightBlock>
   </div>
