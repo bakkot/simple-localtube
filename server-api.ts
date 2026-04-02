@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, hasAnyUsers } from './user-db.ts';
+import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
 import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID, readSubscriptionsFile, assertChannelId } from './util.ts';
 import { addChannel, addVideo, getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, isVideoInDb, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { readFileSync, writeFileSync } from 'fs';
@@ -221,6 +221,70 @@ export function addAPIs(app: Express) {
       } else {
         res.status(500).json({ message: 'Internal server error' });
       }
+    }
+  });
+
+  app.post('/api/update-user-permissions', async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.permissions!.createUser) {
+        res.status(403).json({ message: 'Not authorized to manage users' });
+        return;
+      }
+
+      const { username, allowedChannels, createUser, canSubscribe } = req.body as {
+        username: unknown; allowedChannels: unknown; createUser: unknown; canSubscribe: unknown;
+      };
+
+      if (typeof username !== 'string' || typeof createUser !== 'boolean' || typeof canSubscribe !== 'boolean') {
+        res.status(400).json({ message: 'Invalid request body' });
+        return;
+      }
+
+      const createdBy = getCreatedBy(username);
+      if (createdBy !== req.username) {
+        res.status(403).json({ message: 'You can only modify permissions of users you created' });
+        return;
+      }
+
+      if (canSubscribe && allowedChannels !== 'all') {
+        res.status(400).json({ message: 'Subscription management is only available for users with access to all channels' });
+        return;
+      }
+
+      let channelPermissions: Set<ChannelID> | 'all';
+      if (allowedChannels === 'all') {
+        channelPermissions = 'all';
+      } else {
+        if (!Array.isArray(allowedChannels)) {
+          res.status(400).json({ message: 'allowedChannels must be "all" or an array of channel IDs' });
+          return;
+        }
+        try {
+          allowedChannels.forEach(assertChannelId);
+        } catch (e: unknown) {
+          res.status(400).json({ message: (e as Error).message });
+          return;
+        }
+        channelPermissions = new Set(allowedChannels);
+      }
+
+      const requestedPermissions = {
+        allowedChannels: channelPermissions,
+        createUser,
+        canSubscribe,
+      };
+
+      if (!arePermissionsAtLeastAsRestrictive(requestedPermissions, req.permissions!)) {
+        res.status(403).json({ message: 'You cannot grant permissions that you do not have' });
+        return;
+      }
+
+      updateUserPermissions(username, requestedPermissions);
+
+      res.json({ message: 'Permissions updated successfully' });
+    } catch (error) {
+      console.error('Update user permissions error:', error);
+      res.status(500).json({ message: 'Internal server error' });
     }
   });
 

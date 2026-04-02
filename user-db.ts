@@ -97,6 +97,10 @@ let updatePasswordStmt = db.prepare(`
   UPDATE users SET hashed_password = :hashed_password, salt = :salt WHERE username = :username
 `);
 
+let updatePermissionsStmt = db.prepare(`
+  UPDATE users SET permissions = :permissions WHERE username = :username
+`);
+
 export function generateSalt(): Buffer {
   return randomBytes(32);
 }
@@ -257,6 +261,21 @@ export function getCreatedBy(username: string): string | null {
 
 export function getCreatedAccounts(username: string): string[] {
   return (getCreatedAccountsStmt.all(username) as { username: string }[]).map(r => r.username);
+}
+
+export function getCreatedAccountsWithPermissions(username: string): { username: string; permissions: Permissions }[] {
+  return getCreatedAccounts(username).map(u => ({
+    username: u,
+    permissions: getUserPermissions(u),
+  }));
+}
+
+export function updateUserPermissions(username: string, permissions: Permissions): void {
+  userPermissionsCache.delete(username);
+  updatePermissionsStmt.run({
+    ':permissions': serializePermissions(permissions),
+    ':username': username,
+  });
 }
 
 export function canUserViewChannel(username: string, channelId: ChannelID): boolean {

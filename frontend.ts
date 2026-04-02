@@ -277,7 +277,7 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
         <div class="settings-dropdown">
           <a href="/settings">Settings</a>
           <a href="/subscriptions">Subscriptions</a>
-          ${permissions.createUser ? '<a href="/add-user">Add User</a>' : ''}
+          ${permissions.createUser ? '<a href="/add-user">Add User</a><a href="/manage-users">Manage Users</a>' : ''}
         </div>
       </span>
       <span class="username">${username}</span>
@@ -426,6 +426,31 @@ export function renderAddUserPage(username: string, permissions: Permissions, av
     topRightBlock: renderTopRightBlock(username, permissions),
     hasAllChannelsPermission: permissions.allowedChannels === 'all',
     availableChannels,
+  });
+}
+
+const manageUsersTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'manage-users.html'), 'utf8'));
+export function renderManageUsersPage(
+  username: string,
+  permissions: Permissions,
+  availableChannels: { channel_id: ChannelID; channel_title: string }[],
+  createdUsers: { username: string; permissions: Permissions }[],
+): string {
+  return applyTemplate(manageUsersTemplate, {
+    commonCSS,
+    formPageCSS,
+    topRightBlock: renderTopRightBlock(username, permissions),
+    hasAllChannelsPermission: permissions.allowedChannels === 'all',
+    availableChannels,
+    noCreatedUsers: createdUsers.length === 0,
+    createdUsers: createdUsers.map(u => ({
+      username: u.username,
+      permissionsJSON: JSON.stringify({
+        allowedChannels: u.permissions.allowedChannels === 'all' ? 'all' : [...u.permissions.allowedChannels],
+        createUser: u.permissions.createUser,
+        canSubscribe: u.permissions.canSubscribe,
+      }).replace(/&/g, '&amp;').replace(/"/g, '&quot;'),
+    })),
   });
 }
 

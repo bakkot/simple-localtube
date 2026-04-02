@@ -5,8 +5,8 @@ import { parseArgs } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID, readSubscriptionsFile } from './util.ts';
-import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, type Permissions } from './user-db.ts';
-import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
+import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
+import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
 // Extend Request interface to include username
@@ -199,6 +199,18 @@ app.get('/add-user', (req: Request, res: Response): void => {
   const availableChannels = getChannelsForUser(req.permissions!.allowedChannels);
 
   res.send(renderAddUserPage(req.username!, req.permissions!, availableChannels));
+});
+
+app.get('/manage-users', (req: Request, res: Response): void => {
+  if (!req.permissions!.createUser) {
+    res.send(renderNotAllowed(req.username!, req.permissions!));
+    return;
+  }
+
+  const availableChannels = getChannelsForUser(req.permissions!.allowedChannels);
+  const createdUsers = getCreatedAccountsWithPermissions(req.username!);
+
+  res.send(renderManageUsersPage(req.username!, req.permissions!, availableChannels, createdUsers));
 });
 
 app.get('/settings', (req: Request, res: Response): void => {
