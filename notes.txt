@@ -58,4 +58,3 @@ tests with mock db, files, maybe using VFS?
 
 mode to build to single file inc. bundling frontend templates
 
-subs page not visible to people w/o permission

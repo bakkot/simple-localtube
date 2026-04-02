@@ -44,7 +44,8 @@ if (existing.length === 0) {
         username TEXT PRIMARY KEY,
         hashed_password BLOB NOT NULL,
         salt BLOB NOT NULL,
-        permissions TEXT NOT NULL -- stored as JSON for future compat; we cache on user load anyway
+        permissions TEXT NOT NULL, -- stored as JSON for future compat; we cache on user load anyway
+        created_by TEXT REFERENCES users(username)
     ) STRICT;
   `);
 } else if (!(new Set(existing)).isSubsetOf(new Set(['users']))) {
@@ -80,8 +81,12 @@ let getUserByUsernameStmt = db.prepare(`
 `);
 
 let addUserStmt = db.prepare(`
-  INSERT INTO users (username, hashed_password, salt, permissions)
-  VALUES (:username, :hashed_password, :salt, :permissions)
+  INSERT INTO users (username, hashed_password, salt, permissions, created_by)
+  VALUES (:username, :hashed_password, :salt, :permissions, :created_by)
+`);
+
+let getCreatedAccountsStmt = db.prepare(`
+  SELECT username FROM users WHERE created_by = ?
 `);
 
 let hasAnyUsersStmt = db.prepare(`
@@ -199,6 +204,7 @@ export async function addUser(
   username: string,
   password: string,
   permissions: Permissions,
+  createdBy: string | null,
 ): Promise<void> {
   const existingUser = getUserByUsernameStmt.get(username);
   if (existingUser) {
@@ -220,7 +226,8 @@ export async function addUser(
     ':username': username,
     ':hashed_password': hashedPassword,
     ':salt': salt,
-    'permissions': serializePermissions(permissions),
+    ':permissions': serializePermissions(permissions),
+    ':created_by': createdBy,
   });
 }
 
@@ -238,6 +245,18 @@ export function getUserPermissions(username: string): Permissions {
   let permissions = parsePermissions(user.permissions);
   userPermissionsCache.set(username, permissions);
   return permissions;
+}
+
+export function getCreatedBy(username: string): string | null {
+  const user = getUserByUsernameStmt.get(username) as { created_by: string | null } | undefined;
+  if (!user) {
+    throw new Error(`unrecognized user ${username}`);
+  }
+  return user.created_by;
+}
+
+export function getCreatedAccounts(username: string): string[] {
+  return (getCreatedAccountsStmt.all(username) as { username: string }[]).map(r => r.username);
 }
 
 export function canUserViewChannel(username: string, channelId: ChannelID): boolean {

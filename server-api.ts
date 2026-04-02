@@ -143,12 +143,11 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      // Create first user with full admin permissions
       await addUser(username, password, {
         allowedChannels: 'all',
         createUser: true,
         canSubscribe: true,
-      });
+      }, null);
 
       res.json({ message: 'Administrator account created successfully' });
     } catch (error) {
@@ -209,7 +208,7 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      await addUser(username, password, requestedPermissions);
+      await addUser(username, password, requestedPermissions, req.username!);
 
       res.json({ message: 'User created successfully' });
     } catch (error) {
