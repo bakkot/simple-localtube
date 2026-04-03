@@ -94,7 +94,12 @@ function createInfiniteScroll(apiUrl, showChannel) {
     } finally {
       if (state !== 'errored') loadingEle.style.display = 'none';
       if (state === 'exhausted') return;
-      setTimeout(() => { state = 'idle'; }, 1000);
+      if (state === 'loading') {
+        loadingEle.style.display = 'none';
+        setTimeout(function() { state = 'idle'; }, 100);
+      } else {
+        setTimeout(function() { state = 'idle'; }, 1000);
+      }
     }
   }
 
