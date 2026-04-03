@@ -1,10 +1,11 @@
-import type { Channel, Video } from './media-db.ts';
+import { addVideo, addChannel, type Channel, type Video } from './media-db.ts';
 import { nameExt, vttToText, type ChannelID, type VideoID } from './util.ts';
+import type { ChannelDataJSON } from './get-channel-meta.ts';
 
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
-import type { ChannelDataJSON } from './get-channel-meta.ts';
+
 type VideoDataJSON = {
   fulltitle: string;
   description: string;
@@ -111,17 +112,12 @@ export async function channelFromDisk(mediaDir: string, channelId: ChannelID): P
   };
 }
 
-let addChannelFn: ((channel: Channel) => void) | null = null;
-let addVideoFn: ((video: Video) => void) | null = null;
 async function addVideoOffline(video: Video, channel: Channel, addedChannels: Set<ChannelID>) {
-  if (addChannelFn == null || addVideoFn == null) {
-    ({ addChannel: addChannelFn, addVideo: addVideoFn } = await import('./media-db.ts'));
-  }
   if (!addedChannels.has(channel.channel_id)) {
-    addChannelFn(channel);
+    addChannel(channel);
     addedChannels.add(channel.channel_id);
   }
-  addVideoFn(video);
+  addVideo(video);
 }
 
 export async function rescan(mediaDir: string) {
