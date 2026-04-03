@@ -2,9 +2,8 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
-import { readFileSync, writeFileSync } from 'fs';
 import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
-import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID, readSubscriptionsFile } from './util.ts';
+import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
 import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
@@ -21,12 +20,19 @@ declare global {
 
 const { values } = parseArgs({
   options: {
-    subscriptions: {
-      type: 'string',
+    'enable-subscriptions': {
+      type: 'boolean',
     },
   },
 });
-export const subscriptionsFile = values.subscriptions;
+const enableSubscriptions = values['enable-subscriptions'] ?? false;
+
+type SubscriptionsDB = typeof import('./subscriptions-db.ts');
+let subscriptionsDb: SubscriptionsDB | null = null;
+if (enableSubscriptions) {
+  subscriptionsDb = await import('./subscriptions-db.ts');
+}
+export { subscriptionsDb };
 
 
 const app = express();
@@ -218,19 +224,12 @@ app.get('/settings', (req: Request, res: Response): void => {
 });
 
 app.get('/subscriptions', (req: Request, res: Response): void => {
-  if (!subscriptionsFile) {
-    res.status(500).send('Server was started without passing --subscriptions');
+  if (!subscriptionsDb) {
+    res.status(500).send('Server was started without --enable-subscriptions');
     return;
   }
 
-  let subscriptionsData
-  try {
-    subscriptionsData = readSubscriptionsFile(subscriptionsFile);
-  } catch (error) {
-    console.error('Error reading subscriptions file:', error);
-    res.status(500).send('Error reading subscriptions file');
-    return;
-  }
+  const subscriptionsData = subscriptionsDb.getSubscriptionData();
   res.send(renderSubscriptionsPage(req.username!, req.permissions!, subscriptionsData));
 });
 

@@ -1,4 +1,4 @@
-import { getTemp, lock, move, nameExt, readSubscriptionsFile, type ChannelID, type SubscriptionFile, type VideoID } from '../util.ts';
+import { getTemp, move, nameExt, type ChannelID, type VideoID } from '../util.ts';
 import { parseArgs, promisify } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -8,6 +8,7 @@ import { getLatestVideoUrls } from './get-channel-video-ids.ts';
 import { channelFromDisk, videoFromDisk } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
 import { addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
+import { getSubscribing, getSubscribed, markSubscribed, isInSubscriptions } from '../subscriptions-db.ts';
 
 const execAsync = promisify(execCb);
 
@@ -23,8 +24,8 @@ let { values, positionals } = parseArgs({
   },
 });
 
-if (positionals.length !== 2) {
-  console.log(`Usage: node fetch-videos.ts path-to-subscriptions.json path-to-media-dir
+if (positionals.length !== 1) {
+  console.log(`Usage: node fetch-videos.ts path-to-media-dir
   --tempdir dir   path for temporary files (default: path-to-media-dir)
                   the special value "OS_DEFAULT" will use your operating system's default
 
@@ -38,7 +39,7 @@ some-channel-id/some-video-id/video.mp4
   process.exit(1);
 }
 
-let [subscriptionsFile, mediaDir] = positionals;
+let [mediaDir] = positionals;
 let { tempdir } = values;
 if (tempdir == null) {
   // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
@@ -60,13 +61,6 @@ const temps = fs.readdirSync(tempdir).filter(f => f.startsWith('tmp-localtube-')
 if (temps.length > 0) {
   console.error(`Found "tmp-localtube-" directories in ${tempdir}, which suggests downloader is already running; exiting. If this is not the case, delete any such directories and retry.`);
   process.exit(1);
-}
-
-
-let status = readSubscriptionsFile(subscriptionsFile);
-
-function writeStatus() {
-  fs.writeFileSync(subscriptionsFile, JSON.stringify(status, null, 2));
 }
 
 
@@ -202,36 +196,26 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
 
 const subbed = new Set<ChannelID>();
 let processedCount = 0;
-while (status.subscribing.length > 0) {
-  const channel = status.subscribing[0];
+let subscribing = getSubscribing();
+while (subscribing.length > 0) {
+  const channel = subscribing[0];
   await subscribe(channel);
 
-  using _lockfile = await lock(subscriptionsFile);
-  const freshStatus = readSubscriptionsFile(subscriptionsFile);
-  const isInSubscribing = freshStatus.subscribing.includes(channel);
-  const isInSubscribed = freshStatus.subscribed.includes(channel);
-
-  if (isInSubscribing && isInSubscribed) {
-    throw new Error(`Channel ${channel} found in both subscribing and subscribed lists`);
-  }
-
-  status = freshStatus;
-  subbed.add(channel);
-  processedCount++;
-
-  if (!isInSubscribing || isInSubscribed) {
+  if (!isInSubscriptions(channel)) {
+    subscribing = getSubscribing();
     continue;
   }
 
-  status.subscribing = status.subscribing.filter(id => id !== channel);
-  status.subscribed.push(channel);
-  delete status.titles[channel];
-  writeStatus();
+  markSubscribed(channel);
+  subbed.add(channel);
+  processedCount++;
+  subscribing = getSubscribing();
 }
 console.log(`Performed initial fetch for ${processedCount} channels`);
 
-for (const channel of status.subscribed) {
+const subscribed = getSubscribed();
+for (const channel of subscribed) {
   if (subbed.has(channel)) continue;
   await updateExisting(channel);
 }
-console.log(`Updated ${status.subscribed.length - subbed.size} channels`);
+console.log(`Updated ${subscribed.length - subbed.size} channels`);

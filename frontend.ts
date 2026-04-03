@@ -3,7 +3,8 @@ import path from 'node:path';
 import type { Channel, VideoWithChannel, SearchResults } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
 import type { Permissions } from './user-db.ts';
-import { nameExt, type ChannelID, type SubscriptionFile } from './util.ts';
+import { nameExt, type ChannelID } from './util.ts';
+import type { SubscriptionData } from './subscriptions-db.ts';
 import { parse as parseTemplate, apply as applyTemplate } from './frontend/tinymarker.ts';
 
 const templates = path.join(import.meta.dirname, 'frontend');
@@ -464,7 +465,7 @@ export function renderSettingsPage(username: string, permissions: Permissions): 
 }
 
 const subscriptionsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8'));
-export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptionsData: SubscriptionFile): string {
+export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptionsData: SubscriptionData): string {
   const subscribing = subscriptionsData.subscribing;
   const subscribed = subscriptionsData.subscribed;
   const titles = subscriptionsData.titles;

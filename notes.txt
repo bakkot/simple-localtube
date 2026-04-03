@@ -4,14 +4,9 @@ document minimum node version
 
 fetch-videos needs a `--verbose`
 
-fetch-videos maybe doesn't need the server running (just save the files? or update the sql directly?)
-
 ensure all fetchs are encapsulated in their own utilities
 
 organize files more generally
-
-has-channel should be channel-info
-  null, or name
 
 rename scan.ts to something else, move it under scripts
 split out all the scan logic to its own folder w/ docs
@@ -42,8 +37,6 @@ handle missing avatars etc (placeholder)
 affordance for adding specific videos
   goes in the subscriptions file
   ... maybe that file should be sqlite too...
-
-subs should be a flag not a string
 
 config for where db files live (just a folder for all of them)
 

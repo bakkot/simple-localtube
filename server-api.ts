@@ -1,9 +1,8 @@
 import type { Express, Request, Response } from 'express';
 import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
-import { lock, channelIDFromCanonicalURL, type ChannelID, type VideoID, readSubscriptionsFile, assertChannelId } from './util.ts';
+import { channelIDFromCanonicalURL, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
-import { readFileSync, writeFileSync } from 'fs';
-import { subscriptionsFile } from './server.ts';
+import { subscriptionsDb } from './server.ts';
 
 async function resolveChannelInput(input: string): Promise<{ channelId: ChannelID; title: string }> {
   let url: string;
@@ -72,51 +71,6 @@ async function resolveChannelInput(input: string): Promise<{ channelId: ChannelI
   }
 }
 
-async function addSubscription(channelId: ChannelID, title: string): Promise<void> {
-  if (!subscriptionsFile) {
-    throw new Error('Subscriptions file not configured');
-  }
-
-  using _lockfile = await lock(subscriptionsFile);
-  const subscriptionsData = readSubscriptionsFile(subscriptionsFile);
-
-  const subscribing = subscriptionsData.subscribing || [];
-  const subscribed = subscriptionsData.subscribed || [];
-  const titles = subscriptionsData.titles || {};
-
-  if (subscribing.includes(channelId) || subscribed.includes(channelId)) {
-    throw new Error('Channel is already in subscriptions');
-  }
-
-  subscriptionsData.subscribing = [...subscribing, channelId];
-  subscriptionsData.titles = { ...titles, [channelId]: title };
-
-  writeFileSync(subscriptionsFile, JSON.stringify(subscriptionsData, null, 2));
-}
-
-async function removeSubscription(channelId: ChannelID): Promise<void> {
-  if (!subscriptionsFile) {
-    throw new Error('Subscriptions file not configured');
-  }
-
-  using _lockfile = await lock(subscriptionsFile);
-  const subscriptionsData = readSubscriptionsFile(subscriptionsFile);
-
-  const subscribing = subscriptionsData.subscribing || [];
-  const subscribed = subscriptionsData.subscribed || [];
-  const titles = subscriptionsData.titles || {};
-
-  if (!subscribing.includes(channelId) && !subscribed.includes(channelId)) {
-    throw new Error(`Channel ${channelId} is not in subscriptions`);
-  }
-
-  subscriptionsData.subscribing = subscribing.filter((id: string) => id !== channelId);
-  subscriptionsData.subscribed = subscribed.filter((id: string) => id !== channelId);
-  const { [channelId]: removed, ...remainingTitles } = titles;
-  subscriptionsData.titles = remainingTitles;
-
-  writeFileSync(subscriptionsFile, JSON.stringify(subscriptionsData, null, 2));
-}
 
 export type HealthcheckAPI = boolean;
 export type AddUserAPIRequest = {
@@ -408,7 +362,10 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      // TODO 403 if no subscriptions file configured
+      if (!subscriptionsDb) {
+        res.status(403).json({ message: 'Subscriptions are not enabled' });
+        return;
+      }
 
       const { channelId } = req.body as { channelId: unknown };
 
@@ -418,7 +375,7 @@ export function addAPIs(app: Express) {
       }
 
       const { channelId: resolvedChannelId, title } = await resolveChannelInput(channelId.trim());
-      await addSubscription(resolvedChannelId, title);
+      subscriptionsDb.addSubscription(resolvedChannelId, title);
       res.json({ message: 'Subscription added successfully' });
     } catch (error) {
       console.error('Add subscription error:', error);
@@ -434,6 +391,11 @@ export function addAPIs(app: Express) {
         return;
       }
 
+      if (!subscriptionsDb) {
+        res.status(403).json({ message: 'Subscriptions are not enabled' });
+        return;
+      }
+
       const { channelId } = req.body as { channelId: unknown };
 
       if (!channelId || typeof channelId !== 'string') {
@@ -441,7 +403,7 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      await removeSubscription(channelId as ChannelID);
+      subscriptionsDb.removeSubscription(channelId as ChannelID);
       res.json({ message: 'Unsubscribed successfully' });
     } catch (error) {
       console.error('Unsubscribe error:', error);
