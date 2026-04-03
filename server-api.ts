@@ -42,9 +42,9 @@ async function fetchVideoDetails(videoId: VideoID): Promise<FetchedVideoDetails 
         continue;
       }
       try {
-        const obj = JSON.parse(html.slice(jsonStart, jsonEnd));
+        const obj = JSON.parse(html.slice(jsonStart, jsonEnd)) as VideoDetails;
         if (obj && typeof obj.videoId === 'string') {
-          details = obj as VideoDetails;
+          details = obj;
           break;
         }
       } catch {

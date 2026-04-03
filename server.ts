@@ -297,7 +297,7 @@ app.get('/media/subtitles/:video_id/:lang', async (req: Request, res: Response):
     res.status(404).send('not found');
     return;
   }
-  if (!canUserViewChannel(req.username!, video!.channel_id)) {
+  if (!canUserViewChannel(req.username!, video.channel_id)) {
     res.status(403).send('Access denied');
     return;
   }

@@ -207,7 +207,7 @@ async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
     [YT_DLP_PATH, '--dump-json', '--skip-download', `https://www.youtube.com/watch?v=${videoId}`].join(' '),
     { encoding: 'utf-8' },
   );
-  const info = JSON.parse(result.stdout);
+  const info = JSON.parse(result.stdout) as { channel_id?: string };
   const channelId = info.channel_id as ChannelID;
   if (!channelId) throw new Error(`no channel_id in yt-dlp info for video ${videoId}`);
   return channelId;
