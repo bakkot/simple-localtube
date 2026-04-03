@@ -10,6 +10,7 @@
     .video-list { display: flex; flex-direction: column; gap: 15px; }
     .video-item { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 15px; }
     .video-details { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+    .video-thumb { width: 120px; border-radius: 4px; flex-shrink: 0; }
     .video-title { font-weight: bold; }
     .video-channel { color: #555; font-size: 14px; }
     .video-slug { font-family: monospace; font-size: 14px; color: #888; }
@@ -52,6 +53,9 @@
       <div class="video-list">
         <#foreach video of videos>
           <div class="video-item">
+            <#if video.hasThumbnail>
+              <img class="video-thumb" src="<# video.thumbnail>" alt="">
+            </#if>
             <div class="video-details">
               <#if video.hasMetadata>
                 <div class="video-title"><# video.title></div>

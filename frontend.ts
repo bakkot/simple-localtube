@@ -543,6 +543,8 @@ export function renderVideoQueuePage(username: string, permissions: Permissions,
       title: v.title,
       channelName: v.channel_name,
       hasMetadata: v.title != null,
+      thumbnail: v.thumbnail ? `data:image/jpeg;base64,${v.thumbnail.toBase64()}` : null,
+      hasThumbnail: v.thumbnail != null,
     })),
   });
 }

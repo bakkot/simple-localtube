@@ -41,7 +41,8 @@ export function init(dbDir: string): void {
           video_id TEXT PRIMARY KEY,
           title TEXT,
           channel_id TEXT,
-          channel_name TEXT
+          channel_name TEXT,
+          thumbnail BLOB
       ) STRICT;
     `);
   }
@@ -54,9 +55,9 @@ export function init(dbDir: string): void {
   updateStatusStmt = db.prepare('UPDATE channels SET status = ? WHERE channel_id = ?');
   clearTitleStmt = db.prepare('UPDATE channels SET title = NULL WHERE channel_id = ?');
 
-  getAllVideosStmt = db.prepare('SELECT video_id, title, channel_id, channel_name FROM videos');
+  getAllVideosStmt = db.prepare('SELECT video_id, title, channel_id, channel_name, thumbnail FROM videos');
   getVideoByIdStmt = db.prepare('SELECT video_id FROM videos WHERE video_id = ?');
-  insertVideoStmt = db.prepare('INSERT INTO videos (video_id, title, channel_id, channel_name) VALUES (?, ?, ?, ?)');
+  insertVideoStmt = db.prepare('INSERT INTO videos (video_id, title, channel_id, channel_name, thumbnail) VALUES (?, ?, ?, ?, ?)');
   deleteVideoStmt = db.prepare('DELETE FROM videos WHERE video_id = ?');
 }
 
@@ -144,27 +145,29 @@ export interface QueuedVideo {
   title: string | null;
   channel_id: ChannelID | null;
   channel_name: string | null;
+  thumbnail: Uint8Array | null;
 }
 
 export function getVideoQueue(): QueuedVideo[] {
   throwIfNotInit(getAllVideosStmt);
-  const rows = getAllVideosStmt.all() as { video_id: string; title: string | null; channel_id: string | null; channel_name: string | null }[];
+  const rows = getAllVideosStmt.all() as { video_id: string; title: string | null; channel_id: string | null; channel_name: string | null; thumbnail: Uint8Array | null }[];
   return rows.map(r => ({
     video_id: r.video_id as VideoID,
     title: r.title,
     channel_id: r.channel_id as ChannelID | null,
     channel_name: r.channel_name,
+    thumbnail: r.thumbnail,
   }));
 }
 
-export function addVideoToQueue(videoId: VideoID, title: string | null, channelId: ChannelID | null, channelName: string | null): void {
+export function addVideoToQueue(videoId: VideoID, title: string | null, channelId: ChannelID | null, channelName: string | null, thumbnail: Uint8Array | null): void {
   throwIfNotInit(getVideoByIdStmt);
   throwIfNotInit(insertVideoStmt);
   const existing = getVideoByIdStmt.get(videoId) as { video_id: string } | undefined;
   if (existing) {
     throw new Error('Video is already in the queue');
   }
-  insertVideoStmt.run(videoId, title, channelId, channelName);
+  insertVideoStmt.run(videoId, title, channelId, channelName, thumbnail);
 }
 
 export function removeVideoFromQueue(videoId: VideoID): void {

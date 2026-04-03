@@ -10,9 +10,16 @@ interface VideoDetails {
   title: string;
   channelId: string;
   author: string;
+  thumbnail?: { thumbnails: { url: string; width: number; height: number }[] };
 }
 
-async function fetchVideoDetails(videoId: VideoID): Promise<VideoDetails | null> {
+interface FetchedVideoDetails {
+  details: VideoDetails;
+  thumbnailBuf: Uint8Array | null;
+  thumbnailMime: string | null;
+}
+
+async function fetchVideoDetails(videoId: VideoID): Promise<FetchedVideoDetails | null> {
   try {
     const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
@@ -23,6 +30,7 @@ async function fetchVideoDetails(videoId: VideoID): Promise<VideoDetails | null>
 
     const html = await response.text();
     const needle = '"videoDetails":';
+    let details: VideoDetails | null = null;
     let searchFrom = 0;
     while (true) {
       const idx = html.indexOf(needle, searchFrom);
@@ -36,13 +44,34 @@ async function fetchVideoDetails(videoId: VideoID): Promise<VideoDetails | null>
       try {
         const obj = JSON.parse(html.slice(jsonStart, jsonEnd));
         if (obj && typeof obj.videoId === 'string') {
-          return obj as VideoDetails;
+          details = obj as VideoDetails;
+          break;
         }
       } catch {
         // not valid JSON, try next
       }
       searchFrom = jsonStart;
     }
+
+    if (!details) return null;
+
+    let thumbnailBuf: Uint8Array | null = null;
+    let thumbnailMime: string | null = null;
+    const thumbs = details.thumbnail?.thumbnails;
+    if (thumbs && thumbs.length > 0) {
+      const smallest = thumbs.reduce((a, b) => a.width * a.height <= b.width * b.height ? a : b);
+      try {
+        const thumbResp = await fetch(smallest.url);
+        if (thumbResp.ok) {
+          thumbnailBuf = new Uint8Array(await thumbResp.arrayBuffer());
+          thumbnailMime = thumbResp.headers.get('content-type') ?? 'image/jpeg';
+        }
+      } catch {
+        // thumbnail fetch failed, non-fatal
+      }
+    }
+
+    return { details, thumbnailBuf, thumbnailMime };
   } catch {
     // fetch failed
   }
@@ -454,19 +483,26 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      const details = await fetchVideoDetails(videoId);
+      const fetched = await fetchVideoDetails(videoId);
+      const d = fetched?.details ?? null;
       subscriptionsDb.addVideoToQueue(
         videoId,
-        details?.title ?? null,
-        (details?.channelId ?? null) as ChannelID | null,
-        details?.author ?? null,
+        d?.title ?? null,
+        (d?.channelId ?? null) as ChannelID | null,
+        d?.author ?? null,
+        fetched?.thumbnailBuf ?? null,
       );
+      let thumbnailDataUri: string | null = null;
+      if (fetched?.thumbnailBuf && fetched.thumbnailMime) {
+        thumbnailDataUri = `data:${fetched.thumbnailMime};base64,${fetched.thumbnailBuf.toBase64()}`;
+      }
       res.json({
         message: 'Video added to queue',
         videoId,
-        title: details?.title ?? null,
-        channelId: details?.channelId ?? null,
-        channelName: details?.author ?? null,
+        title: d?.title ?? null,
+        channelId: d?.channelId ?? null,
+        channelName: d?.author ?? null,
+        thumbnail: thumbnailDataUri,
       });
     } catch (error) {
       console.error('Add video error:', error);
