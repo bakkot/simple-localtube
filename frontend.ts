@@ -406,7 +406,7 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
 }
 
 const channelTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'channel.html'), 'utf8'));
-export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], username: string, permissions: Permissions): string {
+export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], username: string, permissions: Permissions, isSubscribed: boolean): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
 
   // TODO figure out why short_id is nullable and what to do about it
@@ -423,6 +423,9 @@ export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], 
     avatarExt,
     hasDescription: channel.description != null,
     description: channel.description,
+    channelId: channel.channel_id,
+    canSubscribe: permissions.canSubscribe,
+    isSubscribed,
   });
 }
 

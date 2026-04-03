@@ -1,3 +1,46 @@
+/*
+A tiny template engine for JS. Supports string interpolations, conditionals, and loops, and that's it.
+
+## Syntax
+
+```
+You can have arbitrary text.
+
+<#-- You can have comments. -->
+
+You can have <# interpolation>s.
+
+You can interpolate <# "literal strings">s.
+
+
+<#if condition>
+You can include text conditionally.
+</#if>
+
+<#if not condition>
+Or exlude it conditionally. "if not" is a special form.
+</#if>
+
+<#if condition>
+And...
+<#else if otherCondition>
+you can have if-elseif chains
+<#else>
+and of course if-else.
+</#if>
+
+<#if false>
+You can also use literal true/false in conditions.
+This is mostly to make it easy to temporarily exclude large blocks.
+</#if>
+
+<#foreach item of items>
+  Finally you can have loops.
+  Loops support <# item.values>.
+</#foreach>
+```
+*/
+
 export class TemplateError extends Error {
   offset: number;
   line: number;

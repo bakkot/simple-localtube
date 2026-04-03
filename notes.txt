@@ -8,13 +8,13 @@ ensure all fetchs are encapsulated in their own utilities
 
 organize files more generally
 
-rename scan.ts to something else, move it under scripts
-split out all the scan logic to its own folder w/ docs
+docs for scripts
 
+dbs under a separate folder
 
 todo consistency for node:foo vs foo + lint
 
-should be a different port
+should be a different default port
 
 todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
 
@@ -27,10 +27,6 @@ handle missing avatars etc (placeholder)
 - pull out the yt-dlp stuff
 - test w/ pinchflat, have sample lifecycle script
 - placeholder avatar
-
-affordance for adding specific videos
-  goes in the subscriptions file
-
 
 all outstanding todos
 

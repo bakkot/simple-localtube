@@ -1,3 +1,8 @@
+// Slice valid JSON out of larger strings, given the start index.
+// Useful for reading it out of other documents like HTML pages without a full parser.
+// More formally:
+// Given an index S into a string, find the minimal index E, E > S, such that slice(string, S, E) is valid JSON.
+// Return -1 if there is no such index.
 export function getJsonEnd(input: string, index: number): number {
   const len = input.length;
   if (index >= len) return -1;
