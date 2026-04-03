@@ -93,17 +93,17 @@ async function resolveChannelInput(input: string): Promise<{ channelId: ChannelI
       throw new Error('Invalid URL format');
     }
   } else {
-    // Check if it's alphanumeric/underscore, possibly with leading @
+    // Check if it's alphanumeric/underscore/dash, possibly with leading @
     const cleanInput = input.trim();
     if (cleanInput.startsWith('@')) {
       const handle = cleanInput.slice(1);
       if (!/^[a-zA-Z0-9_]+$/.test(handle)) {
-        throw new Error('Invalid handle format. Use only letters, numbers, and underscores');
+        throw new Error(`Invalid handle format: ${JSON.stringify(cleanInput)}`);
       }
       url = `https://youtube.com/@${handle}`;
     } else {
-      if (!/^[a-zA-Z0-9_]+$/.test(cleanInput)) {
-        throw new Error('Invalid channel ID format. Use only letters, numbers, and underscores');
+      if (!/^[a-zA-Z0-9_-]+$/.test(cleanInput)) {
+        throw new Error(`Invalid handle format: ${JSON.stringify(cleanInput)}`);
       }
       url = `https://youtube.com/channel/${cleanInput}`;
     }
