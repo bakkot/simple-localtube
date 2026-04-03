@@ -8,7 +8,7 @@ import { getLatestVideoUrls } from './get-channel-video-ids.ts';
 import { channelFromDisk, videoFromDisk } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
-import { init as initSubscriptionsDb, getSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getVideoQueue, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
+import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
 
 const execAsync = promisify(execCb);
 
@@ -212,16 +212,14 @@ async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
   return channelId;
 }
 
-let queuedVideos = getVideoQueue();
 let videoProcessedCount = 0;
-while (queuedVideos.length > 0) {
-  const queued = queuedVideos[0];
+let queued;
+while ((queued = getOneQueuedVideo()) != null) {
   const videoId = queued.video_id;
   if (isVideoInDb(videoId)) {
     removeVideoFromQueue(videoId);
     videoProcessedCount++;
     console.log(`queued video ${videoId} already in database, removing from queue`);
-    queuedVideos = getVideoQueue();
     continue;
   }
 
@@ -231,33 +229,24 @@ while (queuedVideos.length > 0) {
   await addChannelIfNotExists(channelId);
   await addVideoIfNotExists(channelId, videoId);
 
-  if (!isVideoInQueue(videoId)) {
-    queuedVideos = getVideoQueue();
-    continue;
-  }
+  if (!isVideoInQueue(videoId)) continue;
   removeVideoFromQueue(videoId);
   videoProcessedCount++;
   console.log(`downloaded queued video ${videoId}`);
-  queuedVideos = getVideoQueue();
 }
 console.log(`Fetched ${videoProcessedCount} queued videos`);
 
 const subbed = new Set<ChannelID>();
 let processedCount = 0;
-let subscribing = getSubscribing();
-while (subscribing.length > 0) {
-  const channel = subscribing[0];
+let channel;
+while ((channel = getOneSubscribing()) != null) {
   await subscribe(channel);
 
-  if (!isInSubscriptions(channel)) {
-    subscribing = getSubscribing();
-    continue;
-  }
+  if (!isInSubscriptions(channel)) continue;
 
   markSubscribed(channel);
   subbed.add(channel);
   processedCount++;
-  subscribing = getSubscribing();
 }
 console.log(`Performed initial fetch for ${processedCount} channels`);
 

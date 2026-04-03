@@ -7,6 +7,7 @@ let db: DatabaseSync | null = null;
 
 let getAllStmt: StatementSync | null = null;
 let getByStatusStmt: StatementSync | null = null;
+let getOneByStatusStmt: StatementSync | null = null;
 let getByIdStmt: StatementSync | null = null;
 let insertStmt: StatementSync | null = null;
 let deleteStmt: StatementSync | null = null;
@@ -14,6 +15,7 @@ let updateStatusStmt: StatementSync | null = null;
 let clearTitleStmt: StatementSync | null = null;
 
 let getAllVideosStmt: StatementSync | null = null;
+let getOneVideoStmt: StatementSync | null = null;
 let getVideoByIdStmt: StatementSync | null = null;
 let insertVideoStmt: StatementSync | null = null;
 let deleteVideoStmt: StatementSync | null = null;
@@ -49,6 +51,7 @@ export function init(dbDir: string): void {
 
   getAllStmt = db.prepare('SELECT channel_id, status, title FROM channels');
   getByStatusStmt = db.prepare('SELECT channel_id, title FROM channels WHERE status = ?');
+  getOneByStatusStmt = db.prepare('SELECT channel_id FROM channels WHERE status = ? LIMIT 1');
   getByIdStmt = db.prepare('SELECT channel_id, status, title FROM channels WHERE channel_id = ?');
   insertStmt = db.prepare('INSERT INTO channels (channel_id, status, title) VALUES (?, ?, ?)');
   deleteStmt = db.prepare('DELETE FROM channels WHERE channel_id = ?');
@@ -56,6 +59,7 @@ export function init(dbDir: string): void {
   clearTitleStmt = db.prepare('UPDATE channels SET title = NULL WHERE channel_id = ?');
 
   getAllVideosStmt = db.prepare('SELECT video_id, title, channel_id, channel_name, thumbnail FROM videos');
+  getOneVideoStmt = db.prepare('SELECT video_id, title, channel_id, channel_name, thumbnail FROM videos LIMIT 1');
   getVideoByIdStmt = db.prepare('SELECT video_id FROM videos WHERE video_id = ?');
   insertVideoStmt = db.prepare('INSERT INTO videos (video_id, title, channel_id, channel_name, thumbnail) VALUES (?, ?, ?, ?, ?)');
   deleteVideoStmt = db.prepare('DELETE FROM videos WHERE video_id = ?');
@@ -123,6 +127,12 @@ export function getSubscribing(): ChannelID[] {
   return rows.map(r => assertChannelId(r.channel_id));
 }
 
+export function getOneSubscribing(): ChannelID | null {
+  throwIfNotInit(getOneByStatusStmt);
+  const row = getOneByStatusStmt.get('subscribing') as { channel_id: string } | undefined;
+  return row ? assertChannelId(row.channel_id) : null;
+}
+
 export function getSubscribed(): ChannelID[] {
   throwIfNotInit(getByStatusStmt);
   const rows = getByStatusStmt.all('subscribed') as { channel_id: string }[];
@@ -158,6 +168,19 @@ export function getVideoQueue(): QueuedVideo[] {
     channel_name: r.channel_name,
     thumbnail: r.thumbnail,
   }));
+}
+
+export function getOneQueuedVideo(): QueuedVideo | null {
+  throwIfNotInit(getOneVideoStmt);
+  const r = getOneVideoStmt.get() as { video_id: string; title: string | null; channel_id: string | null; channel_name: string | null; thumbnail: Uint8Array | null } | undefined;
+  if (!r) return null;
+  return {
+    video_id: r.video_id as VideoID,
+    title: r.title,
+    channel_id: r.channel_id as ChannelID | null,
+    channel_name: r.channel_name,
+    thumbnail: r.thumbnail,
+  };
 }
 
 export function addVideoToQueue(videoId: VideoID, title: string | null, channelId: ChannelID | null, channelName: string | null, thumbnail: Uint8Array | null): void {
