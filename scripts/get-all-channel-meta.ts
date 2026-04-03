@@ -11,7 +11,7 @@ if (positionals.length !== 1) {
 
 let dir = positionals[0];
 
-const openedDir = await fs.opendirSync(dir);
+const openedDir = fs.opendirSync(dir);
 
 for await (const entry of openedDir) {
   if (!entry.isDirectory()) continue;

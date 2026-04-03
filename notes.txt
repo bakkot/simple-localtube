@@ -1,14 +1,14 @@
 clean up console.log
 
-document minimum node version
+document a minimum node version
 
 ensure all fetchs are encapsulated in their own utilities
 
 organize files more generally
+top level doesn't have source
+npm scripts for running
 
 docs for scripts
-
-dbs under a separate folder
 
 todo consistency for node:foo vs foo + lint
 
@@ -24,7 +24,7 @@ handle missing avatars etc (placeholder)
 - favicon
 - pull out the yt-dlp stuff
 - test w/ pinchflat, have sample lifecycle script
-- placeholder avatar
+- placeholder avatars for channels, videos
 
 all outstanding todos
 
