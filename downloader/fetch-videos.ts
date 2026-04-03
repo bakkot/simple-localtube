@@ -201,10 +201,22 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
   addVideo(video);
 }
 
+async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
+  const result = await execAsync(
+    [YT_DLP_PATH, '--dump-json', '--skip-download', `https://www.youtube.com/watch?v=${videoId}`].join(' '),
+    { encoding: 'utf-8' },
+  );
+  const info = JSON.parse(result.stdout);
+  const channelId = info.channel_id as ChannelID;
+  if (!channelId) throw new Error(`no channel_id in yt-dlp info for video ${videoId}`);
+  return channelId;
+}
+
 let queuedVideos = getVideoQueue();
 let videoProcessedCount = 0;
 while (queuedVideos.length > 0) {
-  const videoId = queuedVideos[0].video_id;
+  const queued = queuedVideos[0];
+  const videoId = queued.video_id;
   if (isVideoInDb(videoId)) {
     removeVideoFromQueue(videoId);
     videoProcessedCount++;
@@ -212,64 +224,12 @@ while (queuedVideos.length > 0) {
     queuedVideos = getVideoQueue();
     continue;
   }
-  using tempDir = getTemp(tempdir);
-  console.log(`fetching queued video https://www.youtube.com/watch?v=${videoId} to ${tempDir.path}`);
-  const command = [
-    YT_DLP_PATH,
-    '--write-info-json',
-    '--write-thumbnail',
-    '--write-auto-subs',
-    '--write-subs',
-    '--sub-langs',
-    'en.*',
-    '--format',
-    'b',
-    '--retry-sleep',
-    'fragment:exp=1:20',
-    '--sleep-requests',
-    '10',
-    '--min-sleep-interval',
-    '2',
-    '--max-sleep-interval',
-    '5',
-    '--sleep-subtitles',
-    '20',
-    `https://www.youtube.com/watch?v=${videoId}`,
-  ].join(' ');
-  console.log(`executing: ${command}`);
-  const result = await execAsync(command, { encoding: 'utf-8', cwd: tempDir.path });
 
-  const files = fs.readdirSync(tempDir.path).filter(f => !f.startsWith('.'));
-  const json = files.filter(f => f.endsWith('.json'));
-  if (json.length !== 1) throw new Error(`got not exactly 1 json file after download ${JSON.stringify(json)}`);
-  const video = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4'));
-  if (video.length !== 1) throw new Error(`got not exactly 1 video file after download ${JSON.stringify(video)}`);
-  const thumb = files.filter(f => f.endsWith('.png') || f.endsWith('.webp') || f.endsWith('.jpg') || f.endsWith('.gif'));
-  if (thumb.length !== 1) throw new Error(`got not exactly 1 thumb file after download ${JSON.stringify(thumb)}`);
-  const subs = files.filter(f => f.endsWith('.vtt'));
-  if (files.length !== subs.length + 3) throw new Error(`got unexpected files after download ${JSON.stringify(files)}`);
-
-  const infoJson = JSON.parse(fs.readFileSync(path.join(tempDir.path, json[0]), 'utf8'));
-  const channelId = infoJson.channel_id as ChannelID;
-  if (!channelId) throw new Error(`no channel_id in info json for video ${videoId}`);
-
+  const channelId = queued.channel_id ?? await resolveChannelForVideo(videoId);
   const channelDir = path.join(mediaDir, channelId);
   if (!fs.existsSync(channelDir)) fs.mkdirSync(channelDir);
   await addChannelIfNotExists(channelId);
-
-  const videoDir = path.join(mediaDir, channelId, videoId);
-  if (!fs.existsSync(videoDir)) fs.mkdirSync(videoDir, { recursive: true });
-
-  await move(path.join(tempDir.path, json[0]), path.join(videoDir, 'data.json'));
-  await move(path.join(tempDir.path, video[0]), path.join(videoDir, 'video.' + nameExt(video[0]).ext));
-  await move(path.join(tempDir.path, thumb[0]), path.join(videoDir, 'thumb.' + nameExt(thumb[0]).ext));
-  for (const sub of subs) {
-    await move(path.join(tempDir.path, sub), path.join(videoDir, 'subs.' + sub.split('.').slice(-2).join('.')));
-  }
-
-  const videoData = videoFromDisk(mediaDir, channelId, videoId);
-  if (videoData == null) throw new Error(`metadata did not exist after fetching for queued video ${videoId}`);
-  addVideo(videoData);
+  await addVideoIfNotExists(channelId, videoId);
 
   if (!isVideoInQueue(videoId)) {
     queuedVideos = getVideoQueue();
