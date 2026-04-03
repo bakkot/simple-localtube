@@ -58,7 +58,7 @@
             </#if>
             <div class="video-details">
               <#if video.hasMetadata>
-                <div class="video-title"><# video.title></div>
+                <a class="video-title" href="https://www.youtube.com/watch?v=<# video.id>" target="_blank"><# video.title></a>
                 <div class="video-channel"><# video.channelName></div>
               </#if>
               <div class="video-slug"><# video.id></div>
