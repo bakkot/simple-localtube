@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
-import { channelIDFromCanonicalURL, type ChannelID, type VideoID, assertChannelId } from './util.ts';
+import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
 
@@ -381,6 +381,68 @@ export function addAPIs(app: Express) {
       console.error('Add subscription error:', error);
       let msg = error instanceof Error ? error.message : String(error);
       res.status(500).json({ message: 'Failed to add subscription: ' + msg });
+    }
+  });
+
+  app.post('/api/add-video', (req: Request, res: Response): void => {
+    try {
+      if (!req.permissions!.canSubscribe) {
+        res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
+        return;
+      }
+
+      if (!subscriptionsDb) {
+        res.status(403).json({ message: 'Subscriptions are not enabled' });
+        return;
+      }
+
+      const { videoInput } = req.body as { videoInput: unknown };
+
+      if (typeof videoInput !== 'string') {
+        res.status(400).json({ message: 'Video input must be a string' });
+        return;
+      }
+
+      const videoId = toVideoID(videoInput.trim());
+      if (!videoId) {
+        res.status(400).json({ message: 'Could not extract a video ID from the input. Accepts YouTube URLs (including mobile, short, and shorts links) or an 11-character video ID.' });
+        return;
+      }
+
+      subscriptionsDb.addVideoToQueue(videoId);
+      res.json({ message: 'Video added to queue', videoId });
+    } catch (error) {
+      console.error('Add video error:', error);
+      let msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ message: 'Failed to add video: ' + msg });
+    }
+  });
+
+  app.post('/api/remove-queued-video', (req: Request, res: Response): void => {
+    try {
+      if (!req.permissions!.canSubscribe) {
+        res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
+        return;
+      }
+
+      if (!subscriptionsDb) {
+        res.status(403).json({ message: 'Subscriptions are not enabled' });
+        return;
+      }
+
+      const { videoId } = req.body as { videoId: unknown };
+
+      if (!videoId || typeof videoId !== 'string') {
+        res.status(400).json({ message: 'Video ID is required and must be a string' });
+        return;
+      }
+
+      subscriptionsDb.removeVideoFromQueue(videoId as VideoID);
+      res.json({ message: 'Video removed from queue' });
+    } catch (error) {
+      console.error('Remove queued video error:', error);
+      let msg = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ message: 'Failed to remove video: ' + msg });
     }
   });
 

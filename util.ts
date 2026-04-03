@@ -18,12 +18,17 @@ export function toVideoID(url: string): VideoID | null {
     ) {
       let res = parsedUrl.searchParams.get('v');
       if (res) return res as VideoID;
+      const shortsMatch = parsedUrl.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]+)/);
+      if (shortsMatch) return shortsMatch[1] as VideoID;
     } else if (parsedUrl.hostname === 'youtu.be') {
       let res = parsedUrl.pathname.substring(1);
       if (res.length > 0) return res as VideoID;
     }
   } catch {
     // pass
+  }
+  if (/^[a-zA-Z0-9_-]{11}$/.test(url)) {
+    return url as VideoID;
   }
   return null;
 }

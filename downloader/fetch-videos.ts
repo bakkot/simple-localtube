@@ -8,7 +8,7 @@ import { getLatestVideoUrls } from './get-channel-video-ids.ts';
 import { channelFromDisk, videoFromDisk } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
-import { init as initSubscriptionsDb, getSubscribing, getSubscribed, markSubscribed, isInSubscriptions } from '../subscriptions-db.ts';
+import { init as initSubscriptionsDb, getSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getVideoQueue, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
 
 const execAsync = promisify(execCb);
 
@@ -200,6 +200,87 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
   }
   addVideo(video);
 }
+
+let queuedVideos = getVideoQueue();
+let videoProcessedCount = 0;
+while (queuedVideos.length > 0) {
+  const videoId = queuedVideos[0];
+  if (isVideoInDb(videoId)) {
+    removeVideoFromQueue(videoId);
+    videoProcessedCount++;
+    console.log(`queued video ${videoId} already in database, removing from queue`);
+    queuedVideos = getVideoQueue();
+    continue;
+  }
+  using tempDir = getTemp(tempdir);
+  console.log(`fetching queued video https://www.youtube.com/watch?v=${videoId} to ${tempDir.path}`);
+  const command = [
+    YT_DLP_PATH,
+    '--write-info-json',
+    '--write-thumbnail',
+    '--write-auto-subs',
+    '--write-subs',
+    '--sub-langs',
+    'en.*',
+    '--format',
+    'b',
+    '--retry-sleep',
+    'fragment:exp=1:20',
+    '--sleep-requests',
+    '10',
+    '--min-sleep-interval',
+    '2',
+    '--max-sleep-interval',
+    '5',
+    '--sleep-subtitles',
+    '20',
+    `https://www.youtube.com/watch?v=${videoId}`,
+  ].join(' ');
+  console.log(`executing: ${command}`);
+  const result = await execAsync(command, { encoding: 'utf-8', cwd: tempDir.path });
+
+  const files = fs.readdirSync(tempDir.path).filter(f => !f.startsWith('.'));
+  const json = files.filter(f => f.endsWith('.json'));
+  if (json.length !== 1) throw new Error(`got not exactly 1 json file after download ${JSON.stringify(json)}`);
+  const video = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4'));
+  if (video.length !== 1) throw new Error(`got not exactly 1 video file after download ${JSON.stringify(video)}`);
+  const thumb = files.filter(f => f.endsWith('.png') || f.endsWith('.webp') || f.endsWith('.jpg') || f.endsWith('.gif'));
+  if (thumb.length !== 1) throw new Error(`got not exactly 1 thumb file after download ${JSON.stringify(thumb)}`);
+  const subs = files.filter(f => f.endsWith('.vtt'));
+  if (files.length !== subs.length + 3) throw new Error(`got unexpected files after download ${JSON.stringify(files)}`);
+
+  const infoJson = JSON.parse(fs.readFileSync(path.join(tempDir.path, json[0]), 'utf8'));
+  const channelId = infoJson.channel_id as ChannelID;
+  if (!channelId) throw new Error(`no channel_id in info json for video ${videoId}`);
+
+  const channelDir = path.join(mediaDir, channelId);
+  if (!fs.existsSync(channelDir)) fs.mkdirSync(channelDir);
+  await addChannelIfNotExists(channelId);
+
+  const videoDir = path.join(mediaDir, channelId, videoId);
+  if (!fs.existsSync(videoDir)) fs.mkdirSync(videoDir, { recursive: true });
+
+  await move(path.join(tempDir.path, json[0]), path.join(videoDir, 'data.json'));
+  await move(path.join(tempDir.path, video[0]), path.join(videoDir, 'video.' + nameExt(video[0]).ext));
+  await move(path.join(tempDir.path, thumb[0]), path.join(videoDir, 'thumb.' + nameExt(thumb[0]).ext));
+  for (const sub of subs) {
+    await move(path.join(tempDir.path, sub), path.join(videoDir, 'subs.' + sub.split('.').slice(-2).join('.')));
+  }
+
+  const videoData = videoFromDisk(mediaDir, channelId, videoId);
+  if (videoData == null) throw new Error(`metadata did not exist after fetching for queued video ${videoId}`);
+  addVideo(videoData);
+
+  if (!isVideoInQueue(videoId)) {
+    queuedVideos = getVideoQueue();
+    continue;
+  }
+  removeVideoFromQueue(videoId);
+  videoProcessedCount++;
+  console.log(`downloaded queued video ${videoId}`);
+  queuedVideos = getVideoQueue();
+}
+console.log(`Fetched ${videoProcessedCount} queued videos`);
 
 const subbed = new Set<ChannelID>();
 let processedCount = 0;

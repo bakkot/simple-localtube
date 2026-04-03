@@ -1,6 +1,6 @@
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import path from 'path';
-import type { ChannelID } from './util.ts';
+import type { ChannelID, VideoID } from './util.ts';
 import { assertChannelId, throwIfNotInit } from './util.ts';
 
 let db: DatabaseSync | null = null;
@@ -13,6 +13,11 @@ let deleteStmt: StatementSync | null = null;
 let updateStatusStmt: StatementSync | null = null;
 let clearTitleStmt: StatementSync | null = null;
 
+let getAllVideosStmt: StatementSync | null = null;
+let getVideoByIdStmt: StatementSync | null = null;
+let insertVideoStmt: StatementSync | null = null;
+let deleteVideoStmt: StatementSync | null = null;
+
 export function init(dbDir: string): void {
   const SUBSCRIPTIONS_DB_PATH = path.join(dbDir, 'subscriptions.sqlite');
 
@@ -20,13 +25,20 @@ export function init(dbDir: string): void {
     timeout: 1000,
   });
 
-  let existing = db.prepare('SELECT name FROM sqlite_master WHERE type=\'table\'').all().map(({ name }) => name);
-  if (existing.length === 0) {
+  let existing = new Set(db.prepare('SELECT name FROM sqlite_master WHERE type=\'table\'').all().map(({ name }) => name));
+  if (!existing.has('channels')) {
     db.exec(`
       CREATE TABLE channels (
           channel_id TEXT PRIMARY KEY,
           status TEXT NOT NULL CHECK(status IN ('subscribing', 'subscribed')),
           title TEXT
+      ) STRICT;
+    `);
+  }
+  if (!existing.has('videos')) {
+    db.exec(`
+      CREATE TABLE videos (
+          video_id TEXT PRIMARY KEY
       ) STRICT;
     `);
   }
@@ -38,6 +50,11 @@ export function init(dbDir: string): void {
   deleteStmt = db.prepare('DELETE FROM channels WHERE channel_id = ?');
   updateStatusStmt = db.prepare('UPDATE channels SET status = ? WHERE channel_id = ?');
   clearTitleStmt = db.prepare('UPDATE channels SET title = NULL WHERE channel_id = ?');
+
+  getAllVideosStmt = db.prepare('SELECT video_id FROM videos');
+  getVideoByIdStmt = db.prepare('SELECT video_id FROM videos WHERE video_id = ?');
+  insertVideoStmt = db.prepare('INSERT INTO videos (video_id) VALUES (?)');
+  deleteVideoStmt = db.prepare('DELETE FROM videos WHERE video_id = ?');
 }
 
 export type SubscriptionData = {
@@ -117,6 +134,37 @@ export function isSubscribed(channelId: ChannelID): boolean {
 export function isInSubscriptions(channelId: ChannelID): boolean {
   throwIfNotInit(getByIdStmt);
   return getByIdStmt.get(channelId) != null;
+}
+
+export function getVideoQueue(): VideoID[] {
+  throwIfNotInit(getAllVideosStmt);
+  const rows = getAllVideosStmt.all() as { video_id: string }[];
+  return rows.map(r => r.video_id as VideoID);
+}
+
+export function addVideoToQueue(videoId: VideoID): void {
+  throwIfNotInit(getVideoByIdStmt);
+  throwIfNotInit(insertVideoStmt);
+  const existing = getVideoByIdStmt.get(videoId) as { video_id: string } | undefined;
+  if (existing) {
+    throw new Error('Video is already in the queue');
+  }
+  insertVideoStmt.run(videoId);
+}
+
+export function removeVideoFromQueue(videoId: VideoID): void {
+  throwIfNotInit(getVideoByIdStmt);
+  throwIfNotInit(deleteVideoStmt);
+  const existing = getVideoByIdStmt.get(videoId) as { video_id: string } | undefined;
+  if (!existing) {
+    throw new Error(`Video ${videoId} is not in the queue`);
+  }
+  deleteVideoStmt.run(videoId);
+}
+
+export function isVideoInQueue(videoId: VideoID): boolean {
+  throwIfNotInit(getVideoByIdStmt);
+  return getVideoByIdStmt.get(videoId) != null;
 }
 
 export function closeSubscriptionsDb(): void {
