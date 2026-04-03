@@ -213,7 +213,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   const videos = getVideosByChannel(channel.channel_id, 30);
   const isSubscribed = subscriptionsDb?.isInSubscriptions(channel.channel_id) ?? false;
 
-  res.send(renderChannelPage(channel, videos, req.username!, req.permissions!, isSubscribed));
+  res.send(renderChannelPage(channel, videos, req.username!, req.permissions!, subscriptionsDb != null, isSubscribed));
 });
 
 app.get('/add-user', (req: Request, res: Response): void => {
