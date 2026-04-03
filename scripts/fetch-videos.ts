@@ -9,20 +9,21 @@ import { fetchMetaForChannel } from '../get-channel-meta.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
 
-function spawnAsync(command: string, options: { cwd?: string } = {}): Promise<{ stdout: string; stderr: string }> {
+function spawnAsync(command: string, options: { cwd?: string; print?: boolean } = {}): Promise<{ stdout: string; stderr: string }> {
+  const { print, ...spawnOptions } = options;
   return new Promise((resolve, reject) => {
-    const child = spawn(command, { shell: true, ...options });
+    const child = spawn(command, { shell: true, ...spawnOptions });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (data: Buffer) => {
       const str = data.toString();
       stdout += str;
-      process.stdout.write(data);
+      if (print) process.stdout.write(data);
     });
     child.stderr.on('data', (data: Buffer) => {
       const str = data.toString();
       stderr += str;
-      process.stderr.write(data);
+      if (print) process.stderr.write(data);
     });
     child.on('close', (code) => {
       if (code !== 0) {
@@ -50,6 +51,10 @@ let { values, positionals } = parseArgs({
     'db-dir': {
       type: 'string',
     },
+    verbose: {
+      type: 'boolean',
+      default: false,
+    },
   },
 });
 
@@ -70,6 +75,7 @@ some-channel-id/some-video-id/video.mp4
 
 let [mediaDir] = positionals;
 let { tempdir } = values;
+const verbose = values.verbose ?? false;
 if (tempdir == null) {
   // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
   tempdir = mediaDir;
@@ -169,8 +175,8 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
         '20', // seconds
         `https://www.youtube.com/watch?v=${videoId}`,
       ].join(' ');
-    console.log(`executing: ${command}`);
-    await spawnAsync(command, { cwd: tempDir.path });
+    if (verbose) console.log(`executing: ${command}`);
+    await spawnAsync(command, { cwd: tempDir.path, print: verbose });
 
     // filter out `._` files created by macOS and similar
     const files = fs.readdirSync(tempDir.path).filter(f => !f.startsWith('.'));
@@ -214,6 +220,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
 async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
   const result = await spawnAsync(
     [YT_DLP_PATH, '--dump-json', '--skip-download', `https://www.youtube.com/watch?v=${videoId}`].join(' '),
+    { print: verbose },
   );
   const info = JSON.parse(result.stdout) as { channel_id?: string };
   const channelId = info.channel_id as ChannelID;
@@ -223,7 +230,7 @@ async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
 
 async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<VideoID[]> {
   const channelVideosUrl = `https://www.youtube.com/channel/${channelId}/videos`;
-  // console.log(`Fetching latest videos for channel ${channelId} from ${channelVideosUrl}`);
+  // console.log(`Fetching latest videos for ${channelVideosUrl}`);
 
   const newVideoIds: VideoID[] = [];
   let startIndex = 1;
@@ -234,10 +241,10 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
       ? `${YT_DLP_PATH} --flat-playlist --print webpage_url "${channelVideosUrl}"`
       : `${YT_DLP_PATH} --playlist-items ${startIndex}:${endIndex} --flat-playlist --print webpage_url "${channelVideosUrl}"`;
 
-    console.log(`Executing: ${command}`);
+    if (verbose) console.log(`Executing: ${command}`);
 
     try {
-      const { stdout } = await spawnAsync(command);
+      const { stdout } = await spawnAsync(command, { print: verbose });
 
       const batchUrls = stdout
         .split('\n')
@@ -245,7 +252,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
         .filter(url => url.length > 0);
 
       if (batchUrls.length === 0) {
-        console.log(`No more videos found for ${channelId} starting from index ${startIndex}.`);
+        if (verbose) console.log(`No more videos found for ${channelId} starting from index ${startIndex}.`);
         break; // Reached the end of the channel's videos
       }
 
@@ -259,7 +266,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
         if (!isVideoInDb(videoId)) {
           newVideoIds.push(videoId);
         } else if (!all) {
-          console.log(`Found known video ${videoId}. Stopping search.`);
+          if (verbose) console.log(`Found known video ${videoId}. Stopping search.`);
           break;
         }
       }
@@ -312,7 +319,7 @@ while ((queued = getOneQueuedVideo()) != null) {
   if (!isVideoInQueue(videoId)) continue;
   removeVideoFromQueue(videoId);
   videoProcessedCount++;
-  console.log(`downloaded queued video ${videoId}`);
+  console.log(`Downloaded queued video ${videoId}`);
 }
 console.log(`Fetched ${videoProcessedCount} queued videos`);
 

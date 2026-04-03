@@ -2,8 +2,6 @@ clean up console.log
 
 document minimum node version
 
-fetch-videos needs a `--verbose`
-
 ensure all fetchs are encapsulated in their own utilities
 
 organize files more generally
