@@ -186,7 +186,7 @@ const imageMimeToExt: Record<string, string | undefined> = {
 const EXIT_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2'];
 export function getTemp(base=os.tmpdir()): { [Symbol.dispose]: () => void; path: string; } {
   const tempDir = fs.mkdtempSync(path.join(base, 'tmp-localtube-'));
-  console.log({ tempDir });
+  // console.log({ tempDir });
   function cleanup() {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
