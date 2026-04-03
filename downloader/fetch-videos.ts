@@ -204,7 +204,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
 let queuedVideos = getVideoQueue();
 let videoProcessedCount = 0;
 while (queuedVideos.length > 0) {
-  const videoId = queuedVideos[0];
+  const videoId = queuedVideos[0].video_id;
   if (isVideoInDb(videoId)) {
     removeVideoFromQueue(videoId);
     videoProcessedCount++;

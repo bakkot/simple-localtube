@@ -531,14 +531,19 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
 }
 
 const videoQueueTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'video-queue.html'), 'utf8'));
-export function renderVideoQueuePage(username: string, permissions: Permissions, videoQueue: import('./util.ts').VideoID[]): string {
+export function renderVideoQueuePage(username: string, permissions: Permissions, videoQueue: import('./subscriptions-db.ts').QueuedVideo[]): string {
   return applyTemplate(videoQueueTemplate, {
     commonCSS,
     formPageCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
     canSubscribe: permissions.canSubscribe,
     videosIsEmpty: videoQueue.length === 0,
-    videos: videoQueue.map(id => ({ id })),
+    videos: videoQueue.map(v => ({
+      id: v.video_id,
+      title: v.title,
+      channelName: v.channel_name,
+      hasMetadata: v.title != null,
+    })),
   });
 }
 

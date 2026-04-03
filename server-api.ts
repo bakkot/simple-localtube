@@ -3,6 +3,51 @@ import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, change
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
+import { getJsonEnd } from './json-excise.ts';
+
+interface VideoDetails {
+  videoId: string;
+  title: string;
+  channelId: string;
+  author: string;
+}
+
+async function fetchVideoDetails(videoId: VideoID): Promise<VideoDetails | null> {
+  try {
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; LocalTube/1.0)'
+      }
+    });
+    if (!response.ok) return null;
+
+    const html = await response.text();
+    const needle = '"videoDetails":';
+    let searchFrom = 0;
+    while (true) {
+      const idx = html.indexOf(needle, searchFrom);
+      if (idx === -1) break;
+      const jsonStart = idx + needle.length;
+      const jsonEnd = getJsonEnd(html, jsonStart);
+      if (jsonEnd === -1) {
+        searchFrom = jsonStart;
+        continue;
+      }
+      try {
+        const obj = JSON.parse(html.slice(jsonStart, jsonEnd));
+        if (obj && typeof obj.videoId === 'string') {
+          return obj as VideoDetails;
+        }
+      } catch {
+        // not valid JSON, try next
+      }
+      searchFrom = jsonStart;
+    }
+  } catch {
+    // fetch failed
+  }
+  return null;
+}
 
 async function resolveChannelInput(input: string): Promise<{ channelId: ChannelID; title: string }> {
   let url: string;
@@ -384,7 +429,7 @@ export function addAPIs(app: Express) {
     }
   });
 
-  app.post('/api/add-video', (req: Request, res: Response): void => {
+  app.post('/api/add-video', async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.permissions!.canSubscribe) {
         res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
@@ -409,8 +454,20 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      subscriptionsDb.addVideoToQueue(videoId);
-      res.json({ message: 'Video added to queue', videoId });
+      const details = await fetchVideoDetails(videoId);
+      subscriptionsDb.addVideoToQueue(
+        videoId,
+        details?.title ?? null,
+        (details?.channelId ?? null) as ChannelID | null,
+        details?.author ?? null,
+      );
+      res.json({
+        message: 'Video added to queue',
+        videoId,
+        title: details?.title ?? null,
+        channelId: details?.channelId ?? null,
+        channelName: details?.author ?? null,
+      });
     } catch (error) {
       console.error('Add video error:', error);
       let msg = error instanceof Error ? error.message : String(error);
