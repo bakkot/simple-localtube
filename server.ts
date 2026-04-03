@@ -5,7 +5,7 @@ import { parseArgs } from 'util';
 import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
 import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
-import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderVideoQueuePage, renderSettingsPage, renderSearchPage } from './frontend.ts';
+import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderAddVideoPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
 // Extend Request interface to include username
@@ -252,14 +252,14 @@ app.get('/subscriptions', (req: Request, res: Response): void => {
   res.send(renderSubscriptionsPage(req.username!, req.permissions!, subscriptionsData));
 });
 
-app.get('/video-queue', (req: Request, res: Response): void => {
+app.get('/add-video', (req: Request, res: Response): void => {
   if (!subscriptionsDb) {
     res.status(500).send('Server was started without --enable-subscriptions');
     return;
   }
 
   const videoQueue = subscriptionsDb.getVideoQueue();
-  res.send(renderVideoQueuePage(req.username!, req.permissions!, videoQueue));
+  res.send(renderAddVideoPage(req.username!, req.permissions!, videoQueue));
 });
 
 app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<void> => {
