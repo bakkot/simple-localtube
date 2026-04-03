@@ -1,7 +1,8 @@
+import * as path from 'node:path';
+import { parseArgs } from 'node:util';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
-import { parseArgs } from 'util';
 import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
 import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
@@ -32,7 +33,7 @@ const { values } = parseArgs({
   },
 });
 const enableSubscriptions = values['enable-subscriptions'] ?? false;
-const dbDir = values['db-dir'] ?? import.meta.dirname;
+const dbDir = values['db-dir'] ?? path.join(import.meta.dirname, 'dbs');
 const port = values.port == null ? 3000 : parsePort(values.port);
 
 initMediaDb(dbDir);

@@ -1,5 +1,5 @@
-import fsp from 'fs/promises';
-import { parseArgs } from 'util';
+import * as fs from 'node:fs';
+import { parseArgs } from 'node:util';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
 import type { ChannelID } from '../util.ts';
 
@@ -11,7 +11,7 @@ if (positionals.length !== 1) {
 
 let dir = positionals[0];
 
-const openedDir = await fsp.opendir(dir);
+const openedDir = await fs.opendirSync(dir);
 
 for await (const entry of openedDir) {
   if (!entry.isDirectory()) continue;

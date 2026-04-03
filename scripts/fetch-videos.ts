@@ -61,7 +61,7 @@ try {
   process.exit(1);
 }
 
-const dbDir = values['db-dir'] ?? path.join(import.meta.dirname, '..');
+const dbDir = values['db-dir'] ?? path.join(import.meta.dirname, '..', 'dbs');
 initMediaDb(dbDir);
 initSubscriptionsDb(dbDir);
 

@@ -1,5 +1,5 @@
 node_modules/
-*.sqlite
+dbs/
 keys.json
 yt-dlp
 CLAUDE.md
