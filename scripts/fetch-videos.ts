@@ -1,15 +1,40 @@
 import { getTemp, move, nameExt, toVideoID, type ChannelID, type VideoID } from '../util.ts';
-import { parseArgs, promisify } from 'node:util';
+import { parseArgs } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync, exec as execCb } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { channelFromDisk, videoFromDisk } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
 
-const execAsync = promisify(execCb);
+function spawnAsync(command: string, options: { cwd?: string } = {}): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, { shell: true, ...options });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (data: Buffer) => {
+      const str = data.toString();
+      stdout += str;
+      process.stdout.write(data);
+    });
+    child.stderr.on('data', (data: Buffer) => {
+      const str = data.toString();
+      stderr += str;
+      process.stderr.write(data);
+    });
+    child.on('close', (code) => {
+      if (code !== 0) {
+        const err = new Error(`Command failed with exit code ${code}`);
+        (err as unknown as Record<string, unknown>).stderr = stderr;
+        reject(err);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, '..', 'yt-dlp');
 const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call
@@ -145,23 +170,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
         `https://www.youtube.com/watch?v=${videoId}`,
       ].join(' ');
     console.log(`executing: ${command}`);
-    // TODO option to print to stdout/s
-    const result = await execAsync(
-      command,
-      {
-        encoding: 'utf-8',
-        cwd: tempDir.path,
-      },
-    );
-    // probably we should check stderr
-    // but, we're going to validate that we have the expected files anyway, so whatever
-
-    // if (result.error) {
-    //   throw result.error;
-    // }
-    // if (result.status !== 0) {
-    //   throw new Error(`Command failed with exit code ${result.status}\nStderr: ${result.stderr}`);
-    // }
+    await spawnAsync(command, { cwd: tempDir.path });
 
     // filter out `._` files created by macOS and similar
     const files = fs.readdirSync(tempDir.path).filter(f => !f.startsWith('.'));
@@ -203,9 +212,8 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
 }
 
 async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
-  const result = await execAsync(
+  const result = await spawnAsync(
     [YT_DLP_PATH, '--dump-json', '--skip-download', `https://www.youtube.com/watch?v=${videoId}`].join(' '),
-    { encoding: 'utf-8' },
   );
   const info = JSON.parse(result.stdout) as { channel_id?: string };
   const channelId = info.channel_id as ChannelID;
@@ -229,14 +237,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
     console.log(`Executing: ${command}`);
 
     try {
-      const { stdout, stderr } = await execAsync(command);
-
-      if (stderr) {
-        // yt-dlp often prints warnings/info to stderr, only log significant errors
-        if (stderr.toLowerCase().includes('error')) {
-          console.warn(`yt-dlp stderr for ${channelId} (${startIndex}-${endIndex}): ${stderr.trim()}`);
-        }
-      }
+      const { stdout } = await spawnAsync(command);
 
       const batchUrls = stdout
         .split('\n')
