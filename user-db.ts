@@ -1,17 +1,13 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { scrypt, randomBytes, createHmac } from 'node:crypto';
 import { promisify } from 'node:util';
 import path from 'path';
 import fs from 'fs';
 import { isChannelInDb } from './media-db.ts';
 import type { ChannelID } from './util.ts';
-import { LRUCache } from './util.ts';
+import { LRUCache, throwIfNotInit } from './util.ts';
 
 const scryptAsync = promisify(scrypt);
-
-// TODO configurable
-const USER_DB_PATH = path.join(import.meta.dirname, './user_data.sqlite');
-const KEYS_PATH = path.join(import.meta.dirname, './keys.json');
 
 type Keys = {
   pepper: Buffer;
@@ -31,77 +27,89 @@ export type Permissions = {
   canSubscribe: boolean;
 };
 
-
-let db: DatabaseSync | undefined = new DatabaseSync(USER_DB_PATH, {
-  timeout: 1000,
-});
-
+let db: DatabaseSync | null = null;
+let keys: Keys | null = null;
 
 const userPermissionsCache = new LRUCache<string, Permissions>(100);
 
-let existing = db.prepare('SELECT name FROM sqlite_master WHERE type=\'table\'').all().map(({ name }) => name);
-if (existing.length === 0) {
-  db.exec(`
-    CREATE TABLE users (
-        username TEXT PRIMARY KEY,
-        hashed_password BLOB NOT NULL,
-        salt BLOB NOT NULL,
-        permissions TEXT NOT NULL, -- stored as JSON for future compat; we cache on user load anyway
-        created_by TEXT REFERENCES users(username)
-    ) STRICT;
-  `);
-} else if (!(new Set(existing)).isSubsetOf(new Set(['users']))) {
-  throw new Error(`${USER_DB_PATH} exists but does not contain the data we expect`);
-}
+let getUserByUsernameStmt: StatementSync | null = null;
+let addUserStmt: StatementSync | null = null;
+let getCreatedAccountsStmt: StatementSync | null = null;
+let hasAnyUsersStmt: StatementSync | null = null;
+let updatePasswordStmt: StatementSync | null = null;
+let updatePermissionsStmt: StatementSync | null = null;
 
-type KeysAsStrings = {
-  pepper: string;
-  hmacKey: string;
-}
-if (!fs.existsSync(KEYS_PATH)) {
-  const pepper = randomBytes(32);
-  const hmacKey = randomBytes(32);
+export function init(dbDir: string): void {
+  const USER_DB_PATH = path.join(dbDir, 'user_data.sqlite');
+  const KEYS_PATH = path.join(dbDir, 'keys.json');
 
-  const keysData: KeysAsStrings = {
-    pepper: pepper.toString('base64'),
-    hmacKey: hmacKey.toString('base64')
+  db = new DatabaseSync(USER_DB_PATH, {
+    timeout: 1000,
+  });
+
+  let existing = db.prepare('SELECT name FROM sqlite_master WHERE type=\'table\'').all().map(({ name }) => name);
+  if (existing.length === 0) {
+    db.exec(`
+      CREATE TABLE users (
+          username TEXT PRIMARY KEY,
+          hashed_password BLOB NOT NULL,
+          salt BLOB NOT NULL,
+          permissions TEXT NOT NULL, -- stored as JSON for future compat; we cache on user load anyway
+          created_by TEXT REFERENCES users(username)
+      ) STRICT;
+    `);
+  } else if (!(new Set(existing)).isSubsetOf(new Set(['users']))) {
+    throw new Error(`${USER_DB_PATH} exists but does not contain the data we expect`);
+  }
+
+  type KeysAsStrings = {
+    pepper: string;
+    hmacKey: string;
+  }
+  if (!fs.existsSync(KEYS_PATH)) {
+    const pepper = randomBytes(32);
+    const hmacKey = randomBytes(32);
+
+    const keysData: KeysAsStrings = {
+      pepper: pepper.toString('base64'),
+      hmacKey: hmacKey.toString('base64')
+    };
+
+    fs.writeFileSync(KEYS_PATH, JSON.stringify(keysData, null, 2));
+    console.log('Generated new keys.json file');
+  }
+
+  const keysData = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8')) as KeysAsStrings;
+  keys = {
+    pepper: Buffer.from(keysData.pepper, 'base64'),
+    hmacKey: Buffer.from(keysData.hmacKey, 'base64'),
   };
 
-  fs.writeFileSync(KEYS_PATH, JSON.stringify(keysData, null, 2));
-  console.log('Generated new keys.json file');
+  getUserByUsernameStmt = db.prepare(`
+    SELECT * FROM users WHERE username = ?
+  `);
+
+  addUserStmt = db.prepare(`
+    INSERT INTO users (username, hashed_password, salt, permissions, created_by)
+    VALUES (:username, :hashed_password, :salt, :permissions, :created_by)
+  `);
+
+  getCreatedAccountsStmt = db.prepare(`
+    SELECT username FROM users WHERE created_by = ?
+  `);
+
+  hasAnyUsersStmt = db.prepare(`
+    SELECT 1 FROM users LIMIT 1
+  `);
+
+  updatePasswordStmt = db.prepare(`
+    UPDATE users SET hashed_password = :hashed_password, salt = :salt WHERE username = :username
+  `);
+
+  updatePermissionsStmt = db.prepare(`
+    UPDATE users SET permissions = :permissions WHERE username = :username
+  `);
 }
-
-const keysData = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8')) as KeysAsStrings;
-let keys: Keys = {
-  pepper: Buffer.from(keysData.pepper, 'base64'),
-  hmacKey: Buffer.from(keysData.hmacKey, 'base64')
-};
-
-
-let getUserByUsernameStmt = db.prepare(`
-  SELECT * FROM users WHERE username = ?
-`);
-
-let addUserStmt = db.prepare(`
-  INSERT INTO users (username, hashed_password, salt, permissions, created_by)
-  VALUES (:username, :hashed_password, :salt, :permissions, :created_by)
-`);
-
-let getCreatedAccountsStmt = db.prepare(`
-  SELECT username FROM users WHERE created_by = ?
-`);
-
-let hasAnyUsersStmt = db.prepare(`
-  SELECT 1 FROM users LIMIT 1
-`);
-
-let updatePasswordStmt = db.prepare(`
-  UPDATE users SET hashed_password = :hashed_password, salt = :salt WHERE username = :username
-`);
-
-let updatePermissionsStmt = db.prepare(`
-  UPDATE users SET permissions = :permissions WHERE username = :username
-`);
 
 export function generateSalt(): Buffer {
   return randomBytes(32);
@@ -128,6 +136,8 @@ type BearerToken = {
   signature: string;
 };
 function generateBearerToken(username: string): string {
+  throwIfNotInit(keys);
+
   const payload: BearTokenPayload = {
     username,
     timestamp: Date.now()
@@ -147,6 +157,8 @@ function generateBearerToken(username: string): string {
 }
 
 export function decodeBearerToken(tokenStr: string): { username: string; timestamp: number } {
+  throwIfNotInit(keys);
+
   let tokenData: BearerToken;
   try {
     const tokenJson = Buffer.from(tokenStr, 'base64').toString('utf8');
@@ -212,6 +224,10 @@ export async function addUser(
   permissions: Permissions,
   createdBy: string | null,
 ): Promise<void> {
+  throwIfNotInit(getUserByUsernameStmt);
+  throwIfNotInit(addUserStmt);
+  throwIfNotInit(keys);
+
   const existingUser = getUserByUsernameStmt.get(username);
   if (existingUser) {
     throw new Error('User already exists');
@@ -238,6 +254,8 @@ export async function addUser(
 }
 
 export function getUserPermissions(username: string): Permissions {
+  throwIfNotInit(getUserByUsernameStmt);
+
   const cached = userPermissionsCache.get(username);
   if (cached) {
     return cached;
@@ -254,6 +272,7 @@ export function getUserPermissions(username: string): Permissions {
 }
 
 export function getCreatedBy(username: string): string | null {
+  throwIfNotInit(getUserByUsernameStmt);
   const user = getUserByUsernameStmt.get(username) as { created_by: string | null } | undefined;
   if (!user) {
     throw new Error(`unrecognized user ${username}`);
@@ -262,6 +281,7 @@ export function getCreatedBy(username: string): string | null {
 }
 
 export function getCreatedAccounts(username: string): string[] {
+  throwIfNotInit(getCreatedAccountsStmt);
   return (getCreatedAccountsStmt.all(username) as { username: string }[]).map(r => r.username);
 }
 
@@ -273,6 +293,7 @@ export function getCreatedAccountsWithPermissions(username: string): { username:
 }
 
 export function updateUserPermissions(username: string, permissions: Permissions): void {
+  throwIfNotInit(updatePermissionsStmt);
   userPermissionsCache.delete(username);
   updatePermissionsStmt.run({
     ':permissions': serializePermissions(permissions),
@@ -289,33 +310,26 @@ export function arePermissionsAtLeastAsRestrictive(
   requestedPermissions: Permissions,
   granterPermissions: Permissions
 ): boolean {
-  // Check createUser permission - can only grant if granter has it
   if (requestedPermissions.createUser && !granterPermissions.createUser) {
     return false;
   }
 
-  // Check canSubscribe permission - can only grant if granter has it
   if (requestedPermissions.canSubscribe && !granterPermissions.canSubscribe) {
     return false;
   }
 
-  // Check special rule: canSubscribe requires all channels access
   if (requestedPermissions.canSubscribe && requestedPermissions.allowedChannels !== 'all') {
     return false;
   }
 
-  // Check channel permissions
   if (granterPermissions.allowedChannels === 'all') {
-    // Granter has all channels, can grant any channel permissions
     return true;
   }
 
   if (requestedPermissions.allowedChannels === 'all') {
-    // Granter doesn't have all channels but requested permissions do
     return false;
   }
 
-  // Both have specific channel sets - check if requested is subset of granter's
   for (const channelId of requestedPermissions.allowedChannels) {
     if (!granterPermissions.allowedChannels.has(channelId)) {
       return false;
@@ -326,10 +340,15 @@ export function arePermissionsAtLeastAsRestrictive(
 }
 
 export function hasAnyUsers(): boolean {
+  throwIfNotInit(hasAnyUsersStmt);
   return !!hasAnyUsersStmt.get();
 }
 
 export async function changePassword(username: string, currentPassword: string, newPassword: string): Promise<void> {
+  throwIfNotInit(getUserByUsernameStmt);
+  throwIfNotInit(updatePasswordStmt);
+  throwIfNotInit(keys);
+
   const user = getUserByUsernameStmt.get(username) as User | undefined;
   if (!user) {
     throw new Error('User not found');
@@ -351,6 +370,9 @@ export async function changePassword(username: string, currentPassword: string, 
 }
 
 export async function checkUsernamePassword(username: string, password: string): Promise<string | null> {
+  throwIfNotInit(getUserByUsernameStmt);
+  throwIfNotInit(keys);
+
   const user = getUserByUsernameStmt.get(username) as User | undefined;
   if (!user) {
     return null;
@@ -369,6 +391,6 @@ export function closeUserDb(): void {
   if (db) {
     console.log('Closing user database connection.');
     db.close();
-    db = undefined;
+    db = null;
   }
 }

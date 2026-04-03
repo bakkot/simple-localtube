@@ -47,6 +47,12 @@ export function channelIDFromCanonicalURL(url: string): ChannelID | null {
   return null;
 }
 
+export function throwIfNotInit(value: null): never;
+export function throwIfNotInit<T>(value: T | null): asserts value is T;
+export function throwIfNotInit<T>(value: T | null): void {
+  if (value === null) throw new Error('Database not initialized; call init() first');
+}
+
 export function assertChannelId(thing: string): ChannelID {
   if (/^UC[a-zA-Z0-9_-]+$/.test(thing)) {
     return thing as ChannelID;

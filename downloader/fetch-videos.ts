@@ -7,8 +7,8 @@ import { spawnSync, exec as execCb } from 'node:child_process';
 import { getLatestVideoUrls } from './get-channel-video-ids.ts';
 import { channelFromDisk, videoFromDisk } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
-import { addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
-import { getSubscribing, getSubscribed, markSubscribed, isInSubscriptions } from '../subscriptions-db.ts';
+import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
+import { init as initSubscriptionsDb, getSubscribing, getSubscribed, markSubscribed, isInSubscriptions } from '../subscriptions-db.ts';
 
 const execAsync = promisify(execCb);
 
@@ -19,6 +19,9 @@ let { values, positionals } = parseArgs({
   allowNegative: true,
   options: {
     tempdir: {
+      type: 'string',
+    },
+    'db-dir': {
       type: 'string',
     },
   },
@@ -56,6 +59,10 @@ try {
   console.error(`${mediaDir} doesn't appear to be a directory`);
   process.exit(1);
 }
+
+const dbDir = values['db-dir'] ?? path.join(import.meta.dirname, '..');
+initMediaDb(dbDir);
+initSubscriptionsDb(dbDir);
 
 const temps = fs.readdirSync(tempdir).filter(f => f.startsWith('tmp-localtube-'));
 if (temps.length > 0) {

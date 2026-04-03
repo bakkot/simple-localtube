@@ -2,9 +2,9 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { parseArgs } from 'util';
-import { getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
+import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
-import { checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
+import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
@@ -23,14 +23,22 @@ const { values } = parseArgs({
     'enable-subscriptions': {
       type: 'boolean',
     },
+    'db-dir': {
+      type: 'string',
+    },
   },
 });
 const enableSubscriptions = values['enable-subscriptions'] ?? false;
+const dbDir = values['db-dir'] ?? import.meta.dirname;
+
+initMediaDb(dbDir);
+initUserDb(dbDir);
 
 type SubscriptionsDB = typeof import('./subscriptions-db.ts');
 let subscriptionsDb: SubscriptionsDB | null = null;
 if (enableSubscriptions) {
   subscriptionsDb = await import('./subscriptions-db.ts');
+  subscriptionsDb.init(dbDir);
 }
 export { subscriptionsDb };
 

@@ -1,12 +1,20 @@
 import { parseArgs } from 'util';
+import path from 'path';
+import { init as initMediaDb } from '../media-db.ts';
 import { rescan } from '../scan.ts';
 
-let { positionals } = parseArgs({
+let { values, positionals } = parseArgs({
   allowPositionals: true,
+  options: {
+    'db-dir': {
+      type: 'string',
+    },
+  },
 });
 
 if (positionals.length !== 1) {
   console.log(`Usage: node rescan.ts path-to-media-dir
+  --db-dir dir    directory for database files (default: project root)
 
 This expects media-dir to be organized like:
 
@@ -22,6 +30,9 @@ Only the data.json files and video.mp4 (or video.webm) are mandatory. data.json 
 `);
   process.exit(1);
 }
+
+const dbDir = values['db-dir'] ?? path.join(import.meta.dirname, '..');
+initMediaDb(dbDir);
 
 let mediaDir = positionals[0];
 console.log(`Scanning ${mediaDir}`);

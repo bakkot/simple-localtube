@@ -46,4 +46,3 @@ tests with mock db, files, maybe using VFS?
   verify permissions in various cases e.g. search results, individual videos
 
 mode to build to single file inc. bundling frontend templates
-
