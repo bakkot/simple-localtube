@@ -100,7 +100,7 @@ async function addChannelIfNotExists(channelId: ChannelID) {
   if (!fs.existsSync(metaFile)) {
     await fetchMetaForChannel(mediaDir, channelId);
   }
-  const channel = await channelFromDisk(mediaDir, channelId);
+  const channel = channelFromDisk(mediaDir, channelId);
   addChannel(channel);
 }
 
@@ -193,7 +193,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
   // at this point metadata + video exist, either because we just downloaded it
   // or because it already existed, possibly because we downloaded it previously but the server went down during the download
 
-  const video = await videoFromDisk(mediaDir, channelId, videoId);
+  const video = videoFromDisk(mediaDir, channelId, videoId);
   if (video == null) {
     throw new Error(`metadata did not exist after fetching for ${channelId}/${videoId}`);
   }

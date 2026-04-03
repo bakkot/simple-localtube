@@ -25,4 +25,4 @@ Only the data.json files and video.mp4 (or video.webm) are mandatory. data.json 
 
 let mediaDir = positionals[0];
 console.log(`Scanning ${mediaDir}`);
-await rescan(mediaDir);
+rescan(mediaDir);

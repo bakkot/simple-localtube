@@ -3,7 +3,6 @@ import { nameExt, vttToText, type ChannelID, type VideoID } from './util.ts';
 import type { ChannelDataJSON } from './get-channel-meta.ts';
 
 import fs from 'fs';
-import fsp from 'fs/promises';
 import path from 'path';
 
 type VideoDataJSON = {
@@ -12,9 +11,9 @@ type VideoDataJSON = {
   duration: number;
   upload_date: string;
 }
-export async function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: VideoID, fetchMissingMetadata?: ((channelId: ChannelID, videoId: VideoID) => Promise<void>)): Promise<Video | null> {
+export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: VideoID): Video | null {
   let dir = path.join(mediaDir, channelId, videoId);
-  let contents = await fsp.readdir(dir);
+  let contents = fs.readdirSync(dir);
   let vids = contents.filter(c => c === 'video.mp4' || c === 'video.webm');
   if (vids.length === 0) {
     console.error(`skipping ${channelId}/${videoId} because of missing video`);
@@ -24,22 +23,15 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
     throw new Error(`${channelId}/${videoId} contains both a .mp4 and a .webm?`);
   }
   if (!contents.includes('data.json')) {
-    if (fetchMissingMetadata) {
-      await fetchMissingMetadata(channelId, videoId);
-      if (!fs.existsSync(path.join(dir, 'data.json'))) {
-        throw new Error(`fetching metadata for ${channelId}/${videoId} did not result in a data.json in ${dir}`);
-      }
-    } else {
-      console.error(`skipping ${channelId}/${videoId} because of missing data.json`);
-      return null;
-    }
+    console.error(`skipping ${channelId}/${videoId} because of missing data.json`);
+    return null;
   }
   let {
     fulltitle: title,
     description,
     duration,
     upload_date
-  } = JSON.parse(await fsp.readFile(path.join(dir, 'data.json'), 'utf8')) as VideoDataJSON;
+  } = JSON.parse(fs.readFileSync(path.join(dir, 'data.json'), 'utf8')) as VideoDataJSON;
   if (typeof title !== 'string' || typeof description !== 'string' || typeof duration !== 'number' || typeof upload_date !== 'string' || upload_date.length !== 8) {
     throw new Error(`malformed data.json for ${channelId}/${videoId}`);
   }
@@ -66,7 +58,7 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
 
   let subtitleTexts: string[] = [];
   for (let vttPath of Object.values(subtitles_files)) {
-    let vtt = await fsp.readFile(vttPath, 'utf8');
+    let vtt = fs.readFileSync(vttPath, 'utf8');
     let text = vttToText(vtt);
     if (text) subtitleTexts.push(text);
   }
@@ -86,16 +78,16 @@ export async function videoFromDisk(mediaDir: string, channelId: ChannelID, vide
   };
 }
 
-export async function channelFromDisk(mediaDir: string, channelId: ChannelID): Promise<Channel> {
+export function channelFromDisk(mediaDir: string, channelId: ChannelID): Channel {
   let dir = path.join(mediaDir, channelId);
-  let { channel, description, uploader_id } = JSON.parse(await fsp.readFile(path.join(dir, 'data.json'), 'utf8')) as ChannelDataJSON;
+  let { channel, description, uploader_id } = JSON.parse(fs.readFileSync(path.join(dir, 'data.json'), 'utf8')) as ChannelDataJSON;
   if (typeof channel !== 'string' || description != null && typeof description !== 'string' || typeof uploader_id !== 'string') {
     throw new Error(`missing data for ${channelId}`);
   }
   if (uploader_id[0] === '@') {
     uploader_id = uploader_id.slice(1);
   }
-  let contents = await fsp.readdir(dir);
+  let contents = fs.readdirSync(dir);
   let avatar = contents.find(f => f === 'avatar.png' || f === 'avatar.jpg') ?? null;
   let banner = contents.find(f => f === 'banner.png' || f === 'banner.jpg') ?? null;
   let bannerUncropped = contents.find(f => f === 'banner_uncropped.png' || 'banner_uncropped.jpg') ?? null;
@@ -112,16 +104,8 @@ export async function channelFromDisk(mediaDir: string, channelId: ChannelID): P
   };
 }
 
-async function addVideoOffline(video: Video, channel: Channel, addedChannels: Set<ChannelID>) {
-  if (!addedChannels.has(channel.channel_id)) {
-    addChannel(channel);
-    addedChannels.add(channel.channel_id);
-  }
-  addVideo(video);
-}
-
-export async function rescan(mediaDir: string) {
-  const channels = await fsp.readdir(mediaDir, { withFileTypes: true });
+export function rescan(mediaDir: string) {
+  const channels = fs.readdirSync(mediaDir, { withFileTypes: true });
   let addedChannels = new Set<ChannelID>();
 
   try {
@@ -131,23 +115,26 @@ export async function rescan(mediaDir: string) {
 
       const channelPath = path.join(mediaDir, channelEntry.name);
       const channelJson = path.join(channelPath, 'data.json');
-      try {
-        await fsp.access(channelJson);
-      } catch {
+      if (!fs.existsSync(channelJson)) {
         // TODO ensure this is in the readme
         console.log(`skipping ${channelEntry.name} because of missing data.json; if it is a real channel you will need to fetch its metadata before it is usable: see the readme.`);
         continue;
       }
 
-      const videoEntries = await fsp.readdir(channelPath, { withFileTypes: true });
-      const channelData = await channelFromDisk(mediaDir, channelEntry.name as ChannelID);
+      const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
+      const channelData = channelFromDisk(mediaDir, channelEntry.name as ChannelID);
+
+      if (!addedChannels.has(channelData.channel_id)) {
+        addChannel(channelData);
+        addedChannels.add(channelData.channel_id);
+      }
 
       for (const videoEntry of videoEntries) {
         if (!videoEntry.isDirectory()) continue;
-        let vid = await videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID);
+        let vid = videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID);
         if (vid != null) {
           try {
-            await addVideoOffline(vid, channelData, addedChannels);
+            addVideo(vid);
           } catch (error) {
             console.error(`Error adding video ${vid.video_id}:`, error);
           }
