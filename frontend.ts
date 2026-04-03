@@ -5,9 +5,11 @@ import { getChannelById } from './media-db.ts';
 import type { Permissions } from './user-db.ts';
 import { nameExt, type ChannelID } from './util.ts';
 import type { SubscriptionData } from './subscriptions-db.ts';
+import { subscriptionsDb } from './server.ts';
 import { parse as parseTemplate, apply as applyTemplate } from './frontend/tinymarker.ts';
 
 const templates = path.join(import.meta.dirname, 'frontend');
+
 
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -277,7 +279,7 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-settings"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         <div class="settings-dropdown">
           <a href="/settings">Settings</a>
-          <a href="/subscriptions">Subscriptions</a>
+          ${subscriptionsDb ? '<a href="/subscriptions">Subscriptions</a>' : ''}
           ${permissions.createUser ? '<a href="/add-user">Add User</a><a href="/manage-users">Manage Users</a>' : ''}
         </div>
       </span>
