@@ -12,12 +12,6 @@ rename scan.ts to something else, move it under scripts
 split out all the scan logic to its own folder w/ docs
 
 
-FTS5
-one version with descriptions
-one with subs
-one with both
-one with neither
-
 todo consistency for node:foo vs foo + lint
 
 should be a different port
@@ -36,9 +30,7 @@ handle missing avatars etc (placeholder)
 
 affordance for adding specific videos
   goes in the subscriptions file
-  ... maybe that file should be sqlite too...
 
-config for where db files live (just a folder for all of them)
 
 all outstanding todos
 

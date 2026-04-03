@@ -26,10 +26,14 @@ const { values } = parseArgs({
     'db-dir': {
       type: 'string',
     },
+    'port': {
+      type: 'string',
+    },
   },
 });
 const enableSubscriptions = values['enable-subscriptions'] ?? false;
 const dbDir = values['db-dir'] ?? import.meta.dirname;
+const port = values.port == null ? 3000 : parsePort(values.port);
 
 initMediaDb(dbDir);
 initUserDb(dbDir);
@@ -44,7 +48,15 @@ export { subscriptionsDb };
 
 
 const app = express();
-const PORT = 3000;
+
+function parsePort(value: string): number {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 1 || num > 65535) {
+    console.error(`Invalid port: "${value}". Must be an integer between 1 and 65535.`);
+    process.exit(1);
+  }
+  return num;
+}
 
 app.use(express.json());
 app.use(cookieParser());
@@ -121,7 +133,6 @@ app.get('/setup', (req: Request, res: Response): void => {
 });
 
 app.get('/login', (req: Request, res: Response): void => {
-  // Check if user is already authenticated
   const authCookie = req.cookies?.auth as unknown;
   if (typeof authCookie === 'string') {
     try {
@@ -300,9 +311,9 @@ app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise
 addAPIs(app);
 
 
-app.listen(PORT, (error) => {
+app.listen(port, (error) => {
   if (error) {
     throw error;
   }
-  console.log(`LocalTube server running on http://localhost:${PORT}`);
+  console.log(`LocalTube server running on http://localhost:${port}`);
 });
