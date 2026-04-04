@@ -21,6 +21,8 @@ TODO extra_data in DB schema for forward-compat
 
 rename youtube_data.sqlite to media_data.sqlite
 
+finite number of accounts you can create? or maybe, intermediate tier permission where you can make accounts but not accounts which can make accounts?
+
 handle missing avatars etc (placeholder)
 
 - favicon
