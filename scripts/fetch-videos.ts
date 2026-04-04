@@ -163,7 +163,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
         videoFileExists ? '--skip-download' : '',
         '--write-info-json',
         '--write-thumbnail',
-        '--write-auto-subs',
+        // '--write-auto-subs',
         '--write-subs',
         '--sub-langs',
         'en.*',
