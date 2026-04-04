@@ -169,6 +169,8 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
         'en.*',
         // '--format',
         // 'b',
+        '--merge-output-format',
+        'mp4/webm',
         // '--retry-sleep',
         // 'fragment:exp=1:20',
         '--sleep-requests',
