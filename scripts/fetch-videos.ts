@@ -62,13 +62,17 @@ let { values, positionals } = parseArgs({
       type: 'boolean',
       default: false,
     },
+    skiplist: {
+      type: 'string',
+    },
   },
 });
 
 if (positionals.length !== 1) {
   console.log(`Usage: node fetch-videos.ts path-to-media-dir
-  --tempdir dir   path for temporary files (default: path-to-media-dir)
-                  the special value "OS_DEFAULT" will use your operating system's default
+  --tempdir dir        path for temporary files (default: path-to-media-dir)
+                       the special value "OS_DEFAULT" will use your operating system's default
+  --skiplist file.txt  newline-separated list of video IDs or URLs to skip
 
 It is recommended but not required that tempdir be on the same volume as the media, to avoid needing to copy files across volumes.
 
@@ -83,6 +87,19 @@ some-channel-id/some-video-id/video.mp4
 let [mediaDir] = positionals;
 let { tempdir } = values;
 const verbose = values.verbose ?? false;
+
+const skipSet = new Set<VideoID>();
+if (values.skiplist) {
+  const lines = fs.readFileSync(values.skiplist, 'utf-8').split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  for (const line of lines) {
+    const id = toVideoID(line);
+    if (id != null) {
+      skipSet.add(id);
+    }
+  }
+  console.log(`Loaded ${skipSet.size} video IDs to skip`);
+}
+
 if (tempdir == null) {
   // download to the same device as the ultimate destination to avoid having to do cross-device moves after downloading
   tempdir = mediaDir;
@@ -145,6 +162,7 @@ async function addChannelIfNotExists(channelId: ChannelID) {
 }
 
 async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
+  if (skipSet.has(videoId)) return;
   if (isVideoInDb(videoId)) return;
   const videoDir = path.join(mediaDir, channelId, videoId);
   if (!fs.existsSync(videoDir)) {
@@ -331,6 +349,10 @@ let videoProcessedCount = 0;
 let queued;
 while ((queued = getOneQueuedVideo()) != null) {
   const videoId = queued.video_id;
+  if (skipSet.has(videoId)) {
+    console.log(`skipping queued video ${videoId} (in skiplist)`);
+    continue;
+  }
   if (isVideoInDb(videoId)) {
     removeVideoFromQueue(videoId);
     videoProcessedCount++;
