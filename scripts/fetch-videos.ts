@@ -9,6 +9,14 @@ import { fetchMetaForChannel } from '../get-channel-meta.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
 
+class ErrorWithStderr extends Error {
+  stderr: string;
+  constructor(message: string, stderr: string) {
+    super(message);
+    this.stderr = stderr;
+  }
+}
+
 function spawnAsync(command: string, options: { cwd?: string; print?: boolean } = {}): Promise<{ stdout: string; stderr: string }> {
   const { print, ...spawnOptions } = options;
   return new Promise((resolve, reject) => {
@@ -27,8 +35,7 @@ function spawnAsync(command: string, options: { cwd?: string; print?: boolean } 
     });
     child.on('close', (code) => {
       if (code !== 0) {
-        const err = new Error(`Command failed with exit code ${code}`);
-        (err as unknown as Record<string, unknown>).stderr = stderr;
+        const err = new ErrorWithStderr(`Command failed with exit code ${code}`, stderr);
         reject(err);
       } else {
         resolve({ stdout, stderr });
@@ -176,7 +183,16 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
         `https://www.youtube.com/watch?v=${videoId}`,
       ].join(' ');
     if (verbose) console.log(`executing: ${command}`);
-    await spawnAsync(command, { cwd: tempDir.path, print: verbose });
+    try {
+      await spawnAsync(command, { cwd: tempDir.path, print: verbose });
+    } catch (e: unknown) {
+      if (e instanceof ErrorWithStderr && e.stderr.includes('members-only content')) {
+        console.error(`skipping members-only ${videoId}`);
+        // TODO store these somewhere so we don't keep fetching
+        return;
+      }
+      throw e;
+    }
 
     // filter out `._` files created by macOS and similar
     const files = fs.readdirSync(tempDir.path).filter(f => !f.startsWith('.'));
