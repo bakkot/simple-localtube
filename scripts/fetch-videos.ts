@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { channelFromDisk, videoFromDisk } from '../scan.ts';
+import { channelFromDisk, videoFromDisk, type VideoDataJSON } from '../scan.ts';
 import { fetchMetaForChannel } from '../get-channel-meta.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
@@ -155,13 +155,12 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
   const metadataExists = fs.existsSync(metadataFile);
   if (metadataExists && !videoFileExists) {
     throw new Error(`found metadata for ${channelId}/${videoId}, but no video`);
-  } else if (!metadataExists && videoFileExists) {
-    throw new Error(`found video for ${channelId}/${videoId}, but no data.json`);
-  } else if (!metadataExists && !videoFileExists) {
+  } else if (!metadataExists) {
     using tempDir = getTemp(tempdir);
     console.log(`fetching https://www.youtube.com/watch?v=${videoId} to ${tempDir.path}`);
     const command = [
         YT_DLP_PATH,
+        videoFileExists ? '--skip-download' : '',
         '--write-info-json',
         '--write-thumbnail',
         '--write-auto-subs',
@@ -203,25 +202,31 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
       throw new Error(`got not exactly 1 json file after download ${JSON.stringify(json)}`);
     }
     const video = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4'));
-    if (video.length !== 1) {
-      throw new Error(`got not exactly 1 video file after download ${JSON.stringify(video)}`);
+    if (videoFileExists) {
+      if (files.length > 0) {
+        throw new Error(`got video file despite --skip-download after downloading ${JSON.stringify(video)}`);
+      }
+    } else if (video.length !== 1) {
+      throw new Error(`got ${video.length} video files after downloading ${JSON.stringify(video)}`);
     }
     const thumb = files.filter(f => f.endsWith('.png') || f.endsWith('.webp') || f.endsWith('.jpg') || f.endsWith('.gif'));
     if (thumb.length !== 1) {
-      throw new Error(`got not exactly 1 thumb file after download ${JSON.stringify(thumb)}`);
+      throw new Error(`got not exactly 1 thumb file after downloading ${JSON.stringify(thumb)}`);
     }
     const subs = files.filter(f => f.endsWith('.vtt'));
-    if (files.length !== subs.length + 3 /* i.e. json,video,thumb */) {
+    if (files.length !== subs.length + (videoFileExists ? 2 : 3) /* i.e. json,video,thumb */) {
       throw new Error(`got unexpected files after download ${JSON.stringify(files)}`);
     }
 
+    if (!videoFileExists) {
+      await move(path.join(tempDir.path, video[0]), path.join(videoDir, 'video.' + nameExt(video[0]).ext));
+    }
     await move(path.join(tempDir.path, json[0]), path.join(videoDir, 'data.json'));
-    await move(path.join(tempDir.path, video[0]), path.join(videoDir, 'video.' + nameExt(video[0]).ext));
     await move(path.join(tempDir.path, thumb[0]), path.join(videoDir, 'thumb.' + nameExt(thumb[0]).ext));
     for (const sub of subs) {
       await move(path.join(tempDir.path, sub), path.join(videoDir, 'subs.' + sub.split('.').slice(-2).join('.')));
     }
-    console.log(`downloaded video ${nameExt(video[0]).name}`);
+    console.log(`downloaded ${videoFileExists ? 'metadata' : 'video'} for ${nameExt(video[0]).name}`);
   }
   // at this point metadata + video exist, either because we just downloaded it
   // or because it already existed, possibly because we downloaded it previously but the server went down during the download

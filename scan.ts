@@ -5,7 +5,7 @@ import type { ChannelDataJSON } from './get-channel-meta.ts';
 import fs from 'fs';
 import path from 'path';
 
-type VideoDataJSON = {
+export type VideoDataJSON = {
   fulltitle: string;
   description: string;
   duration: number;
