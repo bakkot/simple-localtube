@@ -185,10 +185,15 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
     try {
       await spawnAsync(command, { cwd: tempDir.path, print: verbose });
     } catch (e: unknown) {
-      if (e instanceof ErrorWithStderr && e.stderr.includes('members-only content')) {
-        console.error(`skipping members-only ${videoId}`);
+      if (e instanceof ErrorWithStderr) {
         // TODO store these somewhere so we don't keep fetching
-        return;
+        if (e.stderr.includes('members-only content')) {
+          console.error(`skipping members-only ${videoId}`);
+          return;
+        } else if (e.stderr.includes('confirm your age')) {
+          console.error(`skipping age-gated ${videoId}`);
+          return;
+        }
       }
       throw e;
     }
