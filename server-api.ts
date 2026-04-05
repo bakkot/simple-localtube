@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { addUser, arePermissionsAtLeastAsRestrictive, canUserViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
+import { addUser, arePermissionsAtLeastAsRestrictive, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -391,7 +391,7 @@ export function addAPIs(app: Express) {
       return;
     }
 
-    if (!canUserViewChannel(req.username!, channel.channel_id)) {
+    if (!canViewChannel(req.permissions!, channel.channel_id)) {
       res.status(403).json({ error: 'Access denied' });
       return;
     }

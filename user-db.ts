@@ -301,8 +301,7 @@ export function updateUserPermissions(username: string, permissions: Permissions
   });
 }
 
-export function canUserViewChannel(username: string, channelId: ChannelID): boolean {
-  const permissions = getUserPermissions(username);
+export function canViewChannel(permissions: Permissions, channelId: ChannelID): boolean {
   return permissions.allowedChannels === 'all' || permissions.allowedChannels.has(channelId);
 }
 

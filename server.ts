@@ -5,7 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
-import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canUserViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
+import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderAddVideoPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
@@ -190,7 +190,7 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
     return;
   }
 
-  if (!canUserViewChannel(req.username!, video.channel_id)) {
+  if (!canViewChannel(req.permissions!, video.channel_id)) {
     res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
   }
@@ -206,7 +206,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
     return;
   }
 
-  if (!canUserViewChannel(req.username!, channel.channel_id)) {
+  if (!canViewChannel(req.permissions!, channel.channel_id)) {
     res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
   }
@@ -271,7 +271,7 @@ app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<
     res.status(404).send('Video not found');
     return;
   }
-  if (!canUserViewChannel(req.username!, video.channel_id)) {
+  if (!canViewChannel(req.permissions!, video.channel_id)) {
     res.status(403).send('Access denied');
     return;
   }
@@ -285,7 +285,7 @@ app.get('/media/thumbs/:video_id', async (req: Request, res: Response): Promise<
     res.status(404).send('not found');
     return;
   }
-  if (!canUserViewChannel(req.username!, video.channel_id)) {
+  if (!canViewChannel(req.permissions!, video.channel_id)) {
     res.status(403).send('Access denied');
     return;
   }
@@ -299,7 +299,7 @@ app.get('/media/subtitles/:video_id/:lang', async (req: Request, res: Response):
     res.status(404).send('not found');
     return;
   }
-  if (!canUserViewChannel(req.username!, video.channel_id)) {
+  if (!canViewChannel(req.permissions!, video.channel_id)) {
     res.status(403).send('Access denied');
     return;
   }
@@ -313,7 +313,7 @@ app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise
     res.status(404).send('not found');
     return;
   }
-  if (!canUserViewChannel(req.username!, channel.channel_id)) {
+  if (!canViewChannel(req.permissions!, channel.channel_id)) {
     res.status(403).send('Access denied');
     return;
   }
