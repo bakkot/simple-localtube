@@ -54,6 +54,7 @@ async function fetchVideoDetails(videoId: VideoID): Promise<FetchedVideoDetails 
     }
 
     if (!details) return null;
+    assertChannelId(details.channelId);
 
     let thumbnailBuf: Uint8Array | null = null;
     let thumbnailMime: string | null = null;
