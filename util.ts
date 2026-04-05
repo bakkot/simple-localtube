@@ -10,7 +10,12 @@ import { ErrorWithStderr } from './scripts/fetch-videos.ts';
 export type VideoID = string & { __brand: "video id" };
 export type ChannelID = string & { __brand: "channel id" };
 
+function isVideoId(string: string): string is VideoID {
+  return /^[a-zA-Z0-9_-]{11}$/.test(string);
+}
+
 export function toVideoID(url: string): VideoID | null {
+  if (isVideoId(url)) return url;
   try {
     const parsedUrl = new URL(url);
     if (
@@ -19,18 +24,15 @@ export function toVideoID(url: string): VideoID | null {
       parsedUrl.hostname === 'm.youtube.com'
     ) {
       let res = parsedUrl.searchParams.get('v');
-      if (res && /^[a-zA-Z0-9_-]{11}$/.test(res)) return res as VideoID;
+      if (res && isVideoId(res)) return res;
       const shortsMatch = parsedUrl.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]+)/);
-      if (shortsMatch) return shortsMatch[1] as VideoID;
+      if (shortsMatch && isVideoId(shortsMatch[1])) return shortsMatch[1];
     } else if (parsedUrl.hostname === 'youtu.be') {
       let res = parsedUrl.pathname.substring(1);
-      if (res.length > 0 && /^[a-zA-Z0-9_-]{11}$/.test(res)) return res as VideoID;
+      if (res.length > 0 && isVideoId(res)) return res;
     }
   } catch {
     // pass
-  }
-  if (/^[a-zA-Z0-9_-]{11}$/.test(url)) {
-    return url as VideoID;
   }
   return null;
 }
