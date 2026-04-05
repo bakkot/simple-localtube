@@ -23,7 +23,7 @@ type User = {
 
 export type Permissions = {
   allowedChannels: Set<ChannelID> | 'all';
-  createUser: boolean;
+  createUser: boolean | 'limited';
   canSubscribe: boolean;
 };
 
@@ -195,12 +195,12 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
 
 type SerializedPermissions = {
   allowedChannels: 'all' | ChannelID[];
-  createUser: boolean;
+  createUser: boolean | 'limited';
   canSubscribe: boolean;
 }
 function parsePermissions(permissionsString: string): Permissions {
   let { allowedChannels, createUser, canSubscribe } = JSON.parse(permissionsString) as SerializedPermissions;
-  if (allowedChannels !== 'all' && !Array.isArray(allowedChannels) || typeof createUser != 'boolean') {
+  if (allowedChannels !== 'all' && !Array.isArray(allowedChannels) || (createUser !== true && createUser !== false && createUser !== 'limited')) {
     throw new Error('malformed permissions');
   }
   return {
@@ -309,8 +309,16 @@ export function arePermissionsAtLeastAsRestrictive(
   requestedPermissions: Permissions,
   granterPermissions: Permissions
 ): boolean {
-  if (requestedPermissions.createUser && !granterPermissions.createUser) {
-    return false;
+  if (requestedPermissions.createUser) {
+    if (!granterPermissions.createUser) {
+      return false;
+    }
+    if (requestedPermissions.createUser === true && granterPermissions.createUser !== true) {
+      return false;
+    }
+    if (requestedPermissions.createUser === 'limited' && granterPermissions.createUser !== true) {
+      return false;
+    }
   }
 
   if (requestedPermissions.canSubscribe && !granterPermissions.canSubscribe) {
@@ -336,6 +344,10 @@ export function arePermissionsAtLeastAsRestrictive(
   }
 
   return true;
+}
+
+export function canCreateUsers(permissions: Permissions): boolean {
+  return permissions.createUser === true || permissions.createUser === 'limited';
 }
 
 export function hasAnyUsers(): boolean {

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Channel, VideoWithChannel, SearchResults } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
-import type { Permissions } from './user-db.ts';
+import { canCreateUsers, type Permissions } from './user-db.ts';
 import { nameExt, type ChannelID } from './util.ts';
 import type { SubscriptionData } from './subscriptions-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -285,7 +285,7 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
         <div class="settings-dropdown">
           <a href="/settings">Settings</a>
           ${subscriptionsDb ? '<a href="/subscriptions">Subscriptions</a><a href="/add-video">Add Video</a>' : ''}
-          ${permissions.createUser ? '<a href="/add-user">Add User</a><a href="/manage-users">Manage Users</a>' : ''}
+          ${canCreateUsers(permissions) ? '<a href="/add-user">Add User</a><a href="/manage-users">Manage Users</a>' : ''}
         </div>
       </span>
       <span class="username">${username}</span>
@@ -436,6 +436,7 @@ export function renderAddUserPage(username: string, permissions: Permissions, av
     formPageCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
     hasAllChannelsPermission: permissions.allowedChannels === 'all',
+    canGrantCreateUser: permissions.createUser === true,
     availableChannels,
   });
 }
@@ -452,6 +453,7 @@ export function renderManageUsersPage(
     formPageCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
     hasAllChannelsPermission: permissions.allowedChannels === 'all',
+    canGrantCreateUser: permissions.createUser === true,
     availableChannels,
     noCreatedUsers: createdUsers.length === 0,
     createdUsers: createdUsers.map(u => ({

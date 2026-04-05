@@ -41,19 +41,28 @@
         <input type="password" id="password" name="password" required>
       </div>
 
-      <div class="permission-section">
-        <h3>User Permissions</h3>
-        <div class="radio-group">
-          <div class="radio-option">
-            <input type="radio" id="create-user-yes" name="createUser" value="true">
-            <label for="create-user-yes">Can create users</label>
-          </div>
-          <div class="radio-option">
-            <input type="radio" id="create-user-no" name="createUser" value="false" checked>
-            <label for="create-user-no">Cannot create users</label>
+      <#if canGrantCreateUser>
+        <div class="permission-section">
+          <h3>User Permissions</h3>
+          <div class="radio-group">
+            <div class="radio-option">
+              <input type="radio" id="create-user-yes" name="createUser" value="true">
+              <label for="create-user-yes">Can create users</label>
+            </div>
+            <div class="radio-option">
+              <input type="radio" id="create-user-limited" name="createUser" value="limited">
+              <label for="create-user-limited">Can create users (but cannot grant user creation)</label>
+            </div>
+            <div class="radio-option">
+              <input type="radio" id="create-user-no" name="createUser" value="false" checked>
+              <label for="create-user-no">Cannot create users</label>
+            </div>
           </div>
         </div>
-      </div>
+      </#if>
+      <#if not canGrantCreateUser>
+        <input type="hidden" name="createUser" value="false">
+      </#if>
 
       <div class="permission-section">
         <h3>Subscription Permissions</h3>
@@ -194,7 +203,8 @@
       const password = document.getElementById('password').value;
       const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value ||
                                 document.querySelector('input[name="permissions"][type="hidden"]')?.value;
-      const createUser = document.querySelector('input[name="createUser"]:checked')?.value === 'true';
+      const createUserValue = (document.querySelector('input[name="createUser"]:checked') || document.querySelector('input[name="createUser"][type="hidden"]'))?.value;
+      const createUser = createUserValue === 'true' ? true : createUserValue === 'limited' ? 'limited' : false;
       const canSubscribe = document.querySelector('input[name="canSubscribe"]:checked')?.value === 'true';
 
       if (!selectedPermission) {

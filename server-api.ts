@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { addUser, arePermissionsAtLeastAsRestrictive, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
+import { addUser, arePermissionsAtLeastAsRestrictive, canCreateUsers, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -152,7 +152,7 @@ export type AddUserAPIRequest = {
   username: string;
   password: string;
   allowedChannels: 'all' | ChannelID[];
-  createUser: boolean;
+  createUser: boolean | 'limited';
   canSubscribe: boolean;
 }
 export function addAPIs(app: Express) {
@@ -190,15 +190,15 @@ export function addAPIs(app: Express) {
 
   app.post('/api/add-user', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (!req.permissions!.createUser) {
+      if (!canCreateUsers(req.permissions!)) {
         res.status(403).json({ message: 'Not authorized to create users' });
         return;
       }
 
       const { username, password, allowedChannels, createUser, canSubscribe } = req.body as AddUserAPIRequest;
 
-      if (typeof username !== 'string' || typeof password !== 'string' || typeof createUser !== 'boolean' || typeof canSubscribe !== 'boolean') {
-        res.status(400).json({ message: 'Username and password must be strings, createUser and canSubscribe must be boolean' });
+      if (typeof username !== 'string' || typeof password !== 'string' || (createUser !== true && createUser !== false && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
+        res.status(400).json({ message: 'Username and password must be strings, createUser must be boolean or "limited", canSubscribe must be boolean' });
         return;
       }
 
@@ -253,7 +253,7 @@ export function addAPIs(app: Express) {
 
   app.post('/api/update-user-permissions', async (req: Request, res: Response): Promise<void> => {
     try {
-      if (!req.permissions!.createUser) {
+      if (!canCreateUsers(req.permissions!)) {
         res.status(403).json({ message: 'Not authorized to manage users' });
         return;
       }
@@ -262,7 +262,7 @@ export function addAPIs(app: Express) {
         username: unknown; allowedChannels: unknown; createUser: unknown; canSubscribe: unknown;
       };
 
-      if (typeof username !== 'string' || typeof createUser !== 'boolean' || typeof canSubscribe !== 'boolean') {
+      if (typeof username !== 'string' || (createUser !== true && createUser !== false && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
         res.status(400).json({ message: 'Invalid request body' });
         return;
       }
@@ -297,7 +297,7 @@ export function addAPIs(app: Express) {
 
       const requestedPermissions = {
         allowedChannels: channelPermissions,
-        createUser,
+        createUser: createUser as boolean | 'limited',
         canSubscribe,
       };
 

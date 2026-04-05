@@ -5,7 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
-import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, type Permissions } from './user-db.ts';
+import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, getUserPermissions, addUser, hasAnyUsers, arePermissionsAtLeastAsRestrictive, getCreatedAccountsWithPermissions, canCreateUsers, type Permissions } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderAddVideoPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
@@ -218,7 +218,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
 });
 
 app.get('/add-user', (req: Request, res: Response): void => {
-  if (!req.permissions!.createUser) {
+  if (!canCreateUsers(req.permissions!)) {
     res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
   }
@@ -229,7 +229,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
 });
 
 app.get('/manage-users', (req: Request, res: Response): void => {
-  if (!req.permissions!.createUser) {
+  if (!canCreateUsers(req.permissions!)) {
     res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
   }
