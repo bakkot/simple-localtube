@@ -19,12 +19,12 @@ export function toVideoID(url: string): VideoID | null {
       parsedUrl.hostname === 'm.youtube.com'
     ) {
       let res = parsedUrl.searchParams.get('v');
-      if (res) return res as VideoID;
+      if (res && /^[a-zA-Z0-9_-]{11}$/.test(res)) return res as VideoID;
       const shortsMatch = parsedUrl.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]+)/);
       if (shortsMatch) return shortsMatch[1] as VideoID;
     } else if (parsedUrl.hostname === 'youtu.be') {
       let res = parsedUrl.pathname.substring(1);
-      if (res.length > 0) return res as VideoID;
+      if (res.length > 0 && /^[a-zA-Z0-9_-]{11}$/.test(res)) return res as VideoID;
     }
   } catch {
     // pass
@@ -312,7 +312,9 @@ export async function lock(lockPath: string) {
     release,
     [Symbol.dispose]: release,
   };
-}export function spawnAsync(command: string, options: { cwd?: string; print?: boolean; } = {}): Promise<{ stdout: string; stderr: string; }> {
+}
+
+export function spawnAsync(command: string, options: { cwd?: string; print?: boolean; } = {}): Promise<{ stdout: string; stderr: string; }> {
   const { print, ...spawnOptions } = options;
   return new Promise((resolve, reject) => {
     const child = spawn(command, { shell: true, ...spawnOptions });

@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { addChannel, addVideo, init as initMediaDb } from '../media-db.ts';
-import type { ChannelID, VideoID } from '../util.ts';
+import { toVideoID, type ChannelID, type VideoID } from '../util.ts';
 import { channelFromDisk, videoFromDisk } from '../read-from-disk.ts';
 
 
@@ -68,7 +68,11 @@ function rescan(mediaDir: string) {
 
       for (const videoEntry of videoEntries) {
         if (!videoEntry.isDirectory()) continue;
-        let vid = videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID);
+        let asVideoId = toVideoID(videoEntry.name);
+        if (asVideoId == null) {
+          throw new Error(`${JSON.stringify(videoEntry.name)} is not a valid video ID`)
+        }
+        let vid = videoFromDisk(mediaDir, channelEntry.name as ChannelID, asVideoId);
         if (vid != null) {
           try {
             addVideo(vid);
