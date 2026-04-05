@@ -3,10 +3,9 @@ import { parseArgs } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { channelFromDisk, videoFromDisk, type VideoDataJSON } from '../read-from-disk.ts';
+import { channelFromDisk, videoFromDisk } from '../read-from-disk.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
-import { spawnSync } from 'node:child_process';
 
 export class ErrorWithStderr extends Error {
   stderr: string;
@@ -253,21 +252,19 @@ async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID) {
     return;
   }
   using tempDir = getTemp();
-  const result = spawnSync(
-    YT_DLP_PATH,
-    ['--write-info-json', '--skip-download', '--playlist-items', '0', `https://www.youtube.com/channel/${channelId}`],
+  await spawnAsync(
+    [
+      YT_DLP_PATH,
+      '--write-info-json',
+      '--skip-download',
+      '--playlist-items',
+      '0',
+      `https://www.youtube.com/channel/${channelId}`,
+    ].join(' '),
     {
-      stdio: 'pipe',
-      encoding: 'utf-8',
       cwd: tempDir.path,
     },
   );
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(`Command failed with exit code ${result.status}\nStderr: ${result.stderr}`);
-  }
   let files = fs.readdirSync(tempDir.path);
   if (files.length !== 1 || !files[0].endsWith('.json')) {
     throw new Error(`fetching info resulted in unexpected files: ${JSON.stringify(files)}`);

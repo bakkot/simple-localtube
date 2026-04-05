@@ -4,7 +4,7 @@ import { nameExt, vttToText, type ChannelDataJSON, type ChannelID, type VideoID 
 import fs from 'fs';
 import path from 'path';
 
-export type VideoDataJSON = {
+type VideoDataJSON = {
   fulltitle: string;
   description: string;
   duration: number;
