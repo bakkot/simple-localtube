@@ -1,47 +1,19 @@
-import { getTemp, move, nameExt, toVideoID, type ChannelID, type VideoID } from '../util.ts';
+import { fetchTo, getTemp, move, nameExt, spawnAsync, toVideoID, type ChannelDataJSON, type ChannelID, type ThumbnailJSON, type VideoID } from '../util.ts';
 import { parseArgs } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { channelFromDisk, videoFromDisk, type VideoDataJSON } from '../scan.ts';
-import { fetchMetaForChannel } from '../get-channel-meta.ts';
+import { channelFromDisk, videoFromDisk, type VideoDataJSON } from '../read-from-disk.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
+import { spawnSync } from 'node:child_process';
 
-class ErrorWithStderr extends Error {
+export class ErrorWithStderr extends Error {
   stderr: string;
   constructor(message: string, stderr: string) {
     super(message);
     this.stderr = stderr;
   }
-}
-
-function spawnAsync(command: string, options: { cwd?: string; print?: boolean } = {}): Promise<{ stdout: string; stderr: string }> {
-  const { print, ...spawnOptions } = options;
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, { shell: true, ...spawnOptions });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (data: Buffer) => {
-      const str = data.toString();
-      stdout += str;
-      if (print) process.stdout.write(data);
-    });
-    child.stderr.on('data', (data: Buffer) => {
-      const str = data.toString();
-      stderr += str;
-      if (print) process.stderr.write(data);
-    });
-    child.on('close', (code) => {
-      if (code !== 0) {
-        const err = new ErrorWithStderr(`Command failed with exit code ${code}`, stderr);
-        reject(err);
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
 }
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, '..', 'yt-dlp');
@@ -272,6 +244,57 @@ async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
   const channelId = info.channel_id as ChannelID;
   if (!channelId) throw new Error(`no channel_id in yt-dlp info for video ${videoId}`);
   return channelId;
+}
+
+async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID) {
+  const fullPath = path.join(mediaDir, channelId);
+  let jsonPath = path.join(fullPath, 'data.json');
+  if (fs.existsSync(jsonPath)) {
+    return;
+  }
+  using tempDir = getTemp();
+  const result = spawnSync(
+    YT_DLP_PATH,
+    ['--write-info-json', '--skip-download', '--playlist-items', '0', `https://www.youtube.com/channel/${channelId}`],
+    {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      cwd: tempDir.path,
+    },
+  );
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`Command failed with exit code ${result.status}\nStderr: ${result.stderr}`);
+  }
+  let files = fs.readdirSync(tempDir.path);
+  if (files.length !== 1 || !files[0].endsWith('.json')) {
+    throw new Error(`fetching info resulted in unexpected files: ${JSON.stringify(files)}`);
+  }
+  let tempJsonPath = path.join(tempDir.path, files[0]);
+  let contents = JSON.parse(fs.readFileSync(tempJsonPath, 'utf8')) as ChannelDataJSON;
+
+  let avatar = contents.thumbnails.find((t: ThumbnailJSON) => t.id === 'avatar_uncropped');
+  let bannerUncropped = contents.thumbnails.find((t: ThumbnailJSON) => t.id === 'banner_uncropped');
+  let banner = contents.thumbnails.reduce((acc: ThumbnailJSON | null, t: ThumbnailJSON) => t.width == null || t.width / t.height <= 2 ? acc : acc == null ? t : t.width < acc.width ? acc : t, null);
+
+  let avatarName = avatar == null ? null : await fetchTo(avatar.url, tempDir.path, 'avatar');
+  let bannerUncroppedName = bannerUncropped == null ? null : await fetchTo(bannerUncropped.url, tempDir.path, 'banner_uncropped');
+  let bannerName = banner == null ? null : await fetchTo(banner.url, tempDir.path, 'banner');
+
+  await move(tempJsonPath, jsonPath);
+  if (avatarName != null) {
+    await move(path.join(tempDir.path, avatarName), path.join(fullPath, avatarName));
+  }
+  if (bannerUncroppedName != null) {
+    await move(path.join(tempDir.path, bannerUncroppedName), path.join(fullPath, bannerUncroppedName));
+  }
+  if (bannerName != null) {
+    await move(path.join(tempDir.path, bannerName), path.join(fullPath, bannerName));
+  }
+
+  // console.log({ avatarName, bannerName, bannerUncroppedName });
 }
 
 async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<VideoID[]> {

@@ -1,8 +1,27 @@
-// Slice valid JSON out of larger strings, given the start index.
-// Useful for reading it out of other documents like HTML pages without a full parser.
-// More formally:
-// Given an index S into a string, find the minimal index E, E > S, such that slice(string, S, E) is valid JSON.
-// Return -1 if there is no such index.
+/*
+json-excise
+https://github.com/bakkot/json-excise
+
+Slice valid JSON out of larger strings, given the start index.
+
+Useful for reading it out of other documents like HTML pages without a full parser.
+
+More formally:
+
+Given an index S into a string, finds the minimal index E with E > S such that slice(string, S, E) is valid JSON. Returns -1 if there is no such index.
+
+
+LICENSE:
+
+Copyright 2026 Kevin Gibbons
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
 export function getJsonEnd(input: string, index: number): number {
   const len = input.length;
   if (index >= len) return -1;

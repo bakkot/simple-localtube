@@ -1,9 +1,11 @@
+import { spawn } from 'child_process';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import stream from 'stream';
 import { pipeline } from 'stream/promises';
+import { ErrorWithStderr } from './scripts/fetch-videos.ts';
 
 export type VideoID = string & { __brand: "video id" };
 export type ChannelID = string & { __brand: "channel id" };
@@ -310,4 +312,38 @@ export async function lock(lockPath: string) {
     release,
     [Symbol.dispose]: release,
   };
+}export function spawnAsync(command: string, options: { cwd?: string; print?: boolean; } = {}): Promise<{ stdout: string; stderr: string; }> {
+  const { print, ...spawnOptions } = options;
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, { shell: true, ...spawnOptions });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (data: Buffer) => {
+      const str = data.toString();
+      stdout += str;
+      if (print) process.stdout.write(data);
+    });
+    child.stderr.on('data', (data: Buffer) => {
+      const str = data.toString();
+      stderr += str;
+      if (print) process.stderr.write(data);
+    });
+    child.on('close', (code) => {
+      if (code !== 0) {
+        const err = new ErrorWithStderr(`Command failed with exit code ${code}`, stderr);
+        reject(err);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
 }
+
+
+export type ThumbnailJSON = { id: string; url: string; width: number; height: number };
+export type ChannelDataJSON = {
+  thumbnails: ThumbnailJSON[];
+  channel: string;
+  description: string | null;
+  uploader_id: string;
+};

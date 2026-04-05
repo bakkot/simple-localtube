@@ -1,6 +1,5 @@
 import { addVideo, addChannel, type Channel, type Video } from './media-db.ts';
-import { nameExt, vttToText, type ChannelID, type VideoID } from './util.ts';
-import type { ChannelDataJSON } from './get-channel-meta.ts';
+import { nameExt, vttToText, type ChannelDataJSON, type ChannelID, type VideoID } from './util.ts';
 
 import fs from 'fs';
 import path from 'path';
@@ -102,47 +101,4 @@ export function channelFromDisk(mediaDir: string, channelId: ChannelID): Channel
     latest_upload_timestamp: null,
     video_count: 0,
   };
-}
-
-export function rescan(mediaDir: string) {
-  const channels = fs.readdirSync(mediaDir, { withFileTypes: true });
-  let addedChannels = new Set<ChannelID>();
-
-  try {
-    for (const channelEntry of channels) {
-      if (!channelEntry.isDirectory()) continue;
-      console.log(channelEntry.name);
-
-      const channelPath = path.join(mediaDir, channelEntry.name);
-      const channelJson = path.join(channelPath, 'data.json');
-      if (!fs.existsSync(channelJson)) {
-        // TODO ensure this is in the readme
-        console.log(`skipping ${channelEntry.name} because of missing data.json; if it is a real channel you will need to fetch its metadata before it is usable: see the readme.`);
-        continue;
-      }
-
-      const videoEntries = fs.readdirSync(channelPath, { withFileTypes: true });
-      const channelData = channelFromDisk(mediaDir, channelEntry.name as ChannelID);
-
-      if (!addedChannels.has(channelData.channel_id)) {
-        addChannel(channelData);
-        addedChannels.add(channelData.channel_id);
-      }
-
-      for (const videoEntry of videoEntries) {
-        if (!videoEntry.isDirectory()) continue;
-        let vid = videoFromDisk(mediaDir, channelEntry.name as ChannelID, videoEntry.name as VideoID);
-        if (vid != null) {
-          try {
-            addVideo(vid);
-          } catch (error) {
-            console.error(`Error adding video ${vid.video_id}:`, error);
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Error while rescanning; operation may be incomplete.');
-    throw e;
-  }
 }
