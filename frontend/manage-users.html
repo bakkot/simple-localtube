@@ -56,7 +56,7 @@
               <h3>User Permissions</h3>
               <div class="radio-group">
                 <div class="radio-option">
-                  <input type="radio" id="create-user-yes" name="createUser" value="true">
+                  <input type="radio" id="create-user-yes" name="createUser" value="yes">
                   <label for="create-user-yes">Can create users</label>
                 </div>
                 <div class="radio-option">
@@ -64,14 +64,14 @@
                   <label for="create-user-limited">Can create users (but cannot grant user creation)</label>
                 </div>
                 <div class="radio-option">
-                  <input type="radio" id="create-user-no" name="createUser" value="false">
+                  <input type="radio" id="create-user-no" name="createUser" value="no">
                   <label for="create-user-no">Cannot create users</label>
                 </div>
               </div>
             </div>
           </#if>
           <#if not canGrantCreateUser>
-            <input type="hidden" name="createUser" value="false">
+            <input type="hidden" name="createUser" value="no">
           </#if>
 
           <div class="permission-section">
@@ -224,7 +224,7 @@
         var selectedPermission = document.querySelector('input[name="permissions"]:checked');
         if (!selectedPermission) selectedPermission = document.querySelector('input[name="permissions"][type="hidden"]');
         var createUserEl = document.querySelector('input[name="createUser"]:checked') || document.querySelector('input[name="createUser"][type="hidden"]');
-        var createUser = createUserEl.value === 'true' ? true : createUserEl.value === 'limited' ? 'limited' : false;
+        var createUser = createUserEl.value;
         var canSubscribe = document.querySelector('input[name="canSubscribe"]:checked').value === 'true';
 
         if (!selectedPermission) {

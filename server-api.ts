@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { addUser, arePermissionsAtLeastAsRestrictive, canCreateUsers, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
+import { addUser, areRequestedPermissionsAllowedByGranterPermissions, canCreateUsers, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -152,7 +152,7 @@ export type AddUserAPIRequest = {
   username: string;
   password: string;
   allowedChannels: 'all' | ChannelID[];
-  createUser: boolean | 'limited';
+  createUser: 'yes' | 'no' | 'limited';
   canSubscribe: boolean;
 }
 export function addAPIs(app: Express) {
@@ -172,7 +172,7 @@ export function addAPIs(app: Express) {
 
       await addUser(username, password, {
         allowedChannels: 'all',
-        createUser: true,
+        createUser: 'yes',
         canSubscribe: true,
       }, null);
 
@@ -197,8 +197,8 @@ export function addAPIs(app: Express) {
 
       const { username, password, allowedChannels, createUser, canSubscribe } = req.body as AddUserAPIRequest;
 
-      if (typeof username !== 'string' || typeof password !== 'string' || (createUser !== true && createUser !== false && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
-        res.status(400).json({ message: 'Username and password must be strings, createUser must be boolean or "limited", canSubscribe must be boolean' });
+      if (typeof username !== 'string' || typeof password !== 'string' || (createUser !== 'yes' && createUser !== 'no' && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
+        res.status(400).json({ message: 'Username and password must be strings, createUser must be "yes", "no", or "limited", canSubscribe must be boolean' });
         return;
       }
 
@@ -230,7 +230,7 @@ export function addAPIs(app: Express) {
         canSubscribe,
       };
 
-      if (!arePermissionsAtLeastAsRestrictive(requestedPermissions, req.permissions!)) {
+      if (!areRequestedPermissionsAllowedByGranterPermissions(requestedPermissions, req.permissions!)) {
         res.status(403).json({ message: 'You cannot grant permissions that you do not have' });
         return;
       }
@@ -262,7 +262,7 @@ export function addAPIs(app: Express) {
         username: unknown; allowedChannels: unknown; createUser: unknown; canSubscribe: unknown;
       };
 
-      if (typeof username !== 'string' || (createUser !== true && createUser !== false && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
+      if (typeof username !== 'string' || (createUser !== 'yes' && createUser !== 'no' && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
         res.status(400).json({ message: 'Invalid request body' });
         return;
       }
@@ -297,11 +297,11 @@ export function addAPIs(app: Express) {
 
       const requestedPermissions = {
         allowedChannels: channelPermissions,
-        createUser: createUser as boolean | 'limited',
+        createUser: createUser as 'yes' | 'no' | 'limited',
         canSubscribe,
       };
 
-      if (!arePermissionsAtLeastAsRestrictive(requestedPermissions, req.permissions!)) {
+      if (!areRequestedPermissionsAllowedByGranterPermissions(requestedPermissions, req.permissions!)) {
         res.status(403).json({ message: 'You cannot grant permissions that you do not have' });
         return;
       }

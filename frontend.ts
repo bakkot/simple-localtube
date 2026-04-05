@@ -436,7 +436,7 @@ export function renderAddUserPage(username: string, permissions: Permissions, av
     formPageCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
     hasAllChannelsPermission: permissions.allowedChannels === 'all',
-    canGrantCreateUser: permissions.createUser === true,
+    canGrantCreateUser: permissions.createUser === 'yes',
     availableChannels,
   });
 }
@@ -453,7 +453,7 @@ export function renderManageUsersPage(
     formPageCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
     hasAllChannelsPermission: permissions.allowedChannels === 'all',
-    canGrantCreateUser: permissions.createUser === true,
+    canGrantCreateUser: permissions.createUser === 'yes',
     availableChannels,
     noCreatedUsers: createdUsers.length === 0,
     createdUsers: createdUsers.map(u => ({

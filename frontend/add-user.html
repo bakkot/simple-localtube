@@ -46,7 +46,7 @@
           <h3>User Permissions</h3>
           <div class="radio-group">
             <div class="radio-option">
-              <input type="radio" id="create-user-yes" name="createUser" value="true">
+              <input type="radio" id="create-user-yes" name="createUser" value="yes">
               <label for="create-user-yes">Can create users</label>
             </div>
             <div class="radio-option">
@@ -54,14 +54,14 @@
               <label for="create-user-limited">Can create users (but cannot grant user creation)</label>
             </div>
             <div class="radio-option">
-              <input type="radio" id="create-user-no" name="createUser" value="false" checked>
+              <input type="radio" id="create-user-no" name="createUser" value="no" checked>
               <label for="create-user-no">Cannot create users</label>
             </div>
           </div>
         </div>
       </#if>
       <#if not canGrantCreateUser>
-        <input type="hidden" name="createUser" value="false">
+        <input type="hidden" name="createUser" value="no">
       </#if>
 
       <div class="permission-section">
@@ -203,8 +203,7 @@
       const password = document.getElementById('password').value;
       const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value ||
                                 document.querySelector('input[name="permissions"][type="hidden"]')?.value;
-      const createUserValue = (document.querySelector('input[name="createUser"]:checked') || document.querySelector('input[name="createUser"][type="hidden"]'))?.value;
-      const createUser = createUserValue === 'true' ? true : createUserValue === 'limited' ? 'limited' : false;
+      const createUser = (document.querySelector('input[name="createUser"]:checked') || document.querySelector('input[name="createUser"][type="hidden"]'))?.value ?? 'no';
       const canSubscribe = document.querySelector('input[name="canSubscribe"]:checked')?.value === 'true';
 
       if (!selectedPermission) {
