@@ -31,7 +31,7 @@ export type ChannelSort = keyof typeof channelSortOrders;
 let channelSortStmts: Record<ChannelSort, StatementSync> | null = null;
 
 export function init(dbDir: string): void {
-  const DB_PATH = path.join(dbDir, 'youtube_data.sqlite');
+  const DB_PATH = path.join(dbDir, 'media.sqlite');
 
   db = new DatabaseSync(DB_PATH, {
     timeout: 1000,

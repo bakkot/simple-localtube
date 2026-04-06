@@ -19,8 +19,6 @@ todo UCOGeU-1Fig3rrDjhm9Zs_wg vi hart
 TODO add 'service' field from data.json's .webpage_url_domain (default youtube.com)
 TODO extra_data in DB schema for forward-compat
 
-rename youtube_data.sqlite to media_data.sqlite
-
 handle missing avatars etc (placeholder)
 
 - test w/ pinchflat, have sample lifecycle script

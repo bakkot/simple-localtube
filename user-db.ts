@@ -40,7 +40,7 @@ let updatePasswordStmt: StatementSync | null = null;
 let updatePermissionsStmt: StatementSync | null = null;
 
 export function init(dbDir: string): void {
-  const USER_DB_PATH = path.join(dbDir, 'user_data.sqlite');
+  const USER_DB_PATH = path.join(dbDir, 'users.sqlite');
   const KEYS_PATH = path.join(dbDir, 'keys.json');
 
   db = new DatabaseSync(USER_DB_PATH, {
