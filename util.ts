@@ -184,33 +184,17 @@ const imageMimeToExt: Record<string, string | undefined> = {
 };
 
 
-// TODO consider whether we actually care about these
-// https://github.com/nodejs/node/issues/58486
-const EXIT_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGUSR1', 'SIGUSR2'];
 export function getTemp(base=os.tmpdir()): { [Symbol.dispose]: () => void; path: string; } {
   const tempDir = fs.mkdtempSync(path.join(base, 'tmp-localtube-'));
   // console.log({ tempDir });
   function cleanup() {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
-  function cleanupAndExit() {
-    cleanup();
-    process.exit();
-  }
-
-  // TODO
-  // process.on('exit', cleanup);
-  // for (let signal of EXIT_SIGNALS) {
-  //   process.on(signal, cleanupAndExit);
-  // }
 
   return {
     [Symbol.dispose]() {
       cleanup();
       process.removeListener('exit', cleanup);
-      for (let signal of EXIT_SIGNALS) {
-        process.removeListener(signal, cleanupAndExit);
-      }
     },
     path: tempDir,
   };

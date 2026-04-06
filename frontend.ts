@@ -409,8 +409,6 @@ const channelTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'chan
 export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], username: string, permissions: Permissions, subscriptionsEnabled: boolean, isSubscribed: boolean): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
 
-  // TODO figure out why short_id is nullable and what to do about it
-  // probably we should not be using short_id in the API anyway
   return applyTemplate(channelTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),

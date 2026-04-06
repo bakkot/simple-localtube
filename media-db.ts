@@ -415,7 +415,6 @@ export function getRecentVideosForChannels(channelIds: Set<ChannelID> | 'all', l
   if (channelIds.size === 0) return [];
 
   throwIfNotInit(db);
-  // TODO someday we should probably cache this
   const placeholders = [...channelIds].map(() => '?').join(',');
   const stmt = db.prepare(`
     SELECT v.*, c.channel_title, c.short_id as channel_short_id
