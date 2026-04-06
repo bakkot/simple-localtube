@@ -1,4 +1,4 @@
-import { fetchTo, getTemp, move, nameExt, spawnAsync, toVideoID, type ChannelDataJSON, type ChannelID, type ThumbnailJSON, type VideoID } from '../util.ts';
+import { fetchTo, getTemp, move, nameExt, ErrorWithStderr, spawnAsync, toVideoID, type ChannelDataJSON, type ChannelID, type ThumbnailJSON, type VideoID } from '../util.ts';
 import { parseArgs } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -6,14 +6,6 @@ import path from 'node:path';
 import { channelFromDisk, videoFromDisk } from '../read-from-disk.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
-
-export class ErrorWithStderr extends Error {
-  stderr: string;
-  constructor(message: string, stderr: string) {
-    super(message);
-    this.stderr = stderr;
-  }
-}
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, '..', 'yt-dlp');
 const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call

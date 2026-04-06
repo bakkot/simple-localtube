@@ -5,7 +5,6 @@ import os from 'os';
 import path from 'path';
 import stream from 'stream';
 import { pipeline } from 'stream/promises';
-import { ErrorWithStderr } from './scripts/fetch-videos.ts';
 
 export type VideoID = string & { __brand: "video id" };
 export type ChannelID = string & { __brand: "channel id" };
@@ -314,6 +313,14 @@ export async function lock(lockPath: string) {
     release,
     [Symbol.dispose]: release,
   };
+}
+
+export class ErrorWithStderr extends Error {
+  stderr: string;
+  constructor(message: string, stderr: string) {
+    super(message);
+    this.stderr = stderr;
+  }
 }
 
 export function spawnAsync(command: string, options: { cwd?: string; print?: boolean; } = {}): Promise<{ stdout: string; stderr: string; }> {

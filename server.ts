@@ -64,6 +64,10 @@ app.use(cookieParser());
 
 // Auth middleware - must be first to protect everything
 app.use((req: Request, res: Response, next: NextFunction): void => {
+  if (req.path === '/favicon.svg') {
+    return next();
+  }
+
   let isSetup = req.path === '/setup' || req.path === '/api/setup';
   // Check if any users exist - if not, redirect to setup
   if (!hasAnyUsers() && !isSetup) {
@@ -95,6 +99,7 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
       try {
         getUserPermissions(username);
       } catch (e) {
+        console.log(e);
         console.error(`user does not exist: ${username}`);
         throw e;
       }
@@ -122,6 +127,30 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
   req.username = username;
   req.permissions = getUserPermissions(username!);
   next();
+});
+
+const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Rabbit ear antennas -->
+  <line x1="32" y1="18" x2="20" y2="4" />
+  <line x1="32" y1="18" x2="44" y2="4" />
+  <!-- Antenna tips -->
+  <circle cx="20" cy="4" r="2" fill="#000" stroke="none" />
+  <circle cx="44" cy="4" r="2" fill="#000" stroke="none" />
+  <!-- TV body (rounded rectangle) -->
+  <rect x="8" y="18" width="48" height="38" rx="5" ry="5" />
+  <!-- Screen -->
+  <rect x="13" y="23" width="30" height="28" rx="3" ry="3" />
+  <!-- Knobs on the right side -->
+  <circle cx="50" cy="32" r="3" />
+  <circle cx="50" cy="42" r="3" />
+  <!-- Legs -->
+  <line x1="16" y1="56" x2="13" y2="61" />
+  <line x1="48" y1="56" x2="51" y2="61" />
+</svg>`;
+app.get('/favicon.svg', (req: Request, res: Response): void => {
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(favicon);
 });
 
 app.get('/setup', (req: Request, res: Response): void => {

@@ -23,8 +23,6 @@ rename youtube_data.sqlite to media_data.sqlite
 
 handle missing avatars etc (placeholder)
 
-- favicon
-- pull out the yt-dlp stuff
 - test w/ pinchflat, have sample lifecycle script
 - placeholder avatars for channels, videos
 
