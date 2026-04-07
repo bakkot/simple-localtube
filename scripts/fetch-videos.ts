@@ -7,7 +7,7 @@ import { channelFromDisk, videoFromDisk } from '../read-from-disk.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
 import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
 
-const YT_DLP_PATH = process.env.YT_DLP_PATH ?? path.join(import.meta.dirname, '..', 'yt-dlp');
+const YT_DLP_PATH = process.env.YT_DLP_PATH ?? 'yt-dlp';
 const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call
 const YT_DLP_PAUSE_MS = 2000; // Pause between yt-dlp calls
 
@@ -37,7 +37,11 @@ if (positionals.length !== 1) {
                        the special value "OS_DEFAULT" will use your operating system's default
   --skiplist file.txt  newline-separated list of video IDs or URLs to skip
 
+Requires yt-dlp to be either on the path or provided in the \`YT_DLP_PATH\` environment variable.
+\`YT_DLP_PATH\` can include additional arguments such as \`--proxy\`.
+
 It is recommended but not required that tempdir be on the same volume as the media, to avoid needing to copy files across volumes.
+If the media lives on a network volume, "OS_DEFAULT" will probably be more performant.
 
 This expects media-dir to be organized like:
 
@@ -90,27 +94,33 @@ if (temps.length > 0) {
 }
 
 
-async function subscribe(channelId: ChannelID) {
+async function subscribe(channelId: ChannelID): Promise<number> {
   const channelDir = path.join(mediaDir, channelId);
   if (!fs.existsSync(channelDir)) {
     fs.mkdirSync(channelDir);
   }
   await addChannelIfNotExists(channelId);
 
+  let newVids = 0;
   const videoIds = await getLatestVideoUrls(channelId, true);
   for (const videoId of videoIds) {
-    await addVideoIfNotExists(channelId, videoId);
+    let added = await addVideoIfNotExists(channelId, videoId);
+    if (added) ++newVids;
   }
+  return newVids;
 }
 
 async function updateExisting(channelId: ChannelID) {
   if (!isChannelInDb(channelId)) {
     throw new Error(`${channelId} is marked as subscribed but is not present in the database`);
   }
+  let newVids = 0;
   const videoIds = await getLatestVideoUrls(channelId);
   for (const videoId of videoIds) {
-    await addVideoIfNotExists(channelId, videoId);
+    let added = await addVideoIfNotExists(channelId, videoId);
+    if (added) ++newVids;
   }
+  return newVids;
 }
 
 async function addChannelIfNotExists(channelId: ChannelID) {
@@ -124,9 +134,9 @@ async function addChannelIfNotExists(channelId: ChannelID) {
   addChannel(channel);
 }
 
-async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
-  if (skipSet.has(videoId)) return;
-  if (isVideoInDb(videoId)) return;
+async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID): Promise<boolean> {
+  if (skipSet.has(videoId)) return false;
+  if (isVideoInDb(videoId)) return false;
   const videoDir = path.join(mediaDir, channelId, videoId);
   if (!fs.existsSync(videoDir)) {
     fs.mkdirSync(videoDir, { recursive: true });
@@ -172,10 +182,10 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
         // TODO store these somewhere so we don't keep fetching
         if (e.stderr.includes('members-only content')) {
           console.error(`skipping members-only ${videoId}`);
-          return;
+          return false;
         } else if (e.stderr.includes('confirm your age')) {
           console.error(`skipping age-gated ${videoId}`);
-          return;
+          return false;
         }
       }
       throw e;
@@ -224,6 +234,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID) {
     throw new Error(`metadata did not exist after fetching for ${channelId}/${videoId}`);
   }
   addVideo(video);
+  return true;
 }
 
 async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
@@ -356,7 +367,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
   return newVideoIds;
 }
 
-
+let addedFromQueue = 0;
 let videoProcessedCount = 0;
 let queued;
 while ((queued = getOneQueuedVideo()) != null) {
@@ -376,32 +387,40 @@ while ((queued = getOneQueuedVideo()) != null) {
   const channelDir = path.join(mediaDir, channelId);
   if (!fs.existsSync(channelDir)) fs.mkdirSync(channelDir);
   await addChannelIfNotExists(channelId);
-  await addVideoIfNotExists(channelId, videoId);
+  let added = await addVideoIfNotExists(channelId, videoId);
 
+  // note that this can technically race if you're running multiple copies of the script at once
+  // so, you know, don't
   if (!isVideoInQueue(videoId)) continue;
   removeVideoFromQueue(videoId);
-  videoProcessedCount++;
-  console.log(`Downloaded queued video ${videoId}`);
+  if (added) {
+    ++videoProcessedCount;
+    ++addedFromQueue;
+    console.log(`Downloaded queued video ${videoId}`);
+  }
 }
 console.log(`Fetched ${videoProcessedCount} queued videos`);
 
 const subbed = new Set<ChannelID>();
-let processedCount = 0;
+let processedSubscribingCount = 0;
+let addedFromSubscribing = 0;
 let channel;
 while ((channel = getOneSubscribing()) != null) {
-  await subscribe(channel);
+  addedFromSubscribing += await subscribe(channel);
 
   if (!isInSubscriptions(channel)) continue;
 
   markSubscribed(channel);
   subbed.add(channel);
-  processedCount++;
+  processedSubscribingCount++;
 }
-console.log(`Performed initial fetch for ${processedCount} channels`);
+console.log(`Performed initial fetch for ${processedSubscribingCount} channels`);
 
+let addedFromSubscribed = 0;
 const subscribed = getSubscribed();
 for (const channel of subscribed) {
   if (subbed.has(channel)) continue;
-  await updateExisting(channel);
+  addedFromSubscribed += await updateExisting(channel);
 }
 console.log(`Updated ${subscribed.length - subbed.size} channels`);
+console.log(`Finished with ${addedFromQueue + addedFromSubscribing + addedFromSubscribed} new videos (${addedFromQueue} from individual queue, ${addedFromSubscribing} from newly subscribing channels, ${addedFromSubscribed} from subscribed channels)`)
