@@ -13,6 +13,7 @@ let insertStmt: StatementSync | null = null;
 let deleteStmt: StatementSync | null = null;
 let updateStatusStmt: StatementSync | null = null;
 let clearTitleStmt: StatementSync | null = null;
+let clearRecentLimitStmt: StatementSync | null = null;
 
 let getAllVideosStmt: StatementSync | null = null;
 let getOneVideoStmt: StatementSync | null = null;
@@ -36,7 +37,8 @@ export function init(dbDir: string): void {
       CREATE TABLE channels (
           channel_id TEXT PRIMARY KEY,
           status TEXT NOT NULL CHECK(status IN ('subscribing', 'subscribed')),
-          title TEXT
+          title TEXT,
+          recent_limit INTEGER CHECK(recent_limit IS NULL OR recent_limit >= 1)
       ) STRICT;
     `);
   }
@@ -60,14 +62,15 @@ export function init(dbDir: string): void {
     `);
   }
 
-  getAllStmt = db.prepare('SELECT channel_id, status, title FROM channels');
+  getAllStmt = db.prepare('SELECT channel_id, status, title, recent_limit FROM channels');
   getByStatusStmt = db.prepare('SELECT channel_id, title FROM channels WHERE status = ?');
   getOneByStatusStmt = db.prepare('SELECT channel_id FROM channels WHERE status = ? LIMIT 1');
   getByIdStmt = db.prepare('SELECT channel_id, status, title FROM channels WHERE channel_id = ?');
-  insertStmt = db.prepare('INSERT INTO channels (channel_id, status, title) VALUES (?, ?, ?)');
+  insertStmt = db.prepare('INSERT INTO channels (channel_id, status, title, recent_limit) VALUES (?, ?, ?, ?)');
   deleteStmt = db.prepare('DELETE FROM channels WHERE channel_id = ?');
   updateStatusStmt = db.prepare('UPDATE channels SET status = ? WHERE channel_id = ?');
   clearTitleStmt = db.prepare('UPDATE channels SET title = NULL WHERE channel_id = ?');
+  clearRecentLimitStmt = db.prepare('UPDATE channels SET recent_limit = NULL WHERE channel_id = ?');
 
   getAllVideosStmt = db.prepare('SELECT video_id, title, channel_id, channel_name, thumbnail FROM videos');
   getOneVideoStmt = db.prepare('SELECT video_id, title, channel_id, channel_name, thumbnail FROM videos LIMIT 1');
@@ -96,14 +99,19 @@ export type SubscriptionData = {
   subscribing: ChannelID[];
   subscribed: ChannelID[];
   titles: Record<ChannelID, string>;
+  recentLimits: Record<ChannelID, number | null>;
 };
 
 export function getSubscriptionData(): SubscriptionData {
   throwIfNotInit(getAllStmt);
-  const rows = getAllStmt.all() as { channel_id: string; status: string; title: string | null }[];
+  const rows = getAllStmt.all() as { channel_id: string; status: string; title: string | null; recent_limit: number | null }[];
   const subscribing: ChannelID[] = [];
   const subscribed: ChannelID[] = [];
   const titles: Record<ChannelID, string> = {
+    // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
+    __proto__: null,
+  };
+  const recentLimits: Record<ChannelID, number | null> = {
     // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
     __proto__: null,
   };
@@ -117,18 +125,19 @@ export function getSubscriptionData(): SubscriptionData {
     if (row.title != null) {
       titles[id] = row.title;
     }
+    recentLimits[id] = row.recent_limit;
   }
-  return { subscribing, subscribed, titles };
+  return { subscribing, subscribed, titles, recentLimits };
 }
 
-export function addSubscription(channelId: ChannelID, title: string): void {
+export function addSubscription(channelId: ChannelID, title: string, recentLimit: number | null): void {
   throwIfNotInit(getByIdStmt);
   throwIfNotInit(insertStmt);
   const existing = getByIdStmt.get(channelId) as { channel_id: string } | undefined;
   if (existing) {
     throw new Error('Channel is already in subscriptions');
   }
-  insertStmt.run(channelId, 'subscribing', title);
+  insertStmt.run(channelId, 'subscribing', title, recentLimit);
 }
 
 export function removeSubscription(channelId: ChannelID): void {
@@ -144,8 +153,10 @@ export function removeSubscription(channelId: ChannelID): void {
 export function markSubscribed(channelId: ChannelID): void {
   throwIfNotInit(updateStatusStmt);
   throwIfNotInit(clearTitleStmt);
+  throwIfNotInit(clearRecentLimitStmt);
   updateStatusStmt.run('subscribed', channelId);
   clearTitleStmt.run(channelId);
+  clearRecentLimitStmt.run(channelId);
 }
 
 export function getSubscribing(): ChannelID[] {

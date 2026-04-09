@@ -486,6 +486,7 @@ type SubscriptionChannelInfo = {
   latest_upload_timestamp?: number | null;
   video_count?: number;
   status: 'subscribing' | 'subscribed';
+  recentLimit: number | null;
   avatarExt: string | null;
 }
 const subscriptionsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8'));
@@ -493,6 +494,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
   const subscribing = subscriptionsData.subscribing;
   const subscribed = subscriptionsData.subscribed;
   const titles = subscriptionsData.titles;
+  const recentLimits = subscriptionsData.recentLimits;
 
   const allChannelIds = [...subscribing, ...subscribed];
   const channelInfos: SubscriptionChannelInfo[] = [];
@@ -508,6 +510,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       channelInfos.push({
         ...channel,
         status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
+        recentLimit: recentLimits[channelId] ?? null,
         avatarExt,
       });
     } else {
@@ -518,6 +521,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
         channel_title: storedTitle,
         short_id: null,
         status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
+        recentLimit: recentLimits[channelId] ?? null,
         avatarExt: null,
       });
     }
@@ -540,6 +544,9 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       hasAvatar: c.avatar_filename != null,
       avatarExt: c.avatarExt,
       status: c.status,
+      statusLabel: c.status === 'subscribed'
+        ? 'subscribed'
+        : (c.recentLimit == null ? 'subscribing: all' : `subscribing: most recent ${c.recentLimit}`),
     })),
   });
 }

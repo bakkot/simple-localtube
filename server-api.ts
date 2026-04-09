@@ -442,15 +442,24 @@ export function addAPIs(app: Express) {
         return;
       }
 
-      const { channelId } = req.body as { channelId: unknown };
+      const { channelId, recentLimit } = req.body as { channelId: unknown; recentLimit: unknown };
 
       if (typeof channelId !== 'string') {
         res.status(400).json({ message: 'Channel input must be a string' });
         return;
       }
 
+      let resolvedRecentLimit: number | null = null;
+      if (recentLimit != null) {
+        if (typeof recentLimit !== 'number' || !Number.isInteger(recentLimit) || recentLimit < 1) {
+          res.status(400).json({ message: 'recentLimit must be a positive integer' });
+          return;
+        }
+        resolvedRecentLimit = recentLimit;
+      }
+
       const { channelId: resolvedChannelId, title } = await resolveChannelInput(channelId.trim());
-      subscriptionsDb.addSubscription(resolvedChannelId, title);
+      subscriptionsDb.addSubscription(resolvedChannelId, title, resolvedRecentLimit);
       res.json({ message: 'Subscription added successfully' });
     } catch (error) {
       console.error('Add subscription error:', error);

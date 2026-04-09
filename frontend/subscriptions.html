@@ -25,6 +25,8 @@
     .form-row { display: flex; gap: 10px; align-items: flex-end; width: 100%; }
     .form-group { flex: 1; }
     .form-group input { width: 100%; box-sizing: border-box; }
+    .recent-limit-row { margin-top: -10px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+    .recent-limit-row input[type="number"] { width: 4em; box-sizing: border-box; }
     .add-button { background: #1976d2; color: white; padding: 10px 20px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; white-space: nowrap; }
     .add-button:hover { background: #1565c0; }
     .add-button:disabled { background: #ccc; cursor: not-allowed; }
@@ -46,6 +48,12 @@
             <input type="text" id="channelId" name="channelId" placeholder="e.g. @username, UCxxxxx, or https://youtube.com/..." required>
           </div>
           <button type="submit" class="add-button" id="addButton">Add</button>
+        </div>
+        <div class="recent-limit-row">
+          <input type="checkbox" id="recentLimitEnabled">
+          <label for="recentLimitEnabled">Limit to most recent</label>
+          <input type="number" id="recentLimitCount" min="1" value="20">
+          <label for="recentLimitCount">videos</label>
         </div>
         <div id="addMessage" class="message"></div>
       </form>
@@ -73,15 +81,16 @@
               </div>
               <div>
                 <span class="channel-status status-<# channel.status>">
-                  <# channel.status>
+                  <# channel.statusLabel>
                 </span>
               </div>
               <div class="channel-id"><# channel.id></div>
             </div>
             <#if canSubscribe>
-              <button class="unsubscribe-btn" onclick="unsubscribe('<# channel.id>', <# channel.escapedTitle>, event)">
+              <button class="unsubscribe-btn" data-id='<# channel.id>' data-title=<# channel.escapedTitle>>
                 Unsubscribe
               </button>
+
             </#if>
           </div>
         </#foreach>
@@ -90,6 +99,10 @@
   </div>
   <#if canSubscribe>
     <script>
+      for (let button of document.querySelectorAll('button.unsubscribe-btn')) {
+        button.addEventListener('click', e => unsubscribe(button.dataset.id, button.dataset.title, e));
+      }
+
       async function unsubscribe(channelId, channelName, event) {
         const shiftPressed = event.shiftKey;
 
@@ -141,6 +154,17 @@
           return;
         }
 
+        let recentLimit = null;
+        if (document.getElementById('recentLimitEnabled').checked) {
+          const parsed = parseInt(document.getElementById('recentLimitCount').value, 10);
+          if (!Number.isInteger(parsed) || parsed < 1) {
+            addMessage.textContent = 'Recent limit must be a positive integer';
+            addMessage.className = 'message error';
+            return;
+          }
+          recentLimit = parsed;
+        }
+
         addButton.disabled = true;
         addButton.textContent = 'Adding...';
         addMessage.textContent = '';
@@ -150,7 +174,7 @@
           const response = await fetch('/api/add-subscription', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channelId })
+            body: JSON.stringify({ channelId, recentLimit })
           });
 
           if (response.ok) {
