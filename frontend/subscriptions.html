@@ -58,18 +58,18 @@
         <#foreach channel of channels>
           <div class="channel-item">
             <#if channel.hasAvatar>
+              <#-- having an avatar implies having a shortId  -->
               <img class="channel-avatar" src="/media/avatars/<# channel.shortId>.<# channel.avatarExt>" alt="<# channel.title>">
             <#else>
               <div class="channel-avatar" style="background: #ddd;"></div>
             </#if>
             <div class="channel-details">
               <div>
-                <#-- ${channel.short_id ? `
+                <#if channel.hasShortId>
                   <a href="/c/<# channel.shortId>" class="channel-name"><# channel.title></a>
-                ` : `
-                  <span><# channel.channel></span>
-                `} -->
-                <a href="/c/<# channel.shortId>" class="channel-name"><# channel.title></a>
+                <#else>
+                  <span class="channel-name-unlinked"><# channel.title></span>
+                </#if>
               </div>
               <div>
                 <span class="channel-status status-<# channel.status>">

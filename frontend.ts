@@ -234,6 +234,7 @@ const commonCSS = `
   .back-link:hover { text-decoration: underline; }
   .content-section { background: #f5f5f5; padding: 20px; }
   .video-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .channel-name-unlinked { text-decoration: none; font-weight: bold; }
   .channel-name { color: #1976d2; text-decoration: none; font-weight: bold; }
   .channel-name:hover { text-decoration: underline; }
   .description { color: #666; line-height: 1.5; white-space: pre-wrap; }
@@ -474,6 +475,19 @@ export function renderSettingsPage(username: string, permissions: Permissions): 
   });
 }
 
+type SubscriptionChannelInfo = {
+  channel_id: ChannelID;
+  channel_title: string;
+  short_id: string | null;
+  description?: string | null;
+  avatar_filename?: string | null;
+  banner_filename?: string | null;
+  banner_uncropped_filename?: string | null;
+  latest_upload_timestamp?: number | null;
+  video_count?: number;
+  status: 'subscribing' | 'subscribed';
+  avatarExt: string | null;
+}
 const subscriptionsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8'));
 export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptionsData: SubscriptionData): string {
   const subscribing = subscriptionsData.subscribing;
@@ -481,7 +495,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
   const titles = subscriptionsData.titles;
 
   const allChannelIds = [...subscribing, ...subscribed];
-  const channelInfos = [];
+  const channelInfos: SubscriptionChannelInfo[] = [];
 
   for (const channelId of allChannelIds) {
     if (permissions.allowedChannels !== 'all' && !permissions.allowedChannels.has(channelId)) {
@@ -494,7 +508,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       channelInfos.push({
         ...channel,
         status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
-        avatarExt
+        avatarExt,
       });
     } else {
       // Channel not in media DB, use stored title
@@ -502,13 +516,9 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       channelInfos.push({
         channel_id: channelId,
         channel_title: storedTitle,
-        short_id: null, // No short_id available
-        description: null,
-        avatar_filename: null,
-        banner_filename: null,
-        banner_uncropped_filename: null,
+        short_id: null,
         status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
-        avatarExt: null
+        avatarExt: null,
       });
     }
   }
@@ -525,6 +535,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       title: c.channel_title,
       id: c.channel_id,
       escapedTitle: JSON.stringify(c.channel_title),
+      hasShortId: c.short_id != null,
       shortId: c.short_id,
       hasAvatar: c.avatar_filename != null,
       avatarExt: c.avatarExt,
