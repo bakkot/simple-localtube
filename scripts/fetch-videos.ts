@@ -347,12 +347,10 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
       }
 
       startIndex = endIndex + 1;
-      // Pause before the next call if we are continuing
-      if (batchUrls.length === YT_DLP_BATCH_SIZE) {
-        // Only pause if we likely have more videos
-        // console.log(`Pausing for ${YT_DLP_PAUSE_MS / 1000} seconds...`);
-        await new Promise(resolve => setTimeout(resolve, YT_DLP_PAUSE_MS));
-      } else {
+      if (verbose) console.log(`Pausing for ${YT_DLP_PAUSE_MS / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, YT_DLP_PAUSE_MS));
+
+      if (batchUrls.length !== YT_DLP_BATCH_SIZE) {
         // console.log('Reached end of playlist in this batch.');
         break;
       }
