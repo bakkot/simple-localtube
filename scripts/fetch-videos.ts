@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { channelFromDisk, videoFromDisk } from '../read-from-disk.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
-import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue } from '../subscriptions-db.ts';
+import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue, markVideoUnavailable, getVideoUnavailableReason } from '../subscriptions-db.ts';
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? 'yt-dlp';
 const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call
@@ -137,6 +137,11 @@ async function addChannelIfNotExists(channelId: ChannelID) {
 async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID): Promise<boolean> {
   if (skipSet.has(videoId)) return false;
   if (isVideoInDb(videoId)) return false;
+  const unavailableReason = getVideoUnavailableReason(videoId);
+  if (unavailableReason != null) {
+    if (verbose) console.log(`skipping ${unavailableReason} ${videoId}`);
+    return false;
+  }
   const videoDir = path.join(mediaDir, channelId, videoId);
   if (!fs.existsSync(videoDir)) {
     fs.mkdirSync(videoDir, { recursive: true });
@@ -179,12 +184,13 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID): Prom
       await spawnAsync(command, { cwd: tempDir.path, print: verbose });
     } catch (e: unknown) {
       if (e instanceof ErrorWithStderr) {
-        // TODO store these somewhere so we don't keep fetching
         if (e.stderr.includes('members-only content') || e.stderr.includes("available to this channel's members")) {
           console.error(`skipping members-only ${videoId}`);
+          markVideoUnavailable(videoId, 'members-only');
           return false;
         } else if (e.stderr.includes('confirm your age')) {
           console.error(`skipping age-gated ${videoId}`);
+          markVideoUnavailable(videoId, 'age-gated');
           return false;
         }
       }

@@ -20,6 +20,9 @@ let getVideoByIdStmt: StatementSync | null = null;
 let insertVideoStmt: StatementSync | null = null;
 let deleteVideoStmt: StatementSync | null = null;
 
+let getUnavailableVideoStmt: StatementSync | null = null;
+let insertUnavailableVideoStmt: StatementSync | null = null;
+
 export function init(dbDir: string): void {
   const SUBSCRIPTIONS_DB_PATH = path.join(dbDir, 'subscriptions.sqlite');
 
@@ -48,6 +51,14 @@ export function init(dbDir: string): void {
       ) STRICT;
     `);
   }
+  if (!existing.has('unavailable_videos')) {
+    db.exec(`
+      CREATE TABLE unavailable_videos (
+          video_id TEXT PRIMARY KEY,
+          reason TEXT NOT NULL CHECK(reason IN ('members-only', 'age-gated'))
+      ) STRICT;
+    `);
+  }
 
   getAllStmt = db.prepare('SELECT channel_id, status, title FROM channels');
   getByStatusStmt = db.prepare('SELECT channel_id, title FROM channels WHERE status = ?');
@@ -63,6 +74,22 @@ export function init(dbDir: string): void {
   getVideoByIdStmt = db.prepare('SELECT video_id FROM videos WHERE video_id = ?');
   insertVideoStmt = db.prepare('INSERT INTO videos (video_id, title, channel_id, channel_name, thumbnail) VALUES (?, ?, ?, ?, ?)');
   deleteVideoStmt = db.prepare('DELETE FROM videos WHERE video_id = ?');
+
+  getUnavailableVideoStmt = db.prepare('SELECT reason FROM unavailable_videos WHERE video_id = ?');
+  insertUnavailableVideoStmt = db.prepare('INSERT OR REPLACE INTO unavailable_videos (video_id, reason) VALUES (?, ?)');
+}
+
+export type UnavailableReason = 'members-only' | 'age-gated';
+
+export function markVideoUnavailable(videoId: VideoID, reason: UnavailableReason): void {
+  throwIfNotInit(insertUnavailableVideoStmt);
+  insertUnavailableVideoStmt.run(videoId, reason);
+}
+
+export function getVideoUnavailableReason(videoId: VideoID): UnavailableReason | null {
+  throwIfNotInit(getUnavailableVideoStmt);
+  const row = getUnavailableVideoStmt.get(videoId) as { reason: string } | undefined;
+  return row ? (row.reason as UnavailableReason) : null;
 }
 
 export type SubscriptionData = {
