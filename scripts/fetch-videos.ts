@@ -180,7 +180,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID): Prom
     } catch (e: unknown) {
       if (e instanceof ErrorWithStderr) {
         // TODO store these somewhere so we don't keep fetching
-        if (e.stderr.includes('members-only content')) {
+        if (e.stderr.includes('members-only content') || e.stderr.includes("available to this channel's members")) {
           console.error(`skipping members-only ${videoId}`);
           return false;
         } else if (e.stderr.includes('confirm your age')) {
