@@ -338,7 +338,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
           throw new Error('failed to read video ID from url ' + url);
         }
 
-        if (!isVideoInDb(videoId)) {
+        if (!isVideoInDb(videoId) && getVideoUnavailableReason(videoId) == null) {
           newVideoIds.push(videoId);
         } else if (!all) {
           if (verbose) console.log(`Found known video ${videoId}. Stopping search.`);
