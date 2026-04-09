@@ -94,7 +94,7 @@ if (temps.length > 0) {
 }
 
 
-async function subscribe(channelId: ChannelID): Promise<number> {
+async function subscribe(channelId: ChannelID, recentLimit: number | null): Promise<number> {
   const channelDir = path.join(mediaDir, channelId);
   if (!fs.existsSync(channelDir)) {
     fs.mkdirSync(channelDir);
@@ -104,6 +104,7 @@ async function subscribe(channelId: ChannelID): Promise<number> {
   let newVids = 0;
   const videoIds = await getLatestVideoUrls(channelId, true);
   for (const videoId of videoIds) {
+    if (recentLimit != null && newVids >= recentLimit) break;
     let added = await addVideoIfNotExists(channelId, videoId);
     if (added) ++newVids;
   }
@@ -410,12 +411,12 @@ let processedSubscribingCount = 0;
 let addedFromSubscribing = 0;
 let channel;
 while ((channel = getOneSubscribing()) != null) {
-  addedFromSubscribing += await subscribe(channel);
+  addedFromSubscribing += await subscribe(channel.channelId, channel.recentLimit);
 
-  if (!isInSubscriptions(channel)) continue;
+  if (!isInSubscriptions(channel.channelId)) continue;
 
-  markSubscribed(channel);
-  subbed.add(channel);
+  markSubscribed(channel.channelId);
+  subbed.add(channel.channelId);
   processedSubscribingCount++;
 }
 console.log(`Performed initial fetch for ${processedSubscribingCount} channels`);

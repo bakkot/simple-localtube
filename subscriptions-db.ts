@@ -64,7 +64,7 @@ export function init(dbDir: string): void {
 
   getAllStmt = db.prepare('SELECT channel_id, status, title, recent_limit FROM channels');
   getByStatusStmt = db.prepare('SELECT channel_id, title FROM channels WHERE status = ?');
-  getOneByStatusStmt = db.prepare('SELECT channel_id FROM channels WHERE status = ? LIMIT 1');
+  getOneByStatusStmt = db.prepare('SELECT channel_id, recent_limit FROM channels WHERE status = ? LIMIT 1');
   getByIdStmt = db.prepare('SELECT channel_id, status, title FROM channels WHERE channel_id = ?');
   insertStmt = db.prepare('INSERT INTO channels (channel_id, status, title, recent_limit) VALUES (?, ?, ?, ?)');
   deleteStmt = db.prepare('DELETE FROM channels WHERE channel_id = ?');
@@ -165,10 +165,10 @@ export function getSubscribing(): ChannelID[] {
   return rows.map(r => assertChannelId(r.channel_id));
 }
 
-export function getOneSubscribing(): ChannelID | null {
+export function getOneSubscribing(): { channelId: ChannelID; recentLimit: number | null } | null {
   throwIfNotInit(getOneByStatusStmt);
-  const row = getOneByStatusStmt.get('subscribing') as { channel_id: string } | undefined;
-  return row ? assertChannelId(row.channel_id) : null;
+  const row = getOneByStatusStmt.get('subscribing') as { channel_id: string; recent_limit: number | null } | undefined;
+  return row ? { channelId: assertChannelId(row.channel_id), recentLimit: row.recent_limit } : null;
 }
 
 export function getSubscribed(): ChannelID[] {
