@@ -14,6 +14,7 @@ let deleteStmt: StatementSync | null = null;
 let updateStatusStmt: StatementSync | null = null;
 let clearTitleStmt: StatementSync | null = null;
 let clearRecentLimitStmt: StatementSync | null = null;
+let decrementRecentLimitStmt: StatementSync | null = null;
 
 let getAllVideosStmt: StatementSync | null = null;
 let getOneVideoStmt: StatementSync | null = null;
@@ -71,6 +72,7 @@ export function init(dbDir: string): void {
   updateStatusStmt = db.prepare('UPDATE channels SET status = ? WHERE channel_id = ?');
   clearTitleStmt = db.prepare('UPDATE channels SET title = NULL WHERE channel_id = ?');
   clearRecentLimitStmt = db.prepare('UPDATE channels SET recent_limit = NULL WHERE channel_id = ?');
+  decrementRecentLimitStmt = db.prepare('UPDATE channels SET recent_limit = recent_limit - 1 WHERE channel_id = ? AND recent_limit IS NOT NULL');
 
   getAllVideosStmt = db.prepare('SELECT video_id, title, channel_id, channel_name, thumbnail FROM videos');
   getOneVideoStmt = db.prepare('SELECT video_id, title, channel_id, channel_name, thumbnail FROM videos LIMIT 1');
@@ -148,6 +150,11 @@ export function removeSubscription(channelId: ChannelID): void {
     throw new Error(`Channel ${channelId} is not in subscriptions`);
   }
   deleteStmt.run(channelId);
+}
+
+export function decrementRecentLimit(channelId: ChannelID): void {
+  throwIfNotInit(decrementRecentLimitStmt);
+  decrementRecentLimitStmt.run(channelId);
 }
 
 export function markSubscribed(channelId: ChannelID): void {

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { channelFromDisk, videoFromDisk } from '../read-from-disk.ts';
 import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
-import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, isInSubscriptions, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue, markVideoUnavailable, getVideoUnavailableReason } from '../subscriptions-db.ts';
+import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue, markVideoUnavailable, getVideoUnavailableReason, decrementRecentLimit } from '../subscriptions-db.ts';
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? 'yt-dlp';
 const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call
@@ -102,12 +102,20 @@ async function subscribe(channelId: ChannelID, recentLimit: number | null): Prom
   await addChannelIfNotExists(channelId);
 
   let newVids = 0;
+  let remaining = recentLimit;
   const videoIds = await getLatestVideoUrls(channelId, true);
   for (const videoId of videoIds) {
-    if (recentLimit != null && newVids >= recentLimit) break;
     let added = await addVideoIfNotExists(channelId, videoId);
-    if (added) ++newVids;
+    if (added) {
+      ++newVids;
+      if (remaining != null) {
+        if (remaining === 1) break;
+        --remaining;
+        decrementRecentLimit(channelId);
+      }
+    }
   }
+  markSubscribed(channelId);
   return newVids;
 }
 
@@ -411,11 +419,8 @@ let processedSubscribingCount = 0;
 let addedFromSubscribing = 0;
 let channel;
 while ((channel = getOneSubscribing()) != null) {
+  // calling subscribe will also remove the channel from the db
   addedFromSubscribing += await subscribe(channel.channelId, channel.recentLimit);
-
-  if (!isInSubscriptions(channel.channelId)) continue;
-
-  markSubscribed(channel.channelId);
   subbed.add(channel.channelId);
   processedSubscribingCount++;
 }
