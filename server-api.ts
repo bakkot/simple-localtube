@@ -1,4 +1,4 @@
-import { addGetRoute, addPostRoute, type App, type HttpRequest, type HttpResponse } from './httplib.ts';
+import { addGetRoute, addPostRoute, getBodyJson, type App, type HttpRequest, type HttpResponse } from './httplib.ts';
 import { addUser, areRequestedPermissionsAllowedByGranterPermissions, canCreateUsers, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
@@ -211,7 +211,7 @@ export function addAPIs(app: App) {
         return;
       }
 
-      const { username, password } = req.body as { username: unknown; password: unknown };
+      const { username, password } = await getBodyJson(req) as { username: unknown; password: unknown };
 
       if (typeof username !== 'string' || typeof password !== 'string') {
         res.status(400).json({ message: 'Username and password must be strings' });
@@ -243,7 +243,7 @@ export function addAPIs(app: App) {
         return;
       }
 
-      const { username, password, allowedChannels, createUser, canSubscribe } = req.body as AddUserAPIRequest;
+      const { username, password, allowedChannels, createUser, canSubscribe } = await getBodyJson(req) as AddUserAPIRequest;
 
       if (typeof username !== 'string' || typeof password !== 'string' || (createUser !== 'yes' && createUser !== 'no' && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
         res.status(400).json({ message: 'Username and password must be strings, createUser must be "yes", "no", or "limited", canSubscribe must be boolean' });
@@ -306,7 +306,7 @@ export function addAPIs(app: App) {
         return;
       }
 
-      const { username, allowedChannels, createUser, canSubscribe } = req.body as {
+      const { username, allowedChannels, createUser, canSubscribe } = await getBodyJson(req) as {
         username: unknown; allowedChannels: unknown; createUser: unknown; canSubscribe: unknown;
       };
 
@@ -366,7 +366,7 @@ export function addAPIs(app: App) {
 
   addPostRoute(app, '/api/change-password', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
     try {
-      const { currentPassword, newPassword } = req.body as { currentPassword: unknown; newPassword: unknown };
+      const { currentPassword, newPassword } = await getBodyJson(req) as { currentPassword: unknown; newPassword: unknown };
 
       if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
         res.status(400).json({ message: 'Passwords must be strings' });
@@ -455,7 +455,7 @@ export function addAPIs(app: App) {
 
   addPostRoute(app, '/public-api/login', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
     try {
-      const { username, password } = req.body as { username: string, password: string };
+      const { username, password } = await getBodyJson(req) as { username: string, password: string };
 
       if (typeof username !== 'string' || typeof password !== 'string') {
         res.status(400).json({ message: 'Username and password required' });
@@ -491,7 +491,7 @@ export function addAPIs(app: App) {
         return;
       }
 
-      const { channelId, recentLimit } = req.body as { channelId: unknown; recentLimit: unknown };
+      const { channelId, recentLimit } = await getBodyJson(req) as { channelId: unknown; recentLimit: unknown };
 
       if (typeof channelId !== 'string') {
         res.status(400).json({ message: 'Channel input must be a string' });
@@ -529,7 +529,7 @@ export function addAPIs(app: App) {
         return;
       }
 
-      const { videoInput } = req.body as { videoInput: unknown };
+      const { videoInput } = await getBodyJson(req) as { videoInput: unknown };
 
       if (typeof videoInput !== 'string') {
         res.status(400).json({ message: 'Video input must be a string' });
@@ -570,7 +570,7 @@ export function addAPIs(app: App) {
     }
   });
 
-  addPostRoute(app, '/api/remove-queued-video', (req: HttpRequest, res: HttpResponse): void => {
+  addPostRoute(app, '/api/remove-queued-video', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
     try {
       if (!req.permissions!.canSubscribe) {
         res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
@@ -582,7 +582,7 @@ export function addAPIs(app: App) {
         return;
       }
 
-      const { videoId } = req.body as { videoId: unknown };
+      const { videoId } = await getBodyJson(req) as { videoId: unknown };
 
       if (!videoId || typeof videoId !== 'string') {
         res.status(400).json({ message: 'Video ID is required and must be a string' });
@@ -610,7 +610,7 @@ export function addAPIs(app: App) {
         return;
       }
 
-      const { channelId } = req.body as { channelId: unknown };
+      const { channelId } = await getBodyJson(req) as { channelId: unknown };
 
       if (!channelId || typeof channelId !== 'string') {
         res.status(400).json({ message: 'Channel ID is required and must be a string' });

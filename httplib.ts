@@ -9,7 +9,6 @@ export interface HttpRequest {
   query: Record<string, string | undefined>;
   params: Record<string, string>;
   cookies: Record<string, string>;
-  body: unknown;
   headers: http.IncomingHttpHeaders;
   rawReq: http.IncomingMessage;
 }
@@ -24,6 +23,14 @@ export interface HttpResponse {
   sendFile(absolutePath: string): Promise<void>;
 }
 
+export class HttpError extends Error {
+  statusCode: number;
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
 export type Handler = (req: HttpRequest, res: HttpResponse) => void | Promise<void>;
 export type Middleware = (req: HttpRequest, res: HttpResponse, next: () => void) => void | Promise<void>;
 
@@ -35,22 +42,17 @@ interface CompiledRoute {
   handler: Handler;
 }
 
-interface AppImpl {
+export interface App {
   middlewares: Middleware[];
   routes: CompiledRoute[];
 }
 
-export interface App {
-  readonly __brand: 'App';
-}
-
 export function createApp(): App {
-  const impl: AppImpl = { middlewares: [], routes: [] };
-  return impl as unknown as App;
+  return { middlewares: [], routes: [] };
 }
 
 export function addMiddleware(app: App, mw: Middleware): void {
-  (app as unknown as AppImpl).middlewares.push(mw);
+  app.middlewares.push(mw);
 }
 
 function compilePattern(pattern: string): RouteSegment[] {
@@ -64,7 +66,7 @@ function compilePattern(pattern: string): RouteSegment[] {
 }
 
 export function addGetRoute(app: App, pattern: string, handler: Handler): void {
-  (app as unknown as AppImpl).routes.push({
+  app.routes.push({
     method: 'GET',
     segments: compilePattern(pattern),
     handler,
@@ -72,7 +74,7 @@ export function addGetRoute(app: App, pattern: string, handler: Handler): void {
 }
 
 export function addPostRoute(app: App, pattern: string, handler: Handler): void {
-  (app as unknown as AppImpl).routes.push({
+  app.routes.push({
     method: 'POST',
     segments: compilePattern(pattern),
     handler,
@@ -321,56 +323,33 @@ function makeResponse(req: HttpRequest, rawRes: http.ServerResponse): HttpRespon
 
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
 
-export function addJsonBodyParser(app: App): void {
-  addMiddleware(app, (req, res, next) => {
-    if (req.method !== 'POST' && req.method !== 'PUT' && req.method !== 'PATCH') {
-      next();
-      return;
-    }
-    const ct = req.headers['content-type'];
-    if (typeof ct !== 'string' || !ct.toLowerCase().includes('application/json')) {
-      next();
-      return;
-    }
+export async function getBodyJson(req: HttpRequest): Promise<unknown> {
+  return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
-    let aborted = false;
     req.rawReq.on('data', (chunk: Buffer) => {
-      if (aborted) return;
       total += chunk.length;
       if (total > MAX_JSON_BODY_BYTES) {
-        aborted = true;
-        res.status(413).json({ message: 'Request body too large' });
         req.rawReq.destroy();
+        reject(new HttpError(413, 'Request body too large'));
         return;
       }
       chunks.push(chunk);
     });
     req.rawReq.on('end', () => {
-      if (aborted) return;
       const text = Buffer.concat(chunks).toString('utf8');
       if (text.length === 0) {
-        req.body = undefined;
-        next();
+        resolve(undefined);
         return;
       }
       try {
-        req.body = JSON.parse(text);
+        resolve(JSON.parse(text));
       } catch {
-        res.status(400).json({ message: 'Invalid JSON body' });
-        return;
+        reject(new HttpError(400, 'Invalid JSON body'));
       }
-      next();
     });
     req.rawReq.on('error', () => {
-      if (aborted) return;
-      aborted = true;
-      if (!res) return;
-      try {
-        res.status(400).json({ message: 'Request error' });
-      } catch {
-        // ignore
-      }
+      reject(new HttpError(400, 'Request error'));
     });
   });
 }
@@ -397,7 +376,6 @@ function buildRequest(rawReq: http.IncomingMessage): HttpRequest {
     query,
     params: {},
     cookies: {},
-    body: undefined,
     headers: rawReq.headers,
     rawReq,
   };
@@ -434,24 +412,29 @@ function runMiddlewares(
 }
 
 function handleError(err: unknown, rawRes: http.ServerResponse): void {
-  console.error(err);
   if (rawRes.headersSent) {
     rawRes.destroy();
     return;
   }
+  if (err instanceof HttpError) {
+    rawRes.statusCode = err.statusCode;
+    rawRes.setHeader('Content-Type', 'application/json; charset=utf-8');
+    rawRes.end(JSON.stringify({ message: err.message }));
+    return;
+  }
+  console.error(err);
   rawRes.statusCode = 500;
   rawRes.setHeader('Content-Type', 'text/plain; charset=utf-8');
   rawRes.end('Internal server error');
 }
 
 export function listen(app: App, port: number, cb: (err?: Error) => void): http.Server {
-  const impl = app as unknown as AppImpl;
   const server = http.createServer((rawReq, rawRes) => {
     const req = buildRequest(rawReq);
     const res = makeResponse(req, rawRes);
 
-    runMiddlewares(impl.middlewares, 0, req, res, rawRes, () => {
-      for (const route of impl.routes) {
+    runMiddlewares(app.middlewares, 0, req, res, rawRes, () => {
+      for (const route of app.routes) {
         const params = matchRoute(route, req.method, req.path);
         if (params) {
           req.params = params;
