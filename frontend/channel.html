@@ -11,7 +11,8 @@
     .channel-header { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 20px; margin-bottom: 20px; }
     .channel-info { display: flex; align-items: center; }
     .channel-avatar { width: 80px; height: 80px; border-radius: 50%; margin-right: 20px; }
-    .channel-details h1 { margin: 0 0 10px 0; color: #333; }
+    .channel-details .title-row { display: flex; align-items: baseline; margin-bottom: 10px; }
+    .channel-details h1 { margin: 0; color: #333; }
     .channel-description { color: #666; line-height: 1.5; white-space: pre-wrap; }
     .subscribe-status { font-size: 16px; margin-left: 24px; }
     .subscribe-status.subscribed { color: #2e7d32; font-weight: 500; }
@@ -31,7 +32,7 @@
         <img class="channel-avatar" width=80 height=80 src="/media/avatars/<# shortId>.<# avatarExt>" alt="<# channelTitle>">
       </#if>
       <div class="channel-details">
-        <h1><# channelTitle><#if canSubscribe><#if isSubscribed><span class="subscribe-status subscribed">subscribed &#10003;</span><#else><a class="subscribe-status subscribe-link" href="/subscriptions?channelId=<# channelId>">subscribe?</a></#if></#if></h1>
+        <div class="title-row"><h1><# channelTitle></h1><#if canSubscribe><#if isSubscribed><span class="subscribe-status subscribed">subscribed &#10003;</span><#else><a class="subscribe-status subscribe-link" href="/subscriptions?channelId=<# channelId>">subscribe?</a></#if></#if></div>
         <#if hasDescription>
           <div class="channel-description"><# description></div>
         </#if>
