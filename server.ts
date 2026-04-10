@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
-import { createApp, addGetRoute, addMiddleware, addCookieParser, listen, type HttpRequest, type HttpResponse } from './httplib.ts';
+import { createApp, addGetRoute, addMiddleware, getCookies, listen, type HttpRequest, type HttpResponse } from './httplib.ts';
 import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
 import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, getUserPermissions, addUser, hasAnyUsers, areRequestedPermissionsAllowedByGranterPermissions, getCreatedAccountsWithPermissions, canCreateUsers, type Permissions } from './user-db.ts';
@@ -54,8 +54,6 @@ function parsePort(value: string): number {
   return num;
 }
 
-addCookieParser(app);
-
 // Auth middleware - must be first to protect everything
 addMiddleware(app, (req: HttpRequest, res: HttpResponse, next: () => void): void => {
   if (req.path === '/favicon.svg') {
@@ -79,7 +77,7 @@ addMiddleware(app, (req: HttpRequest, res: HttpResponse, next: () => void): void
   }
 
   // Validate auth cookie
-  const authCookie = req.cookies?.auth as unknown;
+  const authCookie = getCookies(req).auth as unknown;
   let isAuthenticated = false;
   let username: string | undefined;
 
@@ -157,7 +155,7 @@ addGetRoute(app, '/setup', (req: HttpRequest, res: HttpResponse): void => {
 });
 
 addGetRoute(app, '/login', (req: HttpRequest, res: HttpResponse): void => {
-  const authCookie = req.cookies?.auth as unknown;
+  const authCookie = getCookies(req).auth as unknown;
   if (typeof authCookie === 'string') {
     try {
       const payload = decodeBearerToken(authCookie);

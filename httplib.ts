@@ -8,7 +8,6 @@ export interface HttpRequest {
   originalUrl: string;
   query: Record<string, string | undefined>;
   params: Record<string, string>;
-  cookies: Record<string, string>;
   headers: http.IncomingHttpHeaders;
   rawReq: http.IncomingMessage;
 }
@@ -354,11 +353,8 @@ export async function getBodyJson(req: HttpRequest): Promise<unknown> {
   });
 }
 
-export function addCookieParser(app: App): void {
-  addMiddleware(app, (req, _res, next) => {
-    req.cookies = parseCookieHeader(req.headers['cookie']);
-    next();
-  });
+export function getCookies(req: HttpRequest): Record<string, string> {
+  return parseCookieHeader(req.headers['cookie']);
 }
 
 function buildRequest(rawReq: http.IncomingMessage): HttpRequest {
@@ -375,7 +371,6 @@ function buildRequest(rawReq: http.IncomingMessage): HttpRequest {
     originalUrl: (rawReq.url ?? '/'),
     query,
     params: {},
-    cookies: {},
     headers: rawReq.headers,
     rawReq,
   };
