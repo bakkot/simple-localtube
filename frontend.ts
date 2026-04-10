@@ -4,7 +4,7 @@ import type { Channel, VideoWithChannel, SearchResults } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
 import { canCreateUsers, type Permissions } from './user-db.ts';
 import { nameExt, type ChannelID } from './util.ts';
-import type { SubscriptionData } from './subscriptions-db.ts';
+import type { SubscriptionChannel } from './subscriptions-db.ts';
 import { subscriptionsDb } from './server.ts';
 import { parse as parseTemplate, apply as applyTemplate } from './frontend/tinymarker.ts';
 
@@ -491,15 +491,10 @@ type SubscriptionChannelInfo = {
   storedAvatar: { data: Uint8Array; mime: string } | null;
 }
 const subscriptionsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8'));
-export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptionsData: SubscriptionData): string {
-  const tagged = [
-    ...subscriptionsData.subscribing.map(c => ({ channel: c, status: 'subscribing' as const })),
-    ...subscriptionsData.subscribed.map(c => ({ channel: c, status: 'subscribed' as const })),
-  ];
-
+export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptions: SubscriptionChannel[]): string {
   const channelInfos: SubscriptionChannelInfo[] = [];
 
-  for (const { channel: sub, status } of tagged) {
+  for (const sub of subscriptions) {
     if (permissions.allowedChannels !== 'all' && !permissions.allowedChannels.has(sub.channelId)) {
       continue;
     }
@@ -509,7 +504,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       const avatarExt = channel.avatar_filename ? nameExt(channel.avatar_filename).ext : null;
       channelInfos.push({
         ...channel,
-        status,
+        status: sub.status,
         recentLimit: sub.recentLimit,
         avatarExt,
         storedAvatar: sub.avatar,
@@ -519,7 +514,7 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
         channel_id: sub.channelId,
         channel_title: sub.title || 'Unknown Channel',
         short_id: null,
-        status,
+        status: sub.status,
         recentLimit: sub.recentLimit,
         avatarExt: null,
         storedAvatar: sub.avatar,

@@ -5,7 +5,7 @@ import { assertChannelId, throwIfNotInit } from './util.ts';
 
 let db: DatabaseSync | null = null;
 
-let getFullByStatusStmt: StatementSync | null = null;
+let getAllFullStmt: StatementSync | null = null;
 let getByStatusStmt: StatementSync | null = null;
 let getOneByStatusStmt: StatementSync | null = null;
 let getByIdStmt: StatementSync | null = null;
@@ -65,7 +65,7 @@ export function init(dbDir: string): void {
     `);
   }
 
-  getFullByStatusStmt = db.prepare('SELECT channel_id, title, recent_limit, avatar, avatar_mime FROM channels WHERE status = ?');
+  getAllFullStmt = db.prepare('SELECT channel_id, status, title, recent_limit, avatar, avatar_mime FROM channels');
   getByStatusStmt = db.prepare('SELECT channel_id FROM channels WHERE status = ?');
   getOneByStatusStmt = db.prepare('SELECT channel_id, recent_limit FROM channels WHERE status = ? LIMIT 1');
   getByIdStmt = db.prepare('SELECT channel_id, status, title FROM channels WHERE channel_id = ?');
@@ -101,38 +101,22 @@ export function getVideoUnavailableReason(videoId: VideoID): UnavailableReason |
 
 export type SubscriptionChannel = {
   channelId: ChannelID;
+  status: 'subscribing' | 'subscribed';
   title: string | null;
   recentLimit: number | null;
   avatar: { data: Uint8Array; mime: string } | null;
 };
 
-export type SubscriptionData = {
-  subscribing: SubscriptionChannel[];
-  subscribed: SubscriptionChannel[];
-};
-
-type SubscriptionChannelRow = {
-  channel_id: string;
-  title: string | null;
-  recent_limit: number | null;
-  avatar: Uint8Array | null;
-  avatar_mime: string | null;
-};
-
-function rowToSubscriptionChannel(row: SubscriptionChannelRow): SubscriptionChannel {
-  return {
+export function getSubscriptionData(): SubscriptionChannel[] {
+  throwIfNotInit(getAllFullStmt);
+  const rows = getAllFullStmt.all() as { channel_id: string; status: string; title: string | null; recent_limit: number | null; avatar: Uint8Array | null; avatar_mime: string | null }[];
+  return rows.map(row => ({
     channelId: assertChannelId(row.channel_id),
+    status: row.status as 'subscribing' | 'subscribed',
     title: row.title,
     recentLimit: row.recent_limit,
     avatar: row.avatar != null ? { data: row.avatar, mime: row.avatar_mime ?? 'image/jpeg' } : null,
-  };
-}
-
-export function getSubscriptionData(): SubscriptionData {
-  throwIfNotInit(getFullByStatusStmt);
-  const subscribing = (getFullByStatusStmt.all('subscribing') as SubscriptionChannelRow[]).map(rowToSubscriptionChannel);
-  const subscribed = (getFullByStatusStmt.all('subscribed') as SubscriptionChannelRow[]).map(rowToSubscriptionChannel);
-  return { subscribing, subscribed };
+  }));
 }
 
 export function addSubscription(channelId: ChannelID, title: string, recentLimit: number | null, avatar: Uint8Array | null, avatarMime: string | null): void {

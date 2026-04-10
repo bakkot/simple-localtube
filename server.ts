@@ -279,8 +279,8 @@ app.get('/subscriptions', (req: Request, res: Response): void => {
     return;
   }
 
-  const subscriptionsData = subscriptionsDb.getSubscriptionData();
-  res.send(renderSubscriptionsPage(req.username!, req.permissions!, subscriptionsData));
+  const subscriptions = subscriptionsDb.getSubscriptionData();
+  res.send(renderSubscriptionsPage(req.username!, req.permissions!, subscriptions));
 });
 
 app.get('/add-video', (req: Request, res: Response): void => {
