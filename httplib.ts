@@ -30,21 +30,21 @@ export class HttpError extends Error {
   }
 }
 
-export type Handler<Ctx extends object = {}> = (req: HttpRequest, ctx: Ctx, res: HttpResponse) => void | Promise<void>;
+export type Handler<Ctx extends object = object> = (req: HttpRequest, ctx: Ctx, res: HttpResponse) => void | Promise<void>;
 export type Middleware<Extra extends object> = (req: HttpRequest, res: HttpResponse, next: (extra: Extra) => void) => void | Promise<void>;
 
 type RouteSegment = { kind: 'literal'; value: string } | { kind: 'param'; name: string };
 
 type InternalHandler = (req: HttpRequest, res: HttpResponse, rawRes: http.ServerResponse) => void;
-type InternalHandlerWithCtx<Ctx extends object = {}> = (req: HttpRequest, ctx: Ctx, res: HttpResponse, rawRes: http.ServerResponse) => void;
+type InternalHandlerWithCtx<Ctx extends object = object> = (req: HttpRequest, ctx: Ctx, res: HttpResponse, rawRes: http.ServerResponse) => void;
 
-interface CompiledRoute<Ctx extends object = {}> {
+interface CompiledRoute<Ctx extends object = object> {
   method: 'GET' | 'POST';
   segments: RouteSegment[];
   handler: Handler<Ctx>;
 }
 
-export interface App<Ctx extends object = {}> {
+export interface App<Ctx extends object = object> {
   routes: CompiledRoute<Ctx>[];
   _wrapHandler: (inner: InternalHandlerWithCtx<Ctx>) => InternalHandler;
 }
