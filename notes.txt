@@ -35,3 +35,7 @@ mode to build to single file inc. bundling frontend templates
 write readme, screenshots etc
 
 domain
+
+logging for login attempts etc
+
+bearer tokens should include issue date

@@ -1,21 +1,16 @@
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
-import express from 'express';
-import type { Request, Response, NextFunction } from 'express';
-import cookieParser from 'cookie-parser';
+import { createApp, addGetRoute, addMiddleware, addJsonBodyParser, addCookieParser, listen, type HttpRequest, type HttpResponse } from './httplib.ts';
 import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
 import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, getUserPermissions, addUser, hasAnyUsers, areRequestedPermissionsAllowedByGranterPermissions, getCreatedAccountsWithPermissions, canCreateUsers, type Permissions } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderAddVideoPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
-// Extend Request interface to include username
-declare global {
-  namespace Express {
-    interface Request {
-      username?: string;
-      permissions?: Permissions;
-    }
+declare module './httplib.ts' {
+  interface HttpRequest {
+    username?: string;
+    permissions?: Permissions;
   }
 }
 
@@ -48,7 +43,7 @@ if (enableSubscriptions) {
 export { subscriptionsDb };
 
 
-const app = express();
+const app = createApp();
 
 function parsePort(value: string): number {
   const num = Number(value);
@@ -59,11 +54,11 @@ function parsePort(value: string): number {
   return num;
 }
 
-app.use(express.json());
-app.use(cookieParser());
+addJsonBodyParser(app);
+addCookieParser(app);
 
 // Auth middleware - must be first to protect everything
-app.use((req: Request, res: Response, next: NextFunction): void => {
+addMiddleware(app, (req: HttpRequest, res: HttpResponse, next: () => void): void => {
   if (req.path === '/favicon.svg') {
     return next();
   }
@@ -147,13 +142,13 @@ const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" wid
   <line x1="16" y1="56" x2="13" y2="61" />
   <line x1="48" y1="56" x2="51" y2="61" />
 </svg>`;
-app.get('/favicon.svg', (req: Request, res: Response): void => {
+addGetRoute(app, '/favicon.svg', (req: HttpRequest, res: HttpResponse): void => {
   res.setHeader('Content-Type', 'image/svg+xml');
   res.setHeader('Cache-Control', 'public, max-age=86400');
   res.send(favicon);
 });
 
-app.get('/setup', (req: Request, res: Response): void => {
+addGetRoute(app, '/setup', (req: HttpRequest, res: HttpResponse): void => {
   if (hasAnyUsers()) {
     res.redirect('/login');
     return;
@@ -162,7 +157,7 @@ app.get('/setup', (req: Request, res: Response): void => {
   res.send(renderSetupPage());
 });
 
-app.get('/login', (req: Request, res: Response): void => {
+addGetRoute(app, '/login', (req: HttpRequest, res: HttpResponse): void => {
   const authCookie = req.cookies?.auth as unknown;
   if (typeof authCookie === 'string') {
     try {
@@ -179,15 +174,15 @@ app.get('/login', (req: Request, res: Response): void => {
   res.send(renderLoginPage());
 });
 
-app.get('/', (req, res) => {
+addGetRoute(app, '/', (req, res) => {
   const videos = getRecentVideosForChannels(req.permissions!.allowedChannels, 30);
 
   res.send(renderHomePage(req.username!, req.permissions!, videos));
 });
 
-app.get('/search', (req, res) => {
+addGetRoute(app, '/search', (req, res) => {
   const q = (req.query.q as string || '').trim();
-  const channelId = req.query.channel as string | undefined;
+  const channelId = req.query.channel;
   let allowedChannels = req.permissions!.allowedChannels;
   let channel: Channel | null = null;
   if (channelId) {
@@ -206,13 +201,13 @@ app.get('/search', (req, res) => {
   res.send(renderSearchPage(req.username!, req.permissions!, q, results, channel));
 });
 
-app.get('/channels', (req, res) => {
+addGetRoute(app, '/channels', (req, res) => {
   const channels = getChannelsSorted(req.permissions!.allowedChannels, 'recent', 30);
   res.send(renderChannelsPage(req.username!, req.permissions!, channels));
 });
 
 // Video player page
-app.get('/v/:video_id', (req: Request, res: Response): void => {
+addGetRoute(app, '/v/:video_id', (req: HttpRequest, res: HttpResponse): void => {
   const video = getVideoById(req.params.video_id as VideoID);
   if (!video) {
     res.status(404).send('Video not found');
@@ -228,7 +223,7 @@ app.get('/v/:video_id', (req: Request, res: Response): void => {
 });
 
 // Channel page
-app.get('/c/:short_id', (req: Request, res: Response): void => {
+addGetRoute(app, '/c/:short_id', (req: HttpRequest, res: HttpResponse): void => {
   const channel = getChannelByShortId(req.params.short_id);
   if (!channel) {
     res.status(404).send('Channel not found');
@@ -246,7 +241,7 @@ app.get('/c/:short_id', (req: Request, res: Response): void => {
   res.send(renderChannelPage(channel, videos, req.username!, req.permissions!, subscriptionsDb != null, isSubscribed));
 });
 
-app.get('/add-user', (req: Request, res: Response): void => {
+addGetRoute(app, '/add-user', (req: HttpRequest, res: HttpResponse): void => {
   if (!canCreateUsers(req.permissions!)) {
     res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
@@ -257,7 +252,7 @@ app.get('/add-user', (req: Request, res: Response): void => {
   res.send(renderAddUserPage(req.username!, req.permissions!, availableChannels));
 });
 
-app.get('/manage-users', (req: Request, res: Response): void => {
+addGetRoute(app, '/manage-users', (req: HttpRequest, res: HttpResponse): void => {
   if (!canCreateUsers(req.permissions!)) {
     res.send(renderNotAllowed(req.username!, req.permissions!));
     return;
@@ -269,11 +264,11 @@ app.get('/manage-users', (req: Request, res: Response): void => {
   res.send(renderManageUsersPage(req.username!, req.permissions!, availableChannels, createdUsers));
 });
 
-app.get('/settings', (req: Request, res: Response): void => {
+addGetRoute(app, '/settings', (req: HttpRequest, res: HttpResponse): void => {
   res.send(renderSettingsPage(req.username!, req.permissions!));
 });
 
-app.get('/subscriptions', (req: Request, res: Response): void => {
+addGetRoute(app, '/subscriptions', (req: HttpRequest, res: HttpResponse): void => {
   if (!subscriptionsDb) {
     res.status(500).send('Server was started without --enable-subscriptions');
     return;
@@ -283,7 +278,7 @@ app.get('/subscriptions', (req: Request, res: Response): void => {
   res.send(renderSubscriptionsPage(req.username!, req.permissions!, subscriptions));
 });
 
-app.get('/add-video', (req: Request, res: Response): void => {
+addGetRoute(app, '/add-video', (req: HttpRequest, res: HttpResponse): void => {
   if (!subscriptionsDb) {
     res.status(500).send('Server was started without --enable-subscriptions');
     return;
@@ -293,7 +288,7 @@ app.get('/add-video', (req: Request, res: Response): void => {
   res.send(renderAddVideoPage(req.username!, req.permissions!, videoQueue));
 });
 
-app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<void> => {
+addGetRoute(app, '/media/videos/:video_id', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
   const videoId = nameExt(req.params.video_id).name;
   const video = getVideoById(videoId as VideoID);
   if (!video) {
@@ -304,10 +299,10 @@ app.get('/media/videos/:video_id', async (req: Request, res: Response): Promise<
     res.status(403).send('Access denied');
     return;
   }
-  res.sendFile(video.video_filename);
+  await res.sendFile(video.video_filename);
 });
 
-app.get('/media/thumbs/:video_id', async (req: Request, res: Response): Promise<void> => {
+addGetRoute(app, '/media/thumbs/:video_id', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
   const videoId = nameExt(req.params.video_id).name;
   const video = getVideoById(videoId as VideoID);
   if (video?.thumb_filename == null) {
@@ -318,10 +313,10 @@ app.get('/media/thumbs/:video_id', async (req: Request, res: Response): Promise<
     res.status(403).send('Access denied');
     return;
   }
-  res.sendFile(video.thumb_filename);
+  await res.sendFile(video.thumb_filename);
 });
 
-app.get('/media/subtitles/:video_id/:lang', async (req: Request, res: Response): Promise<void> => {
+addGetRoute(app, '/media/subtitles/:video_id/:lang', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
   const video = getVideoById(req.params.video_id as VideoID);
   const subtitlePath = video?.subtitles_files[req.params.lang];
   if (!subtitlePath) {
@@ -332,10 +327,10 @@ app.get('/media/subtitles/:video_id/:lang', async (req: Request, res: Response):
     res.status(403).send('Access denied');
     return;
   }
-  res.type('text/vtt').sendFile(subtitlePath);
+  await res.type('text/vtt').sendFile(subtitlePath);
 });
 
-app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise<void> => {
+addGetRoute(app, '/media/avatars/:short_id', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
   const channelShortId = nameExt(req.params.short_id).name;
   const channel = getChannelByShortId(channelShortId);
   if (channel?.avatar_filename == null) {
@@ -346,13 +341,13 @@ app.get('/media/avatars/:short_id', async (req: Request, res: Response): Promise
     res.status(403).send('Access denied');
     return;
   }
-  res.sendFile(channel.avatar_filename);
+  await res.sendFile(channel.avatar_filename);
 });
 
 addAPIs(app);
 
 
-app.listen(port, (error) => {
+listen(app, port, (error) => {
   if (error) {
     throw error;
   }
