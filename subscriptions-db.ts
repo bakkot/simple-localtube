@@ -65,7 +65,7 @@ export function init(dbDir: string): void {
     `);
   }
 
-  getAllStmt = db.prepare('SELECT channel_id, status, title, recent_limit FROM channels');
+  getAllStmt = db.prepare('SELECT channel_id, status, title, recent_limit, avatar, avatar_mime FROM channels');
   getByStatusStmt = db.prepare('SELECT channel_id, title FROM channels WHERE status = ?');
   getOneByStatusStmt = db.prepare('SELECT channel_id, recent_limit FROM channels WHERE status = ? LIMIT 1');
   getByIdStmt = db.prepare('SELECT channel_id, status, title FROM channels WHERE channel_id = ?');
@@ -104,11 +104,12 @@ export type SubscriptionData = {
   subscribed: ChannelID[];
   titles: Record<ChannelID, string>;
   recentLimits: Record<ChannelID, number | null>;
+  avatars: Record<ChannelID, { data: Uint8Array; mime: string }>;
 };
 
 export function getSubscriptionData(): SubscriptionData {
   throwIfNotInit(getAllStmt);
-  const rows = getAllStmt.all() as { channel_id: string; status: string; title: string | null; recent_limit: number | null }[];
+  const rows = getAllStmt.all() as { channel_id: string; status: string; title: string | null; recent_limit: number | null; avatar: Uint8Array | null; avatar_mime: string | null }[];
   const subscribing: ChannelID[] = [];
   const subscribed: ChannelID[] = [];
   const titles: Record<ChannelID, string> = {
@@ -116,6 +117,10 @@ export function getSubscriptionData(): SubscriptionData {
     __proto__: null,
   };
   const recentLimits: Record<ChannelID, number | null> = {
+    // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
+    __proto__: null,
+  };
+  const avatars: Record<ChannelID, { data: Uint8Array; mime: string }> = {
     // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
     __proto__: null,
   };
@@ -130,8 +135,11 @@ export function getSubscriptionData(): SubscriptionData {
       titles[id] = row.title;
     }
     recentLimits[id] = row.recent_limit;
+    if (row.avatar != null) {
+      avatars[id] = { data: row.avatar, mime: row.avatar_mime ?? 'image/jpeg' };
+    }
   }
-  return { subscribing, subscribed, titles, recentLimits };
+  return { subscribing, subscribed, titles, recentLimits, avatars };
 }
 
 export function addSubscription(channelId: ChannelID, title: string, recentLimit: number | null, avatar: Uint8Array | null, avatarMime: string | null): void {

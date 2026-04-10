@@ -535,19 +535,30 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
     topRightBlock: renderTopRightBlock(username, permissions),
     canSubscribe: permissions.canSubscribe,
     channelInfosIsEmpty: channelInfos.length === 0,
-    channels: channelInfos.map(c => ({
-      title: c.channel_title,
-      id: c.channel_id,
-      escapedTitle: JSON.stringify(c.channel_title),
-      hasShortId: c.short_id != null,
-      shortId: c.short_id,
-      hasAvatar: c.avatar_filename != null,
-      avatarExt: c.avatarExt,
-      status: c.status,
-      statusLabel: c.status === 'subscribed'
-        ? 'subscribed'
-        : (c.recentLimit == null ? 'subscribing: all' : `subscribing: most recent ${c.recentLimit}`),
-    })),
+    channels: channelInfos.map(c => {
+      let avatarSrc: string | null = null;
+      if (c.avatar_filename != null && c.short_id != null && c.avatarExt != null) {
+        avatarSrc = `/media/avatars/${c.short_id}.${c.avatarExt}`;
+      } else {
+        const stored = subscriptionsData.avatars[c.channel_id];
+        if (stored) {
+          avatarSrc = `data:${stored.mime};base64,${stored.data.toBase64()}`;
+        }
+      }
+      return {
+        title: c.channel_title,
+        id: c.channel_id,
+        escapedTitle: JSON.stringify(c.channel_title),
+        hasShortId: c.short_id != null,
+        shortId: c.short_id,
+        hasAvatar: avatarSrc != null,
+        avatarSrc,
+        status: c.status,
+        statusLabel: c.status === 'subscribed'
+          ? 'subscribed'
+          : (c.recentLimit == null ? 'subscribing: all' : `subscribing: most recent ${c.recentLimit}`),
+      };
+    }),
   });
 }
 
