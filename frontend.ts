@@ -488,41 +488,41 @@ type SubscriptionChannelInfo = {
   status: 'subscribing' | 'subscribed';
   recentLimit: number | null;
   avatarExt: string | null;
+  storedAvatar: { data: Uint8Array; mime: string } | null;
 }
 const subscriptionsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'subscriptions.html'), 'utf8'));
 export function renderSubscriptionsPage(username: string, permissions: Permissions, subscriptionsData: SubscriptionData): string {
-  const subscribing = subscriptionsData.subscribing;
-  const subscribed = subscriptionsData.subscribed;
-  const titles = subscriptionsData.titles;
-  const recentLimits = subscriptionsData.recentLimits;
+  const tagged = [
+    ...subscriptionsData.subscribing.map(c => ({ channel: c, status: 'subscribing' as const })),
+    ...subscriptionsData.subscribed.map(c => ({ channel: c, status: 'subscribed' as const })),
+  ];
 
-  const allChannelIds = [...subscribing, ...subscribed];
   const channelInfos: SubscriptionChannelInfo[] = [];
 
-  for (const channelId of allChannelIds) {
-    if (permissions.allowedChannels !== 'all' && !permissions.allowedChannels.has(channelId)) {
+  for (const { channel: sub, status } of tagged) {
+    if (permissions.allowedChannels !== 'all' && !permissions.allowedChannels.has(sub.channelId)) {
       continue;
     }
 
-    const channel = getChannelById(channelId);
+    const channel = getChannelById(sub.channelId);
     if (channel) {
       const avatarExt = channel.avatar_filename ? nameExt(channel.avatar_filename).ext : null;
       channelInfos.push({
         ...channel,
-        status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
-        recentLimit: recentLimits[channelId] ?? null,
+        status,
+        recentLimit: sub.recentLimit,
         avatarExt,
+        storedAvatar: sub.avatar,
       });
     } else {
-      // Channel not in media DB, use stored title
-      const storedTitle = titles[channelId] || 'Unknown Channel';
       channelInfos.push({
-        channel_id: channelId,
-        channel_title: storedTitle,
+        channel_id: sub.channelId,
+        channel_title: sub.title || 'Unknown Channel',
         short_id: null,
-        status: subscribing.includes(channelId) ? 'subscribing' : 'subscribed',
-        recentLimit: recentLimits[channelId] ?? null,
+        status,
+        recentLimit: sub.recentLimit,
         avatarExt: null,
+        storedAvatar: sub.avatar,
       });
     }
   }
@@ -539,11 +539,8 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
       let avatarSrc: string | null = null;
       if (c.avatar_filename != null && c.short_id != null && c.avatarExt != null) {
         avatarSrc = `/media/avatars/${c.short_id}.${c.avatarExt}`;
-      } else {
-        const stored = subscriptionsData.avatars[c.channel_id];
-        if (stored) {
-          avatarSrc = `data:${stored.mime};base64,${stored.data.toBase64()}`;
-        }
+      } else if (c.storedAvatar) {
+        avatarSrc = `data:${c.storedAvatar.mime};base64,${c.storedAvatar.data.toBase64()}`;
       }
       return {
         title: c.channel_title,

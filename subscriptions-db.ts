@@ -5,7 +5,7 @@ import { assertChannelId, throwIfNotInit } from './util.ts';
 
 let db: DatabaseSync | null = null;
 
-let getAllStmt: StatementSync | null = null;
+let getFullByStatusStmt: StatementSync | null = null;
 let getByStatusStmt: StatementSync | null = null;
 let getOneByStatusStmt: StatementSync | null = null;
 let getByIdStmt: StatementSync | null = null;
@@ -65,8 +65,8 @@ export function init(dbDir: string): void {
     `);
   }
 
-  getAllStmt = db.prepare('SELECT channel_id, status, title, recent_limit, avatar, avatar_mime FROM channels');
-  getByStatusStmt = db.prepare('SELECT channel_id, title FROM channels WHERE status = ?');
+  getFullByStatusStmt = db.prepare('SELECT channel_id, title, recent_limit, avatar, avatar_mime FROM channels WHERE status = ?');
+  getByStatusStmt = db.prepare('SELECT channel_id FROM channels WHERE status = ?');
   getOneByStatusStmt = db.prepare('SELECT channel_id, recent_limit FROM channels WHERE status = ? LIMIT 1');
   getByIdStmt = db.prepare('SELECT channel_id, status, title FROM channels WHERE channel_id = ?');
   insertStmt = db.prepare('INSERT INTO channels (channel_id, status, title, recent_limit, avatar, avatar_mime) VALUES (?, ?, ?, ?, ?, ?)');
@@ -99,47 +99,40 @@ export function getVideoUnavailableReason(videoId: VideoID): UnavailableReason |
   return row ? (row.reason as UnavailableReason) : null;
 }
 
-export type SubscriptionData = {
-  subscribing: ChannelID[];
-  subscribed: ChannelID[];
-  titles: Record<ChannelID, string>;
-  recentLimits: Record<ChannelID, number | null>;
-  avatars: Record<ChannelID, { data: Uint8Array; mime: string }>;
+export type SubscriptionChannel = {
+  channelId: ChannelID;
+  title: string | null;
+  recentLimit: number | null;
+  avatar: { data: Uint8Array; mime: string } | null;
 };
 
+export type SubscriptionData = {
+  subscribing: SubscriptionChannel[];
+  subscribed: SubscriptionChannel[];
+};
+
+type SubscriptionChannelRow = {
+  channel_id: string;
+  title: string | null;
+  recent_limit: number | null;
+  avatar: Uint8Array | null;
+  avatar_mime: string | null;
+};
+
+function rowToSubscriptionChannel(row: SubscriptionChannelRow): SubscriptionChannel {
+  return {
+    channelId: assertChannelId(row.channel_id),
+    title: row.title,
+    recentLimit: row.recent_limit,
+    avatar: row.avatar != null ? { data: row.avatar, mime: row.avatar_mime ?? 'image/jpeg' } : null,
+  };
+}
+
 export function getSubscriptionData(): SubscriptionData {
-  throwIfNotInit(getAllStmt);
-  const rows = getAllStmt.all() as { channel_id: string; status: string; title: string | null; recent_limit: number | null; avatar: Uint8Array | null; avatar_mime: string | null }[];
-  const subscribing: ChannelID[] = [];
-  const subscribed: ChannelID[] = [];
-  const titles: Record<ChannelID, string> = {
-    // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
-    __proto__: null,
-  };
-  const recentLimits: Record<ChannelID, number | null> = {
-    // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
-    __proto__: null,
-  };
-  const avatars: Record<ChannelID, { data: Uint8Array; mime: string }> = {
-    // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
-    __proto__: null,
-  };
-  for (const row of rows) {
-    const id = assertChannelId(row.channel_id);
-    if (row.status === 'subscribing') {
-      subscribing.push(id);
-    } else {
-      subscribed.push(id);
-    }
-    if (row.title != null) {
-      titles[id] = row.title;
-    }
-    recentLimits[id] = row.recent_limit;
-    if (row.avatar != null) {
-      avatars[id] = { data: row.avatar, mime: row.avatar_mime ?? 'image/jpeg' };
-    }
-  }
-  return { subscribing, subscribed, titles, recentLimits, avatars };
+  throwIfNotInit(getFullByStatusStmt);
+  const subscribing = (getFullByStatusStmt.all('subscribing') as SubscriptionChannelRow[]).map(rowToSubscriptionChannel);
+  const subscribed = (getFullByStatusStmt.all('subscribed') as SubscriptionChannelRow[]).map(rowToSubscriptionChannel);
+  return { subscribing, subscribed };
 }
 
 export function addSubscription(channelId: ChannelID, title: string, recentLimit: number | null, avatar: Uint8Array | null, avatarMime: string | null): void {
