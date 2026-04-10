@@ -142,6 +142,8 @@
       const addForm = document.getElementById('addSubscriptionForm');
       const addButton = document.getElementById('addButton');
       const addMessage = document.getElementById('addMessage');
+      const prefill = new URLSearchParams(window.location.search).get('channelId');
+      if (prefill) document.getElementById('channelId').value = prefill;
 
       addForm.addEventListener('submit', async (e) => {
         e.preventDefault();
