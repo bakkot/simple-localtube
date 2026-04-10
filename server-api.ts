@@ -506,8 +506,8 @@ export function addAPIs(app: Express) {
         resolvedRecentLimit = recentLimit;
       }
 
-      const { channelId: resolvedChannelId, title } = await fetchChannelDetails(channelId.trim());
-      subscriptionsDb.addSubscription(resolvedChannelId, title, resolvedRecentLimit);
+      const { channelId: resolvedChannelId, title, avatarBuf, avatarMime } = await fetchChannelDetails(channelId.trim());
+      subscriptionsDb.addSubscription(resolvedChannelId, title, resolvedRecentLimit, avatarBuf, avatarMime);
       res.json({ message: 'Subscription added successfully' });
     } catch (error) {
       console.error('Add subscription error:', error);

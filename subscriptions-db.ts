@@ -39,7 +39,9 @@ export function init(dbDir: string): void {
           channel_id TEXT PRIMARY KEY,
           status TEXT NOT NULL CHECK(status IN ('subscribing', 'subscribed')),
           title TEXT,
-          recent_limit INTEGER CHECK(recent_limit IS NULL OR recent_limit >= 1)
+          recent_limit INTEGER CHECK(recent_limit IS NULL OR recent_limit >= 1),
+          avatar BLOB,
+          avatar_mime TEXT
       ) STRICT;
     `);
   }
@@ -67,7 +69,7 @@ export function init(dbDir: string): void {
   getByStatusStmt = db.prepare('SELECT channel_id, title FROM channels WHERE status = ?');
   getOneByStatusStmt = db.prepare('SELECT channel_id, recent_limit FROM channels WHERE status = ? LIMIT 1');
   getByIdStmt = db.prepare('SELECT channel_id, status, title FROM channels WHERE channel_id = ?');
-  insertStmt = db.prepare('INSERT INTO channels (channel_id, status, title, recent_limit) VALUES (?, ?, ?, ?)');
+  insertStmt = db.prepare('INSERT INTO channels (channel_id, status, title, recent_limit, avatar, avatar_mime) VALUES (?, ?, ?, ?, ?, ?)');
   deleteStmt = db.prepare('DELETE FROM channels WHERE channel_id = ?');
   updateStatusStmt = db.prepare('UPDATE channels SET status = ? WHERE channel_id = ?');
   clearTitleStmt = db.prepare('UPDATE channels SET title = NULL WHERE channel_id = ?');
@@ -132,14 +134,14 @@ export function getSubscriptionData(): SubscriptionData {
   return { subscribing, subscribed, titles, recentLimits };
 }
 
-export function addSubscription(channelId: ChannelID, title: string, recentLimit: number | null): void {
+export function addSubscription(channelId: ChannelID, title: string, recentLimit: number | null, avatar: Uint8Array | null, avatarMime: string | null): void {
   throwIfNotInit(getByIdStmt);
   throwIfNotInit(insertStmt);
   const existing = getByIdStmt.get(channelId) as { channel_id: string } | undefined;
   if (existing) {
     throw new Error('Channel is already in subscriptions');
   }
-  insertStmt.run(channelId, 'subscribing', title, recentLimit);
+  insertStmt.run(channelId, 'subscribing', title, recentLimit, avatar, avatarMime);
 }
 
 export function removeSubscription(channelId: ChannelID): void {
