@@ -30,42 +30,43 @@ export class HttpError extends Error {
   }
 }
 
-export type Handler<Req extends HttpRequest = HttpRequest> = (req: Req, res: HttpResponse) => void | Promise<void>;
+export type Handler<Ctx extends object = {}> = (req: HttpRequest, ctx: Ctx, res: HttpResponse) => void | Promise<void>;
 export type Middleware<Extra extends object> = (req: HttpRequest, res: HttpResponse, next: (extra: Extra) => void) => void | Promise<void>;
 
 type RouteSegment = { kind: 'literal'; value: string } | { kind: 'param'; name: string };
 
-type InternalHandler<Req extends HttpRequest = HttpRequest> = (req: Req, res: HttpResponse, rawRes: http.ServerResponse) => void;
+type InternalHandler = (req: HttpRequest, res: HttpResponse, rawRes: http.ServerResponse) => void;
+type InternalHandlerWithCtx<Ctx extends object = {}> = (req: HttpRequest, ctx: Ctx, res: HttpResponse, rawRes: http.ServerResponse) => void;
 
-interface CompiledRoute<Req extends HttpRequest = HttpRequest> {
+interface CompiledRoute<Ctx extends object = {}> {
   method: 'GET' | 'POST';
   segments: RouteSegment[];
-  handler: Handler<Req>;
+  handler: Handler<Ctx>;
 }
 
-export interface App<Req extends HttpRequest = HttpRequest> {
-  routes: CompiledRoute<Req>[];
-  _wrapHandler: (inner: InternalHandler<Req>) => InternalHandler;
+export interface App<Ctx extends object = {}> {
+  routes: CompiledRoute<Ctx>[];
+  _wrapHandler: (inner: InternalHandlerWithCtx<Ctx>) => InternalHandler;
 }
 
 export function createApp(): App {
   return {
     routes: [],
-    _wrapHandler: (inner) => inner,
+    _wrapHandler: (inner) => (req, res, rawRes) => inner(req, {}, res, rawRes),
   };
 }
 
-export function withMiddleware<Req extends HttpRequest, Extra extends object>(
-  app: App<Req>,
+export function withMiddleware<Ctx extends object, Extra extends object>(
+  app: App<Ctx>,
   mw: Middleware<Extra>,
-): App<Req & Extra> {
+): App<Ctx & Extra> {
   const prevWrap = app._wrapHandler;
   return {
     routes: app.routes,
-    _wrapHandler: (inner) => prevWrap((req, res, rawRes) => {
+    _wrapHandler: (inner) => prevWrap((req, ctx, res, rawRes) => {
       try {
         const result = mw(req, res, (extra) => {
-          inner(Object.assign(req, extra), res, rawRes);
+          inner(req, { ...ctx, ...extra }, res, rawRes);
         });
         if (result && typeof result.then === 'function') {
           result.catch((err: unknown) => {
@@ -89,7 +90,7 @@ function compilePattern(pattern: string): RouteSegment[] {
   });
 }
 
-export function addGetRoute<Req extends HttpRequest>(app: App<Req>, pattern: string, handler: Handler<Req>): void {
+export function addGetRoute<Ctx extends object>(app: App<Ctx>, pattern: string, handler: Handler<Ctx>): void {
   app.routes.push({
     method: 'GET',
     segments: compilePattern(pattern),
@@ -97,7 +98,7 @@ export function addGetRoute<Req extends HttpRequest>(app: App<Req>, pattern: str
   });
 }
 
-export function addPostRoute<Req extends HttpRequest>(app: App<Req>, pattern: string, handler: Handler<Req>): void {
+export function addPostRoute<Ctx extends object>(app: App<Ctx>, pattern: string, handler: Handler<Ctx>): void {
   app.routes.push({
     method: 'POST',
     segments: compilePattern(pattern),
@@ -105,7 +106,7 @@ export function addPostRoute<Req extends HttpRequest>(app: App<Req>, pattern: st
   });
 }
 
-function matchRoute<Req extends HttpRequest>(route: CompiledRoute<Req>, method: string, pathname: string): Record<string, string> | null {
+function matchRoute<Ctx extends object>(route: CompiledRoute<Ctx>, method: string, pathname: string): Record<string, string> | null {
   if (route.method !== method) return null;
   const parts = pathname.split('/').filter(p => p.length > 0);
   if (parts.length !== route.segments.length) return null;
@@ -418,14 +419,14 @@ function handleError(err: unknown, rawRes: http.ServerResponse): void {
   rawRes.end('Internal server error');
 }
 
-export function listen<Req extends HttpRequest>(app: App<Req>, port: number, cb: (err?: Error) => void): http.Server {
-  const handler = app._wrapHandler((req, res, rawRes) => {
+export function listen<Ctx extends object>(app: App<Ctx>, port: number, cb: (err?: Error) => void): http.Server {
+  const handler = app._wrapHandler((req, ctx, res, rawRes) => {
     for (const route of app.routes) {
       const params = matchRoute(route, req.method, req.path);
       if (params) {
         req.params = params;
         try {
-          const result = route.handler(req, res);
+          const result = route.handler(req, ctx, res);
           if (result && typeof result.then === 'function') {
             result.catch((err: unknown) => {
               handleError(err, rawRes);
