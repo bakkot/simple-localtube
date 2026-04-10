@@ -79,7 +79,20 @@ async function fetchVideoDetails(videoId: VideoID): Promise<FetchedVideoDetails 
   return null;
 }
 
-async function resolveChannelInput(input: string): Promise<{ channelId: ChannelID; title: string }> {
+interface AvatarViewModel {
+  image?: {
+    sources?: { url: string; width: number; height: number }[];
+  };
+}
+
+interface FetchedChannelDetails {
+  channelId: ChannelID;
+  title: string;
+  avatarBuf: Uint8Array | null;
+  avatarMime: string | null;
+}
+
+async function fetchChannelDetails(input: string): Promise<FetchedChannelDetails> {
   let url: string;
 
   // Check if input looks like a URL
@@ -137,7 +150,42 @@ async function resolveChannelInput(input: string): Promise<{ channelId: ChannelI
     const titleMatch = html.match(/<title>([^<]*)<\/title>/i);
     const title = titleMatch ? titleMatch[1].trim().replace(/ - YouTube$/, '') : 'Unknown Channel';
 
-    return { channelId, title };
+    let avatarBuf: Uint8Array | null = null;
+    let avatarMime: string | null = null;
+    const needle = '"avatarViewModel":';
+    let searchFrom = 0;
+    while (true) {
+      const idx = html.indexOf(needle, searchFrom);
+      if (idx === -1) break;
+      const jsonStart = idx + needle.length;
+      const jsonEnd = getJsonEnd(html, jsonStart);
+      if (jsonEnd === -1) {
+        searchFrom = jsonStart;
+        continue;
+      }
+      try {
+        const obj = JSON.parse(html.slice(jsonStart, jsonEnd)) as AvatarViewModel;
+        const sources = obj?.image?.sources;
+        if (sources && sources.length > 0) {
+          const smallest = sources.reduce((a, b) => a.width * a.height <= b.width * b.height ? a : b);
+          try {
+            const avatarResp = await fetch(smallest.url);
+            if (avatarResp.ok) {
+              avatarBuf = new Uint8Array(await avatarResp.arrayBuffer());
+              avatarMime = avatarResp.headers.get('content-type') ?? 'image/jpeg';
+            }
+          } catch {
+            // avatar fetch failed, non-fatal
+          }
+          break;
+        }
+      } catch {
+        // not valid JSON, try next
+      }
+      searchFrom = jsonStart;
+    }
+
+    return { channelId, title, avatarBuf, avatarMime };
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Failed to resolve channel: ${error.message}`);
@@ -458,7 +506,7 @@ export function addAPIs(app: Express) {
         resolvedRecentLimit = recentLimit;
       }
 
-      const { channelId: resolvedChannelId, title } = await resolveChannelInput(channelId.trim());
+      const { channelId: resolvedChannelId, title } = await fetchChannelDetails(channelId.trim());
       subscriptionsDb.addSubscription(resolvedChannelId, title, resolvedRecentLimit);
       res.json({ message: 'Subscription added successfully' });
     } catch (error) {
