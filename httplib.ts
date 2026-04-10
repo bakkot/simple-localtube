@@ -9,7 +9,7 @@ type ExtractRouteParams<Path extends string> =
       ? { [K in Param | keyof ExtractRouteParams<`/${Rest}`>]: string }
       : Path extends `${string}:${infer Param}`
         ? { [K in Param]: string }
-        : {};
+        : { [key: string]: never };
 
 export interface HttpRequest<Params extends Record<string, string> = Record<string, string>> {
   method: string;
@@ -50,7 +50,7 @@ type InternalHandlerWithCtx<Ctx extends object = object> = (req: HttpRequest, ct
 interface CompiledRoute<Ctx extends object = object> {
   method: 'GET' | 'POST';
   segments: RouteSegment[];
-  handler: Handler<Ctx>;
+  handler(req: HttpRequest, ctx: Ctx, res: HttpResponse): void | Promise<void>;
 }
 
 export interface App<Ctx extends object = object> {
@@ -103,7 +103,7 @@ export function addGetRoute<Ctx extends object, Path extends string>(app: App<Ct
   app.routes.push({
     method: 'GET',
     segments: compilePattern(pattern),
-    handler: handler as unknown as Handler<Ctx>,
+    handler: handler,
   });
 }
 
@@ -111,7 +111,7 @@ export function addPostRoute<Ctx extends object, Path extends string>(app: App<C
   app.routes.push({
     method: 'POST',
     segments: compilePattern(pattern),
-    handler: handler as unknown as Handler<Ctx>,
+    handler: handler,
   });
 }
 
