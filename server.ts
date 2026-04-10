@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
-import { createApp, addGetRoute, withMiddleware, getCookies, listen, type Middleware } from './httplib.ts';
+import { createApp, addGetRoute, withMiddleware, getCookies, listen, send, sendJson, redirect, sendFile, type Middleware } from './httplib.ts';
 import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
 import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, getUserPermissions, addUser, hasAnyUsers, areRequestedPermissionsAllowedByGranterPermissions, getCreatedAccountsWithPermissions, canCreateUsers, type Permissions } from './user-db.ts';
@@ -45,7 +45,7 @@ function parsePort(value: string): number {
   return num;
 }
 
-const authMiddleware: Middleware<{ username?: string; permissions?: Permissions }> = (req, res, next) => {
+const authMiddleware: Middleware<{ username?: string; permissions?: Permissions }> = (req, rawRes, next) => {
   if (req.path === '/favicon.svg') {
     return next({});
   }
@@ -54,10 +54,11 @@ const authMiddleware: Middleware<{ username?: string; permissions?: Permissions 
   // Check if any users exist - if not, redirect to setup
   if (!hasAnyUsers() && !isSetup) {
     if (req.path.startsWith('/api') || req.method !== 'GET') {
-      res.status(403).json({ message: 'Setup required' });
+      rawRes.statusCode = 403;
+      sendJson(rawRes, { message: 'Setup required' });
       return;
     }
-    res.redirect('/setup');
+    redirect(rawRes, '/setup');
     return;
   }
 
@@ -93,7 +94,8 @@ const authMiddleware: Middleware<{ username?: string; permissions?: Permissions 
 
   if (!isAuthenticated) {
     if (req.path.startsWith('/api') || req.method !== 'GET') {
-      res.status(403).json({ message: 'Authentication required' });
+      rawRes.statusCode = 403;
+      sendJson(rawRes, { message: 'Authentication required' });
       return;
     }
 
@@ -101,7 +103,7 @@ const authMiddleware: Middleware<{ username?: string; permissions?: Permissions 
     const redirectUrl = req.path === '/'
       ? '/login'
       : `/login?next=${encodeURIComponent(req.originalUrl)}`;
-    res.redirect(redirectUrl);
+    redirect(rawRes, redirectUrl);
     return;
   }
 
@@ -128,206 +130,220 @@ const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" wid
   <line x1="16" y1="56" x2="13" y2="61" />
   <line x1="48" y1="56" x2="51" y2="61" />
 </svg>`;
-addGetRoute(app, '/favicon.svg', (req, ctx, res): void => {
-  res.setHeader('Content-Type', 'image/svg+xml');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.send(favicon);
+addGetRoute(app, '/favicon.svg', (req, ctx, rawRes): void => {
+  rawRes.setHeader('Content-Type', 'image/svg+xml');
+  rawRes.setHeader('Cache-Control', 'public, max-age=86400');
+  send(rawRes, favicon);
 });
 
-addGetRoute(app, '/setup', (req, ctx, res): void => {
+addGetRoute(app, '/setup', (req, ctx, rawRes): void => {
   if (hasAnyUsers()) {
-    res.redirect('/login');
+    redirect(rawRes, '/login');
     return;
   }
 
-  res.send(renderSetupPage());
+  send(rawRes, renderSetupPage());
 });
 
-addGetRoute(app, '/login', (req, ctx, res): void => {
+addGetRoute(app, '/login', (req, ctx, rawRes): void => {
   const authCookie = getCookies(req).auth as unknown;
   if (typeof authCookie === 'string') {
     try {
       const payload = decodeBearerToken(authCookie);
       getUserPermissions(payload.username); // This will throw if user doesn't exist
       // User is authenticated, redirect to home
-      res.redirect('/');
+      redirect(rawRes, '/');
       return;
     } catch {
       // Invalid or expired token, continue to login page
     }
   }
 
-  res.send(renderLoginPage());
+  send(rawRes, renderLoginPage());
 });
 
-addGetRoute(app, '/', (req, ctx, res) => {
+addGetRoute(app, '/', (req, ctx, rawRes) => {
   const videos = getRecentVideosForChannels(ctx.permissions!.allowedChannels, 30);
 
-  res.send(renderHomePage(ctx.username!, ctx.permissions!, videos));
+  send(rawRes, renderHomePage(ctx.username!, ctx.permissions!, videos));
 });
 
-addGetRoute(app, '/search', (req, ctx, res) => {
+addGetRoute(app, '/search', (req, ctx, rawRes) => {
   const q = (req.query.q as string || '').trim();
   const channelId = req.query.channel;
   let allowedChannels = ctx.permissions!.allowedChannels;
   let channel: Channel | null = null;
   if (channelId) {
     if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
-      res.send(renderNotAllowed(ctx.username!, ctx.permissions!));
+      send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
       return;
     }
     channel = getChannelById(channelId as ChannelID);
     if (!channel) {
-      res.status(404).send('Channel not found');
+      rawRes.statusCode = 404;
+      send(rawRes, 'Channel not found');
       return;
     }
     allowedChannels = new Set([channelId as ChannelID]);
   }
   const results = search(q, allowedChannels, 30, false, !!channelId);
-  res.send(renderSearchPage(ctx.username!, ctx.permissions!, q, results, channel));
+  send(rawRes, renderSearchPage(ctx.username!, ctx.permissions!, q, results, channel));
 });
 
-addGetRoute(app, '/channels', (req, ctx, res) => {
+addGetRoute(app, '/channels', (req, ctx, rawRes) => {
   const channels = getChannelsSorted(ctx.permissions!.allowedChannels, 'recent', 30);
-  res.send(renderChannelsPage(ctx.username!, ctx.permissions!, channels));
+  send(rawRes, renderChannelsPage(ctx.username!, ctx.permissions!, channels));
 });
 
 // Video player page
-addGetRoute(app, '/v/:video_id', (req, ctx, res): void => {
+addGetRoute(app, '/v/:video_id', (req, ctx, rawRes): void => {
   const video = getVideoById(req.params.video_id as VideoID);
   if (!video) {
-    res.status(404).send('Video not found');
+    rawRes.statusCode = 404;
+    send(rawRes, 'Video not found');
     return;
   }
 
   if (!canViewChannel(ctx.permissions!, video.channel_id)) {
-    res.send(renderNotAllowed(ctx.username!, ctx.permissions!));
+    send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
     return;
   }
 
-  res.send(renderVideoPage(video, ctx.username!, ctx.permissions!));
+  send(rawRes, renderVideoPage(video, ctx.username!, ctx.permissions!));
 });
 
 // Channel page
-addGetRoute(app, '/c/:short_id', (req, ctx, res): void => {
+addGetRoute(app, '/c/:short_id', (req, ctx, rawRes): void => {
   const channel = getChannelByShortId(req.params.short_id);
   if (!channel) {
-    res.status(404).send('Channel not found');
+    rawRes.statusCode = 404;
+    send(rawRes, 'Channel not found');
     return;
   }
 
   if (!canViewChannel(ctx.permissions!, channel.channel_id)) {
-    res.send(renderNotAllowed(ctx.username!, ctx.permissions!));
+    send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
     return;
   }
 
   const videos = getVideosByChannel(channel.channel_id, 30);
   const isSubscribed = subscriptionsDb?.isInSubscriptions(channel.channel_id) ?? false;
 
-  res.send(renderChannelPage(channel, videos, ctx.username!, ctx.permissions!, subscriptionsDb != null, isSubscribed));
+  send(rawRes, renderChannelPage(channel, videos, ctx.username!, ctx.permissions!, subscriptionsDb != null, isSubscribed));
 });
 
-addGetRoute(app, '/add-user', (req, ctx, res): void => {
+addGetRoute(app, '/add-user', (req, ctx, rawRes): void => {
   if (!canCreateUsers(ctx.permissions!)) {
-    res.send(renderNotAllowed(ctx.username!, ctx.permissions!));
+    send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
     return;
   }
 
   const availableChannels = getChannelsForUser(ctx.permissions!.allowedChannels);
 
-  res.send(renderAddUserPage(ctx.username!, ctx.permissions!, availableChannels));
+  send(rawRes, renderAddUserPage(ctx.username!, ctx.permissions!, availableChannels));
 });
 
-addGetRoute(app, '/manage-users', (req, ctx, res): void => {
+addGetRoute(app, '/manage-users', (req, ctx, rawRes): void => {
   if (!canCreateUsers(ctx.permissions!)) {
-    res.send(renderNotAllowed(ctx.username!, ctx.permissions!));
+    send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
     return;
   }
 
   const availableChannels = getChannelsForUser(ctx.permissions!.allowedChannels);
   const createdUsers = getCreatedAccountsWithPermissions(ctx.username!);
 
-  res.send(renderManageUsersPage(ctx.username!, ctx.permissions!, availableChannels, createdUsers));
+  send(rawRes, renderManageUsersPage(ctx.username!, ctx.permissions!, availableChannels, createdUsers));
 });
 
-addGetRoute(app, '/settings', (req, ctx, res): void => {
-  res.send(renderSettingsPage(ctx.username!, ctx.permissions!));
+addGetRoute(app, '/settings', (req, ctx, rawRes): void => {
+  send(rawRes, renderSettingsPage(ctx.username!, ctx.permissions!));
 });
 
-addGetRoute(app, '/subscriptions', (req, ctx, res): void => {
+addGetRoute(app, '/subscriptions', (req, ctx, rawRes): void => {
   if (!subscriptionsDb) {
-    res.status(500).send('Server was started without --enable-subscriptions');
+    rawRes.statusCode = 500;
+    send(rawRes, 'Server was started without --enable-subscriptions');
     return;
   }
 
   const subscriptions = subscriptionsDb.getSubscriptionData();
-  res.send(renderSubscriptionsPage(ctx.username!, ctx.permissions!, subscriptions));
+  send(rawRes, renderSubscriptionsPage(ctx.username!, ctx.permissions!, subscriptions));
 });
 
-addGetRoute(app, '/add-video', (req, ctx, res): void => {
+addGetRoute(app, '/add-video', (req, ctx, rawRes): void => {
   if (!subscriptionsDb) {
-    res.status(500).send('Server was started without --enable-subscriptions');
+    rawRes.statusCode = 500;
+    send(rawRes, 'Server was started without --enable-subscriptions');
     return;
   }
 
   const videoQueue = subscriptionsDb.getVideoQueue();
-  res.send(renderAddVideoPage(ctx.username!, ctx.permissions!, videoQueue));
+  send(rawRes, renderAddVideoPage(ctx.username!, ctx.permissions!, videoQueue));
 });
 
-addGetRoute(app, '/media/videos/:video_id', async (req, ctx, res): Promise<void> => {
+addGetRoute(app, '/media/videos/:video_id', async (req, ctx, rawRes): Promise<void> => {
   const videoId = nameExt(req.params.video_id).name;
   const video = getVideoById(videoId as VideoID);
   if (!video) {
-    res.status(404).send('Video not found');
+    rawRes.statusCode = 404;
+    send(rawRes, 'Video not found');
     return;
   }
   if (!canViewChannel(ctx.permissions!, video.channel_id)) {
-    res.status(403).send('Access denied');
+    rawRes.statusCode = 403;
+    send(rawRes, 'Access denied');
     return;
   }
-  await res.sendFile(video.video_filename);
+  await sendFile(req, rawRes, video.video_filename);
 });
 
-addGetRoute(app, '/media/thumbs/:video_id', async (req, ctx, res): Promise<void> => {
+addGetRoute(app, '/media/thumbs/:video_id', async (req, ctx, rawRes): Promise<void> => {
   const videoId = nameExt(req.params.video_id).name;
   const video = getVideoById(videoId as VideoID);
   if (video?.thumb_filename == null) {
-    res.status(404).send('not found');
+    rawRes.statusCode = 404;
+    send(rawRes, 'not found');
     return;
   }
   if (!canViewChannel(ctx.permissions!, video.channel_id)) {
-    res.status(403).send('Access denied');
+    rawRes.statusCode = 403;
+    send(rawRes, 'Access denied');
     return;
   }
-  await res.sendFile(video.thumb_filename);
+  await sendFile(req, rawRes, video.thumb_filename);
 });
 
-addGetRoute(app, '/media/subtitles/:video_id/:lang', async (req, ctx, res): Promise<void> => {
+addGetRoute(app, '/media/subtitles/:video_id/:lang', async (req, ctx, rawRes): Promise<void> => {
   const video = getVideoById(req.params.video_id as VideoID);
   const subtitlePath = video?.subtitles_files[req.params.lang];
   if (!subtitlePath) {
-    res.status(404).send('not found');
+    rawRes.statusCode = 404;
+    send(rawRes, 'not found');
     return;
   }
   if (!canViewChannel(ctx.permissions!, video.channel_id)) {
-    res.status(403).send('Access denied');
+    rawRes.statusCode = 403;
+    send(rawRes, 'Access denied');
     return;
   }
-  await res.type('text/vtt').sendFile(subtitlePath);
+  rawRes.setHeader('Content-Type', 'text/vtt');
+  await sendFile(req, rawRes, subtitlePath);
 });
 
-addGetRoute(app, '/media/avatars/:short_id', async (req, ctx, res): Promise<void> => {
+addGetRoute(app, '/media/avatars/:short_id', async (req, ctx, rawRes): Promise<void> => {
   const channelShortId = nameExt(req.params.short_id).name;
   const channel = getChannelByShortId(channelShortId);
   if (channel?.avatar_filename == null) {
-    res.status(404).send('not found');
+    rawRes.statusCode = 404;
+    send(rawRes, 'not found');
     return;
   }
   if (!canViewChannel(ctx.permissions!, channel.channel_id)) {
-    res.status(403).send('Access denied');
+    rawRes.statusCode = 403;
+    send(rawRes, 'Access denied');
     return;
   }
-  await res.sendFile(channel.avatar_filename);
+  await sendFile(req, rawRes, channel.avatar_filename);
 });
 
 addAPIs(app);

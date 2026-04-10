@@ -1,4 +1,4 @@
-import { addGetRoute, addPostRoute, getBodyJson, type App } from './httplib.ts';
+import { addGetRoute, addPostRoute, getBodyJson, sendJson, type App } from './httplib.ts';
 import { addUser, areRequestedPermissionsAllowedByGranterPermissions, canCreateUsers, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions, type Permissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
@@ -204,17 +204,19 @@ export type AddUserAPIRequest = {
   canSubscribe: boolean;
 }
 export function addAPIs(app: App<{ username?: string; permissions?: Permissions }>) {
-  addPostRoute(app, '/api/setup', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/api/setup', async (req, ctx, rawRes): Promise<void> => {
     try {
       if (hasAnyUsers()) {
-        res.status(403).json({ message: 'Setup has already been completed' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Setup has already been completed' });
         return;
       }
 
       const { username, password } = await getBodyJson(req) as { username: unknown; password: unknown };
 
       if (typeof username !== 'string' || typeof password !== 'string') {
-        res.status(400).json({ message: 'Username and password must be strings' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Username and password must be strings' });
         return;
       }
 
@@ -224,34 +226,39 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
         canSubscribe: true,
       }, null);
 
-      res.json({ message: 'Administrator account created successfully' });
+      sendJson(rawRes, { message: 'Administrator account created successfully' });
     } catch (error) {
       console.error('Setup error:', error);
       let msg = error instanceof Error ? error.message : '';
       if (msg === 'User already exists') {
-        res.status(409).json({ message: 'Username already exists' });
+        rawRes.statusCode = 409;
+        sendJson(rawRes, { message: 'Username already exists' });
       } else {
-        res.status(500).json({ message: 'Internal server error' });
+        rawRes.statusCode = 500;
+        sendJson(rawRes, { message: 'Internal server error' });
       }
     }
   });
 
-  addPostRoute(app, '/api/add-user', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/api/add-user', async (req, ctx, rawRes): Promise<void> => {
     try {
       if (!canCreateUsers(ctx.permissions!)) {
-        res.status(403).json({ message: 'Not authorized to create users' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Not authorized to create users' });
         return;
       }
 
       const { username, password, allowedChannels, createUser, canSubscribe } = await getBodyJson(req) as AddUserAPIRequest;
 
       if (typeof username !== 'string' || typeof password !== 'string' || (createUser !== 'yes' && createUser !== 'no' && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
-        res.status(400).json({ message: 'Username and password must be strings, createUser must be "yes", "no", or "limited", canSubscribe must be boolean' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Username and password must be strings, createUser must be "yes", "no", or "limited", canSubscribe must be boolean' });
         return;
       }
 
       if (canSubscribe && allowedChannels !== 'all') {
-        res.status(400).json({ message: 'Subscription management is only available for users with access to all channels' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Subscription management is only available for users with access to all channels' });
         return;
       }
 
@@ -260,13 +267,15 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
         channelPermissions = 'all';
       } else {
         if (!Array.isArray(allowedChannels)) {
-          res.status(400).json({ message: 'allowedChannels must be "all" or an array of channel IDs' });
+          rawRes.statusCode = 400;
+          sendJson(rawRes, { message: 'allowedChannels must be "all" or an array of channel IDs' });
           return;
         }
         try {
           allowedChannels.forEach(assertChannelId);
         } catch (e: unknown) {
-          res.status(400).json({ message: (e as Error).message });
+          rawRes.statusCode = 400;
+          sendJson(rawRes, { message: (e as Error).message });
           return;
         }
         channelPermissions = new Set(allowedChannels);
@@ -279,30 +288,35 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       };
 
       if (!areRequestedPermissionsAllowedByGranterPermissions(requestedPermissions, ctx.permissions!)) {
-        res.status(403).json({ message: 'You cannot grant permissions that you do not have' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'You cannot grant permissions that you do not have' });
         return;
       }
 
       await addUser(username, password, requestedPermissions, ctx.username!);
 
-      res.json({ message: 'User created successfully' });
+      sendJson(rawRes, { message: 'User created successfully' });
     } catch (error) {
       console.error('Add user error:', error);
       let msg = error instanceof Error ? error.message : '';
       if (msg === 'User already exists') {
-        res.status(409).json({ message: 'Username already exists' });
+        rawRes.statusCode = 409;
+        sendJson(rawRes, { message: 'Username already exists' });
       } else if (msg.includes('Channel') && msg.includes('does not exist')) {
-        res.status(400).json({ message: msg });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: msg });
       } else {
-        res.status(500).json({ message: 'Internal server error' });
+        rawRes.statusCode = 500;
+        sendJson(rawRes, { message: 'Internal server error' });
       }
     }
   });
 
-  addPostRoute(app, '/api/update-user-permissions', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/api/update-user-permissions', async (req, ctx, rawRes): Promise<void> => {
     try {
       if (!canCreateUsers(ctx.permissions!)) {
-        res.status(403).json({ message: 'Not authorized to manage users' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Not authorized to manage users' });
         return;
       }
 
@@ -311,18 +325,21 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       };
 
       if (typeof username !== 'string' || (createUser !== 'yes' && createUser !== 'no' && createUser !== 'limited') || typeof canSubscribe !== 'boolean') {
-        res.status(400).json({ message: 'Invalid request body' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Invalid request body' });
         return;
       }
 
       const createdBy = getCreatedBy(username);
       if (createdBy !== ctx.username) {
-        res.status(403).json({ message: 'You can only modify permissions of users you created' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'You can only modify permissions of users you created' });
         return;
       }
 
       if (canSubscribe && allowedChannels !== 'all') {
-        res.status(400).json({ message: 'Subscription management is only available for users with access to all channels' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Subscription management is only available for users with access to all channels' });
         return;
       }
 
@@ -331,13 +348,15 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
         channelPermissions = 'all';
       } else {
         if (!Array.isArray(allowedChannels)) {
-          res.status(400).json({ message: 'allowedChannels must be "all" or an array of channel IDs' });
+          rawRes.statusCode = 400;
+          sendJson(rawRes, { message: 'allowedChannels must be "all" or an array of channel IDs' });
           return;
         }
         try {
           allowedChannels.forEach(assertChannelId);
         } catch (e: unknown) {
-          res.status(400).json({ message: (e as Error).message });
+          rawRes.statusCode = 400;
+          sendJson(rawRes, { message: (e as Error).message });
           return;
         }
         channelPermissions = new Set(allowedChannels);
@@ -351,67 +370,72 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       };
 
       if (!areRequestedPermissionsAllowedByGranterPermissions(requestedPermissions, ctx.permissions!)) {
-        res.status(403).json({ message: 'You cannot grant permissions that you do not have' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'You cannot grant permissions that you do not have' });
         return;
       }
 
       updateUserPermissions(username, requestedPermissions);
 
-      res.json({ message: 'Permissions updated successfully' });
+      sendJson(rawRes, { message: 'Permissions updated successfully' });
     } catch (error) {
       console.error('Update user permissions error:', error);
-      res.status(500).json({ message: 'Internal server error' });
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Internal server error' });
     }
   });
 
-  addPostRoute(app, '/api/change-password', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/api/change-password', async (req, ctx, rawRes): Promise<void> => {
     try {
       const { currentPassword, newPassword } = await getBodyJson(req) as { currentPassword: unknown; newPassword: unknown };
 
       if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
-        res.status(400).json({ message: 'Passwords must be strings' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Passwords must be strings' });
         return;
       }
 
       await changePassword(ctx.username!, currentPassword, newPassword);
 
-      res.json({ message: 'Password changed successfully' });
+      sendJson(rawRes, { message: 'Password changed successfully' });
     } catch (error) {
       // console.error('Change password error:', error);
       let msg = error instanceof Error ? error.message : '';
       if (msg === 'Current password is incorrect') {
-        res.status(403).json({ message: 'Current password is incorrect' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Current password is incorrect' });
       } else {
-        res.status(500).json({ message: 'Internal server error' });
+        rawRes.statusCode = 500;
+        sendJson(rawRes, { message: 'Internal server error' });
       }
     }
   });
 
-  addGetRoute(app, '/api/videos', (req, ctx, res): void => {
+  addGetRoute(app, '/api/videos', (req, ctx, rawRes): void => {
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
 
     const videos = getRecentVideosForChannels(ctx.permissions!.allowedChannels, limit, offset);
 
-    res.json(videos);
+    sendJson(rawRes, videos);
   });
 
   const validSorts = new Set<ChannelSort>(['recent', 'oldest', 'a-z', 'z-a']);
-  addGetRoute(app, '/api/channels', (req, ctx, res): void => {
+  addGetRoute(app, '/api/channels', (req, ctx, rawRes): void => {
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
     const sort: ChannelSort = validSorts.has(req.query.sort as ChannelSort) ? req.query.sort as ChannelSort : 'recent';
 
     const channels = getChannelsSorted(ctx.permissions!.allowedChannels, sort, limit, offset);
 
-    res.json(channels);
+    sendJson(rawRes, channels);
   });
 
   const validSearchTiers = new Set<SearchTier>(['channels', 'title', 'description', 'subtitles']);
-  addGetRoute(app, '/api/search', (req, ctx, res): void => {
+  addGetRoute(app, '/api/search', (req, ctx, rawRes): void => {
     const q = (req.query.q as string || '').trim();
     if (!q) {
-      res.json([]);
+      sendJson(rawRes, []);
       return;
     }
     const limit = parseInt(req.query.limit as string) || 30;
@@ -420,7 +444,8 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
     const channelId = req.query.channel;
     if (channelId) {
       if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
-        res.status(403).json({ message: 'Access denied' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Access denied' });
         return;
       }
       allowedChannels = new Set([channelId as ChannelID]);
@@ -428,80 +453,90 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
     const prefix = req.query.prefix === '1' || req.query.prefix === 'true';
     const tier = req.query.tier as SearchTier;
     if (!validSearchTiers.has(tier)) {
-      res.status(400).json({ message: 'tier parameter required: channels, title, description, or subtitles' });
+      rawRes.statusCode = 400;
+      sendJson(rawRes, { message: 'tier parameter required: channels, title, description, or subtitles' });
       return;
     }
-    res.json(searchByTier(q, tier, allowedChannels, limit, offset, prefix));
+    sendJson(rawRes, searchByTier(q, tier, allowedChannels, limit, offset, prefix));
   });
 
-  addGetRoute(app, '/api/channel/:short_id/videos', (req, ctx, res): void => {
+  addGetRoute(app, '/api/channel/:short_id/videos', (req, ctx, rawRes): void => {
     const channel = getChannelByShortId(req.params.short_id);
     if (!channel) {
-      res.status(404).json({ error: 'Channel not found' });
+      rawRes.statusCode = 404;
+      sendJson(rawRes, { error: 'Channel not found' });
       return;
     }
 
     if (!canViewChannel(ctx.permissions!, channel.channel_id)) {
-      res.status(403).json({ error: 'Access denied' });
+      rawRes.statusCode = 403;
+      sendJson(rawRes, { error: 'Access denied' });
       return;
     }
 
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
     const videos = getVideosByChannel(channel.channel_id, limit, offset);
-    res.json(videos);
+    sendJson(rawRes, videos);
   });
 
 
-  addPostRoute(app, '/public-api/login', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/public-api/login', async (req, ctx, rawRes): Promise<void> => {
     try {
       const { username, password } = await getBodyJson(req) as { username: string, password: string };
 
       if (typeof username !== 'string' || typeof password !== 'string') {
-        res.status(400).json({ message: 'Username and password required' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Username and password required' });
         return;
       }
 
       const token = await checkUsernamePassword(username, password);
 
       if (token) {
-        res.json({ token });
+        sendJson(rawRes, { token });
       } else {
-        res.status(401).json({ message: 'Invalid username or password' });
+        rawRes.statusCode = 401;
+        sendJson(rawRes, { message: 'Invalid username or password' });
       }
     } catch (error) {
       console.error('Login error:', error);
-      res.status(500).json({ message: 'Internal server error' });
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Internal server error' });
     }
   });
 
-  addGetRoute(app, '/public-api/healthcheck', (req, ctx, res): void => {
-    res.json(true satisfies HealthcheckAPI);
+  addGetRoute(app, '/public-api/healthcheck', (req, ctx, rawRes): void => {
+    sendJson(rawRes, true satisfies HealthcheckAPI);
   });
 
-  addPostRoute(app, '/api/add-subscription', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/api/add-subscription', async (req, ctx, rawRes): Promise<void> => {
     try {
       if (!ctx.permissions!.canSubscribe) {
-        res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'You do not have permission to manage subscriptions' });
         return;
       }
 
       if (!subscriptionsDb) {
-        res.status(403).json({ message: 'Subscriptions are not enabled' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Subscriptions are not enabled' });
         return;
       }
 
       const { channelId, recentLimit } = await getBodyJson(req) as { channelId: unknown; recentLimit: unknown };
 
       if (typeof channelId !== 'string') {
-        res.status(400).json({ message: 'Channel input must be a string' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Channel input must be a string' });
         return;
       }
 
       let resolvedRecentLimit: number | null = null;
       if (recentLimit != null) {
         if (typeof recentLimit !== 'number' || !Number.isInteger(recentLimit) || recentLimit < 1) {
-          res.status(400).json({ message: 'recentLimit must be a positive integer' });
+          rawRes.statusCode = 400;
+          sendJson(rawRes, { message: 'recentLimit must be a positive integer' });
           return;
         }
         resolvedRecentLimit = recentLimit;
@@ -509,36 +544,41 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
 
       const { channelId: resolvedChannelId, title, avatarBuf, avatarMime } = await fetchChannelDetails(channelId.trim());
       subscriptionsDb.addSubscription(resolvedChannelId, title, resolvedRecentLimit, avatarBuf, avatarMime);
-      res.json({ message: 'Subscription added successfully' });
+      sendJson(rawRes, { message: 'Subscription added successfully' });
     } catch (error) {
       console.error('Add subscription error:', error);
       let msg = error instanceof Error ? error.message : String(error);
-      res.status(500).json({ message: 'Failed to add subscription: ' + msg });
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Failed to add subscription: ' + msg });
     }
   });
 
-  addPostRoute(app, '/api/add-video', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/api/add-video', async (req, ctx, rawRes): Promise<void> => {
     try {
       if (!ctx.permissions!.canSubscribe) {
-        res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'You do not have permission to manage subscriptions' });
         return;
       }
 
       if (!subscriptionsDb) {
-        res.status(403).json({ message: 'Subscriptions are not enabled' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Subscriptions are not enabled' });
         return;
       }
 
       const { videoInput } = await getBodyJson(req) as { videoInput: unknown };
 
       if (typeof videoInput !== 'string') {
-        res.status(400).json({ message: 'Video input must be a string' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Video input must be a string' });
         return;
       }
 
       const videoId = toVideoID(videoInput.trim());
       if (!videoId) {
-        res.status(400).json({ message: 'Could not extract a video ID from the input. Accepts YouTube URLs (including mobile, short, and shorts links) or an 11-character video ID.' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Could not extract a video ID from the input. Accepts YouTube URLs (including mobile, short, and shorts links) or an 11-character video ID.' });
         return;
       }
 
@@ -555,7 +595,7 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       if (fetched?.thumbnailBuf && fetched.thumbnailMime) {
         thumbnailDataUri = `data:${fetched.thumbnailMime};base64,${fetched.thumbnailBuf.toBase64()}`;
       }
-      res.json({
+      sendJson(rawRes, {
         message: 'Video added to queue',
         videoId,
         title: d?.title ?? null,
@@ -566,63 +606,72 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
     } catch (error) {
       console.error('Add video error:', error);
       let msg = error instanceof Error ? error.message : String(error);
-      res.status(500).json({ message: 'Failed to add video: ' + msg });
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Failed to add video: ' + msg });
     }
   });
 
-  addPostRoute(app, '/api/remove-queued-video', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/api/remove-queued-video', async (req, ctx, rawRes): Promise<void> => {
     try {
       if (!ctx.permissions!.canSubscribe) {
-        res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'You do not have permission to manage subscriptions' });
         return;
       }
 
       if (!subscriptionsDb) {
-        res.status(403).json({ message: 'Subscriptions are not enabled' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Subscriptions are not enabled' });
         return;
       }
 
       const { videoId } = await getBodyJson(req) as { videoId: unknown };
 
       if (!videoId || typeof videoId !== 'string') {
-        res.status(400).json({ message: 'Video ID is required and must be a string' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Video ID is required and must be a string' });
         return;
       }
 
       subscriptionsDb.removeVideoFromQueue(videoId as VideoID);
-      res.json({ message: 'Video removed from queue' });
+      sendJson(rawRes, { message: 'Video removed from queue' });
     } catch (error) {
       console.error('Remove queued video error:', error);
       let msg = error instanceof Error ? error.message : String(error);
-      res.status(500).json({ message: 'Failed to remove video: ' + msg });
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Failed to remove video: ' + msg });
     }
   });
 
-  addPostRoute(app, '/api/unsubscribe', async (req, ctx, res): Promise<void> => {
+  addPostRoute(app, '/api/unsubscribe', async (req, ctx, rawRes): Promise<void> => {
     try {
       if (!ctx.permissions!.canSubscribe) {
-        res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'You do not have permission to manage subscriptions' });
         return;
       }
 
       if (!subscriptionsDb) {
-        res.status(403).json({ message: 'Subscriptions are not enabled' });
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Subscriptions are not enabled' });
         return;
       }
 
       const { channelId } = await getBodyJson(req) as { channelId: unknown };
 
       if (!channelId || typeof channelId !== 'string') {
-        res.status(400).json({ message: 'Channel ID is required and must be a string' });
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Channel ID is required and must be a string' });
         return;
       }
 
       subscriptionsDb.removeSubscription(channelId as ChannelID);
-      res.json({ message: 'Unsubscribed successfully' });
+      sendJson(rawRes, { message: 'Unsubscribed successfully' });
     } catch (error) {
       console.error('Unsubscribe error:', error);
       let msg = error instanceof Error ? error.message : String(error);
-      res.status(500).json({ message: 'Failed to unsubscribe: ' + msg });
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Failed to unsubscribe: ' + msg });
     }
   });
 
