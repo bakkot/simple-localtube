@@ -1,5 +1,5 @@
 {
-  "priavte": true,
+  "private": true,
   "scripts": {
     "start": "node server.ts",
     "dev": "node --watch server.ts",

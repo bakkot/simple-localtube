@@ -153,12 +153,6 @@ export function markSubscribed(channelId: ChannelID): void {
   clearRecentLimitStmt.run(channelId);
 }
 
-export function getSubscribing(): ChannelID[] {
-  throwIfNotInit(getByStatusStmt);
-  const rows = getByStatusStmt.all('subscribing') as { channel_id: string }[];
-  return rows.map(r => assertChannelId(r.channel_id));
-}
-
 export function getOneSubscribing(): { channelId: ChannelID; recentLimit: number | null } | null {
   throwIfNotInit(getOneByStatusStmt);
   const row = getOneByStatusStmt.get('subscribing') as { channel_id: string; recent_limit: number | null } | undefined;

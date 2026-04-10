@@ -417,7 +417,7 @@ console.log(`Fetched ${videoProcessedCount} queued videos`);
 const subbed = new Set<ChannelID>();
 let processedSubscribingCount = 0;
 let addedFromSubscribing = 0;
-let channel;
+let channel: ReturnType<typeof getOneSubscribing>;
 while ((channel = getOneSubscribing()) != null) {
   // calling subscribe will also remove the channel from the db
   addedFromSubscribing += await subscribe(channel.channelId, channel.recentLimit);

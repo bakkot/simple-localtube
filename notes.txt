@@ -34,10 +34,14 @@ mode to build to single file inc. bundling frontend templates
 
 write readme, screenshots etc
 
-domain
-
-logging for login attempts etc
+logging for login attempts, 404s, etc
 
 bearer tokens should include issue date
 
-- remove HttpResponse, just have a bunch of methods
+fetch-videos, for limited subscribe, provide limit when fetching vids
+
+fetch-videos to print channel titles
+
+subscribe button on pages should take you to the subscribing page instead of doing the thing itself
+
+when subbing, only fetch avatar / title for channels not already in db
