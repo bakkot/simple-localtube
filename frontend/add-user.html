@@ -146,6 +146,16 @@
     const usernameInput = document.getElementById('username');
     const passwordInput = document.getElementById('password');
 
+    let showingSuccess = false;
+
+    function clearSuccess() {
+      if (showingSuccess) {
+        showingSuccess = false;
+        message.textContent = '';
+        message.className = '';
+      }
+    }
+
     function updateChannelsVisibility() {
       if (!channelsSection) return; // it is always visible for restricted users
       const selectedPermission = document.querySelector('input[name="permissions"]:checked')?.value;
@@ -171,21 +181,24 @@
       }
 
       button.disabled = reasons.length > 0;
-      message.textContent = reasons.length > 0 ? reasons[0] : '';
-      message.className = reasons.length > 0 ? 'error' : '';
+      if (!showingSuccess) {
+        message.textContent = reasons.length > 0 ? reasons[0] : '';
+        message.className = reasons.length > 0 ? 'error' : '';
+      }
     }
 
     permissionRadios.forEach(radio => {
-      radio.addEventListener('change', () => { updateChannelsVisibility(); updateButtonState(); });
+      radio.addEventListener('change', () => { clearSuccess(); updateChannelsVisibility(); updateButtonState(); });
     });
 
-    usernameInput.addEventListener('input', updateButtonState);
-    passwordInput.addEventListener('input', updateButtonState);
+    usernameInput.addEventListener('input', () => { clearSuccess(); updateButtonState(); });
+    passwordInput.addEventListener('input', () => { clearSuccess(); updateButtonState(); });
     document.querySelectorAll('input[name="channels"]').forEach(cb => {
-      cb.addEventListener('change', updateButtonState);
+      cb.addEventListener('change', () => { clearSuccess(); updateButtonState(); });
     });
 
     function selectAllChannels() {
+      clearSuccess();
       document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
         checkbox.checked = true;
       });
@@ -193,6 +206,7 @@
     }
 
     function deselectAllChannels() {
+      clearSuccess();
       document.querySelectorAll('input[name="channels"]').forEach(checkbox => {
         checkbox.checked = false;
       });
@@ -254,11 +268,12 @@
         });
 
         if (response.ok) {
-          message.textContent = 'User created successfully!';
-          message.className = 'success';
           form.reset();
           updateChannelsVisibility();
+          showingSuccess = true;
           updateButtonState();
+          message.textContent = `Success! Created ${username}`;
+          message.className = 'success';
         } else {
           const error = await response.json();
           message.textContent = error.message || 'Failed to create user';
