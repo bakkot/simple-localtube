@@ -2,12 +2,21 @@ import * as http from 'node:http';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-export interface HttpRequest {
+type ExtractRouteParams<Path extends string> =
+  string extends Path
+    ? Record<string, string>
+    : Path extends `${string}:${infer Param}/${infer Rest}`
+      ? { [K in Param | keyof ExtractRouteParams<`/${Rest}`>]: string }
+      : Path extends `${string}:${infer Param}`
+        ? { [K in Param]: string }
+        : {};
+
+export interface HttpRequest<Params extends Record<string, string> = Record<string, string>> {
   method: string;
   path: string;
   originalUrl: string;
   query: Record<string, string | undefined>;
-  params: Record<string, string>;
+  params: Params;
   headers: http.IncomingHttpHeaders;
   rawReq: http.IncomingMessage;
 }
@@ -90,19 +99,19 @@ function compilePattern(pattern: string): RouteSegment[] {
   });
 }
 
-export function addGetRoute<Ctx extends object>(app: App<Ctx>, pattern: string, handler: Handler<Ctx>): void {
+export function addGetRoute<Ctx extends object, Path extends string>(app: App<Ctx>, pattern: Path, handler: (req: HttpRequest<ExtractRouteParams<Path>>, ctx: Ctx, res: HttpResponse) => void | Promise<void>): void {
   app.routes.push({
     method: 'GET',
     segments: compilePattern(pattern),
-    handler,
+    handler: handler as unknown as Handler<Ctx>,
   });
 }
 
-export function addPostRoute<Ctx extends object>(app: App<Ctx>, pattern: string, handler: Handler<Ctx>): void {
+export function addPostRoute<Ctx extends object, Path extends string>(app: App<Ctx>, pattern: Path, handler: (req: HttpRequest<ExtractRouteParams<Path>>, ctx: Ctx, res: HttpResponse) => void | Promise<void>): void {
   app.routes.push({
     method: 'POST',
     segments: compilePattern(pattern),
-    handler,
+    handler: handler as unknown as Handler<Ctx>,
   });
 }
 
