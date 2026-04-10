@@ -424,18 +424,13 @@ function handleError(err: unknown, rawRes: http.ServerResponse): void {
 }
 
 export function listen<Ctx extends object>(app: App<Ctx>, port: number, cb: (err?: Error) => void): http.Server {
-  const handler = app._wrapHandler((req, ctx, res, rawRes) => {
+  const handler = app._wrapHandler(async (req, ctx, res, rawRes) => {
     for (const route of app.routes) {
       const params = matchRoute(route, req.method, req.path);
       if (params) {
         req.params = params;
         try {
-          const result = route.handler(req, ctx, res);
-          if (result && typeof result.then === 'function') {
-            result.catch((err: unknown) => {
-              handleError(err, rawRes);
-            });
-          }
+          await route.handler(req, ctx, res);
         } catch (err) {
           handleError(err, rawRes);
         }
