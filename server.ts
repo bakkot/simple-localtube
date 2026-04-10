@@ -47,7 +47,7 @@ function parsePort(value: string): number {
 
 const authMiddleware: Middleware<{ username?: string; permissions?: Permissions }> = (req, res, next) => {
   if (req.path === '/favicon.svg') {
-    return next();
+    return next({});
   }
 
   let isSetup = req.path === '/setup' || req.path === '/api/setup';
@@ -63,7 +63,7 @@ const authMiddleware: Middleware<{ username?: string; permissions?: Permissions 
 
   // Login, setup, and public-api do not require auth
   if (req.path === '/login' || req.path.startsWith('/public-api/') || isSetup) {
-    return next();
+    return next({});
   }
 
   // Validate auth cookie
@@ -105,10 +105,7 @@ const authMiddleware: Middleware<{ username?: string; permissions?: Permissions 
     return;
   }
 
-  // Attach username and permissions to request for later use
-  req.username = username;
-  req.permissions = getUserPermissions(username!);
-  next();
+  next({ username, permissions: getUserPermissions(username!) });
 };
 
 const app = withMiddleware(createApp(), authMiddleware);

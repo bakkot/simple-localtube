@@ -31,33 +31,52 @@ export class HttpError extends Error {
 }
 
 export type Handler<Req extends HttpRequest = HttpRequest> = (req: Req, res: HttpResponse) => void | Promise<void>;
-type MiddlewareFn = (req: HttpRequest, res: HttpResponse, next: () => void) => void | Promise<void>;
-export type Middleware<Extra extends object> = (req: HttpRequest & Extra, res: HttpResponse, next: () => void) => void | Promise<void>;
+export type Middleware<Extra extends object> = (req: HttpRequest, res: HttpResponse, next: (extra: Extra) => void) => void | Promise<void>;
 
 type RouteSegment = { kind: 'literal'; value: string } | { kind: 'param'; name: string };
 
-interface CompiledRoute {
+type InternalHandler<Req extends HttpRequest = HttpRequest> = (req: Req, res: HttpResponse, rawRes: http.ServerResponse) => void;
+
+interface CompiledRoute<Req extends HttpRequest = HttpRequest> {
   method: 'GET' | 'POST';
   segments: RouteSegment[];
-  handler: Handler;
+  handler: Handler<Req>;
 }
 
 export interface App<Req extends HttpRequest = HttpRequest> {
-  middlewares: MiddlewareFn[];
-  routes: CompiledRoute[];
-  readonly _phantom?: Req;
+  routes: CompiledRoute<Req>[];
+  _wrapHandler: (inner: InternalHandler<Req>) => InternalHandler;
 }
 
 export function createApp(): App {
-  return { middlewares: [], routes: [] };
+  return {
+    routes: [],
+    _wrapHandler: (inner) => inner,
+  };
 }
 
 export function withMiddleware<Req extends HttpRequest, Extra extends object>(
   app: App<Req>,
   mw: Middleware<Extra>,
 ): App<Req & Extra> {
-  app.middlewares.push(mw as unknown as MiddlewareFn);
-  return app as App<Req & Extra>;
+  const prevWrap = app._wrapHandler;
+  return {
+    routes: app.routes,
+    _wrapHandler: (inner) => prevWrap((req, res, rawRes) => {
+      try {
+        const result = mw(req, res, (extra) => {
+          inner(Object.assign(req, extra), res, rawRes);
+        });
+        if (result && typeof result.then === 'function') {
+          result.catch((err: unknown) => {
+            handleError(err, rawRes);
+          });
+        }
+      } catch (err) {
+        handleError(err, rawRes);
+      }
+    }),
+  };
 }
 
 function compilePattern(pattern: string): RouteSegment[] {
@@ -74,7 +93,7 @@ export function addGetRoute<Req extends HttpRequest>(app: App<Req>, pattern: str
   app.routes.push({
     method: 'GET',
     segments: compilePattern(pattern),
-    handler: handler as unknown as Handler,
+    handler,
   });
 }
 
@@ -82,11 +101,11 @@ export function addPostRoute<Req extends HttpRequest>(app: App<Req>, pattern: st
   app.routes.push({
     method: 'POST',
     segments: compilePattern(pattern),
-    handler: handler as unknown as Handler,
+    handler,
   });
 }
 
-function matchRoute(route: CompiledRoute, method: string, pathname: string): Record<string, string> | null {
+function matchRoute<Req extends HttpRequest>(route: CompiledRoute<Req>, method: string, pathname: string): Record<string, string> | null {
   if (route.method !== method) return null;
   const parts = pathname.split('/').filter(p => p.length > 0);
   if (parts.length !== route.segments.length) return null;
@@ -382,36 +401,6 @@ function buildRequest(rawReq: http.IncomingMessage): HttpRequest {
   };
 }
 
-function runMiddlewares(
-  mws: MiddlewareFn[],
-  i: number,
-  req: HttpRequest,
-  res: HttpResponse,
-  rawRes: http.ServerResponse,
-  done: () => void,
-): void {
-  if (i >= mws.length) {
-    done();
-    return;
-  }
-  let advanced = false;
-  const next = () => {
-    if (advanced) return;
-    advanced = true;
-    runMiddlewares(mws, i + 1, req, res, rawRes, done);
-  };
-  try {
-    const result = mws[i](req, res, next);
-    if (result && typeof result.then === 'function') {
-      result.catch((err: unknown) => {
-        handleError(err, rawRes);
-      });
-    }
-  } catch (err) {
-    handleError(err, rawRes);
-  }
-}
-
 function handleError(err: unknown, rawRes: http.ServerResponse): void {
   if (rawRes.headersSent) {
     rawRes.destroy();
@@ -429,35 +418,36 @@ function handleError(err: unknown, rawRes: http.ServerResponse): void {
   rawRes.end('Internal server error');
 }
 
-export function listen(app: App<HttpRequest>, port: number, cb: (err?: Error) => void): http.Server {
+export function listen<Req extends HttpRequest>(app: App<Req>, port: number, cb: (err?: Error) => void): http.Server {
+  const handler = app._wrapHandler((req, res, rawRes) => {
+    for (const route of app.routes) {
+      const params = matchRoute(route, req.method, req.path);
+      if (params) {
+        req.params = params;
+        try {
+          const result = route.handler(req, res);
+          if (result && typeof result.then === 'function') {
+            result.catch((err: unknown) => {
+              handleError(err, rawRes);
+            });
+          }
+        } catch (err) {
+          handleError(err, rawRes);
+        }
+        return;
+      }
+    }
+    if (!rawRes.headersSent) {
+      rawRes.statusCode = 404;
+      rawRes.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      rawRes.end('Not found');
+    }
+  });
+
   const server = http.createServer((rawReq, rawRes) => {
     const req = buildRequest(rawReq);
     const res = makeResponse(req, rawRes);
-
-    runMiddlewares(app.middlewares, 0, req, res, rawRes, () => {
-      for (const route of app.routes) {
-        const params = matchRoute(route, req.method, req.path);
-        if (params) {
-          req.params = params;
-          try {
-            const result = route.handler(req, res);
-            if (result && typeof result.then === 'function') {
-              result.catch((err: unknown) => {
-                handleError(err, rawRes);
-              });
-            }
-          } catch (err) {
-            handleError(err, rawRes);
-          }
-          return;
-        }
-      }
-      if (!rawRes.headersSent) {
-        rawRes.statusCode = 404;
-        rawRes.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        rawRes.end('Not found');
-      }
-    });
+    handler(req, res, rawRes);
   });
 
   server.on('error', (err: Error) => {
