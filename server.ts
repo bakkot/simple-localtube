@@ -105,7 +105,7 @@ const authMiddleware: Middleware<{ username?: string; permissions?: Permissions 
     return;
   }
 
-  next({ username, permissions: getUserPermissions(username!) });
+  return next({ username, permissions: getUserPermissions(username!) });
 };
 
 const app = withMiddleware(createApp(), authMiddleware);

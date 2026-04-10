@@ -39,3 +39,5 @@ domain
 logging for login attempts etc
 
 bearer tokens should include issue date
+
+- remove HttpResponse, just have a bunch of methods

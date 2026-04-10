@@ -40,12 +40,12 @@ export class HttpError extends Error {
 }
 
 export type Handler<Ctx extends object = object> = (req: HttpRequest, ctx: Ctx, res: HttpResponse) => void | Promise<void>;
-export type Middleware<Extra extends object> = (req: HttpRequest, res: HttpResponse, next: (extra: Extra) => void) => void | Promise<void>;
+export type Middleware<Extra extends object> = (req: HttpRequest, res: HttpResponse, next: (extra: Extra) => void | Promise<void>) => void | Promise<void>;
 
 type RouteSegment = { kind: 'literal'; value: string } | { kind: 'param'; name: string };
 
 type InternalHandler = (req: HttpRequest, res: HttpResponse, rawRes: http.ServerResponse) => void;
-type InternalHandlerWithCtx<Ctx extends object = object> = (req: HttpRequest, ctx: Ctx, res: HttpResponse, rawRes: http.ServerResponse) => void;
+type InternalHandlerWithCtx<Ctx extends object = object> = (req: HttpRequest, ctx: Ctx, res: HttpResponse, rawRes: http.ServerResponse) => void | Promise<void>;
 
 interface CompiledRoute<Ctx extends object = object> {
   method: 'GET' | 'POST';
@@ -72,16 +72,11 @@ export function withMiddleware<Ctx extends object, Extra extends object>(
   const prevWrap = app._wrapHandler;
   return {
     routes: app.routes,
-    _wrapHandler: (inner) => prevWrap((req, ctx, res, rawRes) => {
+    _wrapHandler: (inner) => prevWrap(async (req, ctx, res, rawRes) => {
       try {
-        const result = mw(req, res, (extra) => {
-          inner(req, { ...ctx, ...extra }, res, rawRes);
+        await mw(req, res, async (extra) => {
+          await inner(req, { ...ctx, ...extra }, res, rawRes);
         });
-        if (result && typeof result.then === 'function') {
-          result.catch((err: unknown) => {
-            handleError(err, rawRes);
-          });
-        }
       } catch (err) {
         handleError(err, rawRes);
       }
