@@ -1,3 +1,38 @@
+/*
+This is a single-file zero-dependency library which is a replacement for a tiny subset of Express.
+
+Basic usage:
+
+const authMiddleware: Middleware<{ username?: string; permissions?: Permissions }> = (req, rawRes, next) => {
+  if (isNotInitialized) {
+    redirect(rawRes, '/setup');
+    return;
+  }
+  // do some stuff...
+  return next({ username, permissions });
+};
+
+const app = withMiddleware(createApp(), authMiddleware);
+
+// only the `:foo` parameter syntax is supported
+addGetRoute(app, '/media/videos/:video_id', async (req, ctx, rawRes): Promise<void> => {
+  const video = getVideoById(req.params.video_id);
+  if (!canViewChannel(ctx.permissions!, video?.channel_id)) {
+    rawRes.statusCode = 403;
+    send(rawRes, 'Access denied');
+    return;
+  }
+  await sendFile(req, rawRes, video.video_filename);
+});
+
+const port = 3000;
+listen(app, port, (error) => {
+  if (error) {
+    throw error;
+  }
+  console.log(`LocalTube server running on http://localhost:${port}`);
+});
+*/
 import * as http from 'node:http';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -104,7 +139,10 @@ function matchRoute<Ctx extends object>(route: CompiledRoute<Ctx>, method: strin
   if (route.method !== method) return null;
   const parts = pathname.split('/').filter(p => p.length > 0);
   if (parts.length !== route.segments.length) return null;
-  const params: Record<string, string> = {};
+  const params: Record<string, string> = {
+    // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
+    __proto__: null,
+  };
   for (let i = 0; i < parts.length; i++) {
     const seg = route.segments[i];
     if (seg.kind === 'literal') {
