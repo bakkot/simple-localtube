@@ -1,5 +1,5 @@
-import { addGetRoute, addPostRoute, getBodyJson, type App, type HttpRequest, type HttpResponse } from './httplib.ts';
-import { addUser, areRequestedPermissionsAllowedByGranterPermissions, canCreateUsers, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions } from './user-db.ts';
+import { addGetRoute, addPostRoute, getBodyJson, type App, type HttpRequest } from './httplib.ts';
+import { addUser, areRequestedPermissionsAllowedByGranterPermissions, canCreateUsers, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions, type Permissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -203,8 +203,8 @@ export type AddUserAPIRequest = {
   createUser: 'yes' | 'no' | 'limited';
   canSubscribe: boolean;
 }
-export function addAPIs(app: App) {
-  addPostRoute(app, '/api/setup', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+export function addAPIs(app: App<HttpRequest & { username?: string; permissions?: Permissions }>) {
+  addPostRoute(app, '/api/setup', async (req, res): Promise<void> => {
     try {
       if (hasAnyUsers()) {
         res.status(403).json({ message: 'Setup has already been completed' });
@@ -236,7 +236,7 @@ export function addAPIs(app: App) {
     }
   });
 
-  addPostRoute(app, '/api/add-user', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+  addPostRoute(app, '/api/add-user', async (req, res): Promise<void> => {
     try {
       if (!canCreateUsers(req.permissions!)) {
         res.status(403).json({ message: 'Not authorized to create users' });
@@ -299,7 +299,7 @@ export function addAPIs(app: App) {
     }
   });
 
-  addPostRoute(app, '/api/update-user-permissions', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+  addPostRoute(app, '/api/update-user-permissions', async (req, res): Promise<void> => {
     try {
       if (!canCreateUsers(req.permissions!)) {
         res.status(403).json({ message: 'Not authorized to manage users' });
@@ -364,7 +364,7 @@ export function addAPIs(app: App) {
     }
   });
 
-  addPostRoute(app, '/api/change-password', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+  addPostRoute(app, '/api/change-password', async (req, res): Promise<void> => {
     try {
       const { currentPassword, newPassword } = await getBodyJson(req) as { currentPassword: unknown; newPassword: unknown };
 
@@ -387,7 +387,7 @@ export function addAPIs(app: App) {
     }
   });
 
-  addGetRoute(app, '/api/videos', (req: HttpRequest, res: HttpResponse): void => {
+  addGetRoute(app, '/api/videos', (req, res): void => {
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
 
@@ -397,7 +397,7 @@ export function addAPIs(app: App) {
   });
 
   const validSorts = new Set<ChannelSort>(['recent', 'oldest', 'a-z', 'z-a']);
-  addGetRoute(app, '/api/channels', (req: HttpRequest, res: HttpResponse): void => {
+  addGetRoute(app, '/api/channels', (req, res): void => {
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
     const sort: ChannelSort = validSorts.has(req.query.sort as ChannelSort) ? req.query.sort as ChannelSort : 'recent';
@@ -408,7 +408,7 @@ export function addAPIs(app: App) {
   });
 
   const validSearchTiers = new Set<SearchTier>(['channels', 'title', 'description', 'subtitles']);
-  addGetRoute(app, '/api/search', (req: HttpRequest, res: HttpResponse): void => {
+  addGetRoute(app, '/api/search', (req, res): void => {
     const q = (req.query.q as string || '').trim();
     if (!q) {
       res.json([]);
@@ -434,7 +434,7 @@ export function addAPIs(app: App) {
     res.json(searchByTier(q, tier, allowedChannels, limit, offset, prefix));
   });
 
-  addGetRoute(app, '/api/channel/:short_id/videos', (req: HttpRequest, res: HttpResponse): void => {
+  addGetRoute(app, '/api/channel/:short_id/videos', (req, res): void => {
     const channel = getChannelByShortId(req.params.short_id);
     if (!channel) {
       res.status(404).json({ error: 'Channel not found' });
@@ -453,7 +453,7 @@ export function addAPIs(app: App) {
   });
 
 
-  addPostRoute(app, '/public-api/login', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+  addPostRoute(app, '/public-api/login', async (req, res): Promise<void> => {
     try {
       const { username, password } = await getBodyJson(req) as { username: string, password: string };
 
@@ -475,11 +475,11 @@ export function addAPIs(app: App) {
     }
   });
 
-  addGetRoute(app, '/public-api/healthcheck', (req: HttpRequest, res: HttpResponse): void => {
+  addGetRoute(app, '/public-api/healthcheck', (req, res): void => {
     res.json(true satisfies HealthcheckAPI);
   });
 
-  addPostRoute(app, '/api/add-subscription', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+  addPostRoute(app, '/api/add-subscription', async (req, res): Promise<void> => {
     try {
       if (!req.permissions!.canSubscribe) {
         res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
@@ -517,7 +517,7 @@ export function addAPIs(app: App) {
     }
   });
 
-  addPostRoute(app, '/api/add-video', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+  addPostRoute(app, '/api/add-video', async (req, res): Promise<void> => {
     try {
       if (!req.permissions!.canSubscribe) {
         res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
@@ -570,7 +570,7 @@ export function addAPIs(app: App) {
     }
   });
 
-  addPostRoute(app, '/api/remove-queued-video', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+  addPostRoute(app, '/api/remove-queued-video', async (req, res): Promise<void> => {
     try {
       if (!req.permissions!.canSubscribe) {
         res.status(403).json({ message: 'You do not have permission to manage subscriptions' });
@@ -598,7 +598,7 @@ export function addAPIs(app: App) {
     }
   });
 
-  addPostRoute(app, '/api/unsubscribe', async (req: HttpRequest, res: HttpResponse): Promise<void> => {
+  addPostRoute(app, '/api/unsubscribe', async (req, res): Promise<void> => {
     try {
       if (!req.permissions!.canSubscribe) {
         res.status(403).json({ message: 'You do not have permission to manage subscriptions' });

@@ -30,8 +30,9 @@ export class HttpError extends Error {
   }
 }
 
-export type Handler = (req: HttpRequest, res: HttpResponse) => void | Promise<void>;
-export type Middleware = (req: HttpRequest, res: HttpResponse, next: () => void) => void | Promise<void>;
+export type Handler<Req extends HttpRequest = HttpRequest> = (req: Req, res: HttpResponse) => void | Promise<void>;
+type MiddlewareFn = (req: HttpRequest, res: HttpResponse, next: () => void) => void | Promise<void>;
+export type Middleware<Extra extends object> = (req: HttpRequest & Extra, res: HttpResponse, next: () => void) => void | Promise<void>;
 
 type RouteSegment = { kind: 'literal'; value: string } | { kind: 'param'; name: string };
 
@@ -41,17 +42,22 @@ interface CompiledRoute {
   handler: Handler;
 }
 
-export interface App {
-  middlewares: Middleware[];
+export interface App<Req extends HttpRequest = HttpRequest> {
+  middlewares: MiddlewareFn[];
   routes: CompiledRoute[];
+  readonly _phantom?: Req;
 }
 
 export function createApp(): App {
   return { middlewares: [], routes: [] };
 }
 
-export function addMiddleware(app: App, mw: Middleware): void {
-  app.middlewares.push(mw);
+export function withMiddleware<Req extends HttpRequest, Extra extends object>(
+  app: App<Req>,
+  mw: Middleware<Extra>,
+): App<Req & Extra> {
+  app.middlewares.push(mw as unknown as MiddlewareFn);
+  return app as App<Req & Extra>;
 }
 
 function compilePattern(pattern: string): RouteSegment[] {
@@ -64,19 +70,19 @@ function compilePattern(pattern: string): RouteSegment[] {
   });
 }
 
-export function addGetRoute(app: App, pattern: string, handler: Handler): void {
+export function addGetRoute<Req extends HttpRequest>(app: App<Req>, pattern: string, handler: Handler<Req>): void {
   app.routes.push({
     method: 'GET',
     segments: compilePattern(pattern),
-    handler,
+    handler: handler as unknown as Handler,
   });
 }
 
-export function addPostRoute(app: App, pattern: string, handler: Handler): void {
+export function addPostRoute<Req extends HttpRequest>(app: App<Req>, pattern: string, handler: Handler<Req>): void {
   app.routes.push({
     method: 'POST',
     segments: compilePattern(pattern),
-    handler,
+    handler: handler as unknown as Handler,
   });
 }
 
@@ -377,7 +383,7 @@ function buildRequest(rawReq: http.IncomingMessage): HttpRequest {
 }
 
 function runMiddlewares(
-  mws: Middleware[],
+  mws: MiddlewareFn[],
   i: number,
   req: HttpRequest,
   res: HttpResponse,
@@ -423,7 +429,7 @@ function handleError(err: unknown, rawRes: http.ServerResponse): void {
   rawRes.end('Internal server error');
 }
 
-export function listen(app: App, port: number, cb: (err?: Error) => void): http.Server {
+export function listen(app: App<HttpRequest>, port: number, cb: (err?: Error) => void): http.Server {
   const server = http.createServer((rawReq, rawRes) => {
     const req = buildRequest(rawReq);
     const res = makeResponse(req, rawRes);
