@@ -98,7 +98,7 @@ export function addGetRoute<Ctx extends object, Path extends string>(app: App<Ct
   app.routes.push({
     method: 'GET',
     segments: compilePattern(pattern),
-    handler: handler,
+    handler,
   });
 }
 
@@ -106,7 +106,7 @@ export function addPostRoute<Ctx extends object, Path extends string>(app: App<C
   app.routes.push({
     method: 'POST',
     segments: compilePattern(pattern),
-    handler: handler,
+    handler,
   });
 }
 
