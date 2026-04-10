@@ -40,8 +40,6 @@ bearer tokens should include issue date
 
 fetch-videos, for limited subscribe, provide limit when fetching vids
 
-fetch-videos to print channel titles
-
 subscribe button on pages should take you to the subscribing page instead of doing the thing itself
 
 when subbing, only fetch avatar / title for channels not already in db

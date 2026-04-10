@@ -66,8 +66,8 @@ export function init(dbDir: string): void {
   }
 
   getAllFullStmt = db.prepare('SELECT channel_id, status, title, recent_limit, avatar, avatar_mime FROM channels');
-  getByStatusStmt = db.prepare('SELECT channel_id FROM channels WHERE status = ?');
-  getOneByStatusStmt = db.prepare('SELECT channel_id, recent_limit FROM channels WHERE status = ? LIMIT 1');
+  getByStatusStmt = db.prepare('SELECT channel_id, title FROM channels WHERE status = ?');
+  getOneByStatusStmt = db.prepare('SELECT channel_id, recent_limit, title FROM channels WHERE status = ? LIMIT 1');
   getByIdStmt = db.prepare('SELECT channel_id, status, title FROM channels WHERE channel_id = ?');
   insertStmt = db.prepare('INSERT INTO channels (channel_id, status, title, recent_limit, avatar, avatar_mime) VALUES (?, ?, ?, ?, ?, ?)');
   deleteStmt = db.prepare('DELETE FROM channels WHERE channel_id = ?');
@@ -153,16 +153,16 @@ export function markSubscribed(channelId: ChannelID): void {
   clearRecentLimitStmt.run(channelId);
 }
 
-export function getOneSubscribing(): { channelId: ChannelID; recentLimit: number | null } | null {
+export function getOneSubscribing(): { channelId: ChannelID; recentLimit: number | null; title: string | null } | null {
   throwIfNotInit(getOneByStatusStmt);
-  const row = getOneByStatusStmt.get('subscribing') as { channel_id: string; recent_limit: number | null } | undefined;
-  return row ? { channelId: assertChannelId(row.channel_id), recentLimit: row.recent_limit } : null;
+  const row = getOneByStatusStmt.get('subscribing') as { channel_id: string; recent_limit: number | null; title: string | null } | undefined;
+  return row ? { channelId: assertChannelId(row.channel_id), recentLimit: row.recent_limit, title: row.title } : null;
 }
 
-export function getSubscribed(): ChannelID[] {
+export function getSubscribed(): { channelId: ChannelID; title: string | null }[] {
   throwIfNotInit(getByStatusStmt);
-  const rows = getByStatusStmt.all('subscribed') as { channel_id: string }[];
-  return rows.map(r => assertChannelId(r.channel_id));
+  const rows = getByStatusStmt.all('subscribed') as { channel_id: string; title: string | null }[];
+  return rows.map(r => ({ channelId: assertChannelId(r.channel_id), title: r.title }));
 }
 
 export function isSubscribed(channelId: ChannelID): boolean {

@@ -94,7 +94,11 @@ if (temps.length > 0) {
 }
 
 
-async function subscribe(channelId: ChannelID, recentLimit: number | null): Promise<number> {
+function channelDisplay(channelId: ChannelID, title: string | null): string {
+  return title != null ? `${title} (${channelId})` : channelId;
+}
+
+async function subscribe(channelId: ChannelID, recentLimit: number | null, title: string | null): Promise<number> {
   const channelDir = path.join(mediaDir, channelId);
   if (!fs.existsSync(channelDir)) {
     fs.mkdirSync(channelDir);
@@ -103,7 +107,7 @@ async function subscribe(channelId: ChannelID, recentLimit: number | null): Prom
 
   let newVids = 0;
   let remaining = recentLimit;
-  const videoIds = await getLatestVideoUrls(channelId, true);
+  const videoIds = await getLatestVideoUrls(channelId, true, title);
   for (const videoId of videoIds) {
     let added = await addVideoIfNotExists(channelId, videoId);
     if (added) {
@@ -119,12 +123,12 @@ async function subscribe(channelId: ChannelID, recentLimit: number | null): Prom
   return newVids;
 }
 
-async function updateExisting(channelId: ChannelID) {
+async function updateExisting(channelId: ChannelID, title: string | null) {
   if (!isChannelInDb(channelId)) {
     throw new Error(`${channelId} is marked as subscribed but is not present in the database`);
   }
   let newVids = 0;
-  const videoIds = await getLatestVideoUrls(channelId);
+  const videoIds = await getLatestVideoUrls(channelId, false, title);
   for (const videoId of videoIds) {
     let added = await addVideoIfNotExists(channelId, videoId);
     if (added) ++newVids;
@@ -312,7 +316,7 @@ async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID) {
   // console.log({ avatarName, bannerName, bannerUncroppedName });
 }
 
-async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<VideoID[]> {
+async function getLatestVideoUrls(channelId: ChannelID, all=false, title: string | null = null): Promise<VideoID[]> {
   const channelVideosUrl = `https://www.youtube.com/channel/${channelId}/videos`;
   // console.log(`Fetching latest videos for ${channelVideosUrl}`);
 
@@ -336,7 +340,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
         .filter(url => url.length > 0);
 
       if (batchUrls.length === 0) {
-        if (verbose) console.log(`No more videos found for ${channelId} starting from index ${startIndex}.`);
+        if (verbose) console.log(`No more videos found for ${channelDisplay(channelId, title)} starting from index ${startIndex}.`);
         break; // Reached the end of the channel's videos
       }
 
@@ -350,7 +354,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
         if (!isVideoInDb(videoId) && getVideoUnavailableReason(videoId) == null) {
           newVideoIds.push(videoId);
         } else if (!all) {
-          if (verbose) console.log(`Found known video ${videoId}. Stopping search.`);
+          if (verbose) console.log(`Found known video ${videoId} in ${channelDisplay(channelId, title)}. Stopping search.`);
           break;
         }
       }
@@ -366,7 +370,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error);
       let stderr = (error as { stderr?: string }).stderr;
-      console.error(`Error executing yt-dlp for ${channelId} (${startIndex}-${endIndex}):`, message);
+      console.error(`Error executing yt-dlp for ${channelDisplay(channelId, title)} (${startIndex}-${endIndex}):`, message);
       if (stderr) {
         console.error(`yt-dlp stderr: ${stderr}`);
       }
@@ -376,7 +380,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false): Promise<Vide
     if (all) break;
   }
 
-  console.log(`Found ${newVideoIds.length} new videos for channel ${channelId}`);
+  console.log(`Found ${newVideoIds.length} new videos for channel ${channelDisplay(channelId, title)}`);
   return newVideoIds;
 }
 
@@ -420,7 +424,7 @@ let addedFromSubscribing = 0;
 let channel: ReturnType<typeof getOneSubscribing>;
 while ((channel = getOneSubscribing()) != null) {
   // calling subscribe will also remove the channel from the db
-  addedFromSubscribing += await subscribe(channel.channelId, channel.recentLimit);
+  addedFromSubscribing += await subscribe(channel.channelId, channel.recentLimit, channel.title);
   subbed.add(channel.channelId);
   processedSubscribingCount++;
 }
@@ -428,9 +432,9 @@ console.log(`Performed initial fetch for ${processedSubscribingCount} channels`)
 
 let addedFromSubscribed = 0;
 const subscribed = getSubscribed();
-for (const channel of subscribed) {
-  if (subbed.has(channel)) continue;
-  addedFromSubscribed += await updateExisting(channel);
+for (const { channelId, title } of subscribed) {
+  if (subbed.has(channelId)) continue;
+  addedFromSubscribed += await updateExisting(channelId, title);
 }
 console.log(`Updated ${subscribed.length - subbed.size} channels`);
 console.log(`Finished with ${addedFromQueue + addedFromSubscribing + addedFromSubscribed} new videos (${addedFromQueue} from individual queue, ${addedFromSubscribing} from newly subscribing channels, ${addedFromSubscribed} from subscribed channels)`)
