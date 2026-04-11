@@ -45,7 +45,10 @@
 
     function parseVTT(text) {
       const cues = [];
-      const blocks = text.replace(/^\uFEFF/, '').split(/\n{2,}/);
+      const blocks = text
+        .replace(/^\uFEFF/, '')
+        .replaceAll('&nbsp;', '\u00A0')
+        .split(/\n{2,}/);
       for (const block of blocks) {
         const lines = block.trim().split('\n');
         if (/^(WEBVTT|NOTE|STYLE|REGION)(\s|$)/.test(lines[0])) continue;
