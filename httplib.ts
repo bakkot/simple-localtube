@@ -80,12 +80,18 @@ interface CompiledRoute<Ctx extends object = object> {
 
 export interface App<Ctx extends object = object> {
   routes: CompiledRoute<Ctx>[];
+  notFoundHandler: (req: HttpRequest, ctx: Ctx, rawRes: http.ServerResponse) => void | Promise<void>;
   _wrapHandler: (inner: InternalHandlerWithCtx<Ctx>) => InternalHandler;
 }
 
 export function createApp(): App {
   return {
     routes: [],
+    notFoundHandler: (req, ctx, rawRes) => {
+      rawRes.statusCode = 404;
+      rawRes.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      rawRes.end('Not found');
+    },
     _wrapHandler: (inner) => (req, rawRes) => inner(req, {}, rawRes),
   };
 }
@@ -97,6 +103,7 @@ export function withMiddleware<Ctx extends object, Extra extends object>(
   const prevWrap = app._wrapHandler;
   return {
     routes: app.routes,
+    notFoundHandler: app.notFoundHandler,
     _wrapHandler: (inner) => prevWrap(async (req, ctx, rawRes) => {
       try {
         await mw(req, rawRes, async (extra) => {
@@ -452,9 +459,7 @@ export function listen<Ctx extends object>(app: App<Ctx>, port: number, cb: (err
       }
     }
     if (!rawRes.headersSent) {
-      rawRes.statusCode = 404;
-      rawRes.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      rawRes.end('Not found');
+      app.notFoundHandler(req, ctx, rawRes);
     }
   });
 

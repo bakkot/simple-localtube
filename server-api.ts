@@ -482,10 +482,12 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
 
 
   addPostRoute(app, '/public-api/login', async (req, ctx, rawRes): Promise<void> => {
+    let username, password;
     try {
-      const { username, password } = await getBodyJson(req) as { username: string, password: string };
+      ({ username, password } = await getBodyJson(req) as { username: string, password: string });
 
       if (typeof username !== 'string' || typeof password !== 'string') {
+        console.error(`Malformed login attempt`);
         rawRes.statusCode = 400;
         sendJson(rawRes, { message: 'Username and password required' });
         return;
@@ -494,13 +496,19 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       const token = await checkUsernamePassword(username, password);
 
       if (token) {
+        console.log(`Successful login for ${username}`);
         sendJson(rawRes, { token });
       } else {
+        console.error(`Failed login for ${username}`);
         rawRes.statusCode = 401;
         sendJson(rawRes, { message: 'Invalid username or password' });
       }
     } catch (error) {
-      console.error('Login error:', error);
+      if (username) {
+        console.error(`Login failure for ${username}`, error);
+      } else {
+        console.error(`Login error`, error);
+      }
       rawRes.statusCode = 500;
       sendJson(rawRes, { message: 'Internal server error' });
     }
@@ -674,6 +682,4 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       sendJson(rawRes, { message: 'Failed to unsubscribe: ' + msg });
     }
   });
-
-
 }
