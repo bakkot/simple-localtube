@@ -348,6 +348,11 @@ addGetRoute(app, '/media/avatars/:short_id', async (req, ctx, rawRes): Promise<v
 
 addAPIs(app);
 
+const original404 = app.notFoundHandler;
+app.notFoundHandler = (req, ctx, rawRes) => {
+  console.error(`404 for ${req.originalUrl}`);
+  original404(req, ctx, rawRes);
+};
 
 listen(app, port, (error) => {
   if (error) {
