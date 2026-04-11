@@ -224,7 +224,8 @@ export function vttToText(vtt: string): string {
       continue;
     }
     if (inCuePayload) {
-      textLines.push(line.replace(/<[^>]+>/g, ''));
+      // yes yes we should do other entities too but whatever
+      textLines.push(line.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '\u00A0'));
     }
   }
   return textLines.join('\n');

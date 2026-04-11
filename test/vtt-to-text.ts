@@ -14,6 +14,18 @@ Second line`;
   assert.equal(vttToText(vtt), 'Hello world\nSecond line');
 });
 
+test('nbsp', () => {
+  const vtt = `WEBVTT
+
+00:00:00.000 --> 00:00:05.000
+Hello&nbsp;&nbsp;world
+
+00:00:05.000 --> 00:00:10.000
+Second &nbsp; line`;
+
+  assert.equal(vttToText(vtt), 'Hello\u00A0\u00A0world\nSecond \u00A0 line');
+});
+
 test('strips inline tags', () => {
   const vtt = `WEBVTT
 
