@@ -36,4 +36,4 @@ write readme, screenshots etc
 
 logging for login attempts, 404s, etc
 
-bearer tokens should include issue date
+vtt parsing to handle &nbsp;

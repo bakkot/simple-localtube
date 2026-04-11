@@ -162,13 +162,17 @@
       switch (e.key) {
         case 'c': {
           let tracks = [...video.textTracks];
-          if (tracks.length === 0) break;
+          if (tracks.length === 0) {
+            showModal('no subtitles', 500);
+            break;
+          }
           let active = tracks.find(x => x.mode === 'showing');
           if (active != null) {
             active.mode = 'disabled';
           } else {
             tracks[lastSeenTextTrack].mode = 'showing';
           }
+          showModal(active ? 'cc off' : 'cc on', 500);
           break;
         }
         case 'm':
