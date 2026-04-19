@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { channelFromDisk, videoFromDisk } from '../read-from-disk.ts';
-import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb } from '../media-db.ts';
-import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue, markVideoUnavailable, getVideoUnavailableReason, decrementRecentLimit } from '../subscriptions-db.ts';
+import { init as initMediaDb, addChannel, addVideo, isChannelInDb, isVideoInDb, getChannelById } from '../media-db.ts';
+import { init as initSubscriptionsDb, getOneSubscribing, getSubscribed, markSubscribed, getOneQueuedVideo, removeVideoFromQueue, isVideoInQueue, markVideoUnavailable, getVideoUnavailableReason, decrementRecentLimit, setSubscriptionTitle } from '../subscriptions-db.ts';
 
 const YT_DLP_PATH = process.env.YT_DLP_PATH ?? 'yt-dlp';
 const YT_DLP_BATCH_SIZE = 100; // How many videos to fetch per yt-dlp call
@@ -435,7 +435,15 @@ let addedFromSubscribed = 0;
 const subscribed = getSubscribed();
 for (const { channelId, title } of subscribed) {
   if (subbed.has(channelId)) continue;
-  addedFromSubscribed += await updateExisting(channelId, title);
+  let resolvedTitle = title;
+  if (resolvedTitle == null) {
+    const mediaChannel = getChannelById(channelId);
+    if (mediaChannel?.channel_title) {
+      resolvedTitle = mediaChannel.channel_title;
+      setSubscriptionTitle(channelId, resolvedTitle);
+    }
+  }
+  addedFromSubscribed += await updateExisting(channelId, resolvedTitle);
 }
 console.log(`Updated ${subscribed.length - subbed.size} channels`);
 console.log(`Finished with ${addedFromQueue + addedFromSubscribing + addedFromSubscribed} new videos (${addedFromQueue} from individual queue, ${addedFromSubscribing} from newly subscribing channels, ${addedFromSubscribed} from subscribed channels)`)
