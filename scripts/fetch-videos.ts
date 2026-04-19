@@ -38,7 +38,7 @@ if (positionals.length !== 1) {
   --skiplist file.txt  newline-separated list of video IDs or URLs to skip
 
 Requires yt-dlp to be either on the path or provided in the \`YT_DLP_PATH\` environment variable.
-\`YT_DLP_PATH\` can include additional arguments such as \`--proxy\`.
+\`YT_DLP_PATH\` can include additional arguments such as \`--js-runtimes node\`.
 
 It is recommended but not required that tempdir be on the same volume as the media, to avoid needing to copy files across volumes.
 If the media lives on a network volume, "OS_DEFAULT" will probably be more performant.

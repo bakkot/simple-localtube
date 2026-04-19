@@ -1,5 +1,5 @@
 import { DatabaseSync, type StatementSync } from 'node:sqlite';
-import { scrypt, randomBytes, createHmac } from 'node:crypto';
+import { scrypt, randomBytes, createHmac, timingSafeEqual, type ScryptOptions, type BinaryLike } from 'node:crypto';
 import { promisify } from 'node:util';
 import path from 'path';
 import fs from 'fs';
@@ -7,7 +7,8 @@ import { isChannelInDb } from './media-db.ts';
 import type { ChannelID } from './util.ts';
 import { LRUCache, throwIfNotInit } from './util.ts';
 
-const scryptAsync = promisify(scrypt);
+type Scrypt = (password: BinaryLike, salt: BinaryLike, keylen: number, options: ScryptOptions) => Promise<Buffer>;
+const scryptAsync = promisify(scrypt) as Scrypt;
 
 type Keys = {
   pepper: Buffer;
@@ -117,14 +118,24 @@ export function generateSalt(): Buffer {
 
 async function hashPassword(password: string, salt: Buffer, pepper: Buffer): Promise<Buffer> {
   const normalizedPassword = password.normalize('NFC');
-  const passwordWithPepper = normalizedPassword + pepper.toString('base64');
-  const hash = await scryptAsync(passwordWithPepper, salt, 64) as Buffer;
+
+  const pepperedPassword = createHmac('sha256', pepper)
+    .update(normalizedPassword)
+    .digest();
+
+  const hash = await scryptAsync(pepperedPassword, salt, 64, {
+    cost: 32768,
+    blockSize: 8,
+    parallelization: 1,
+    maxmem: 128 * 32768 * 8 * 2, // must exceed 128 N r
+  });
+
   return hash;
 }
 
 async function verifyPassword(password: string, storedHash: Buffer, salt: Buffer, pepper: Buffer): Promise<boolean> {
   const computedHash = await hashPassword(password, salt, pepper);
-  return computedHash.equals(storedHash);
+  return timingSafeEqual(computedHash, storedHash);
 }
 
 type BearTokenPayload = {

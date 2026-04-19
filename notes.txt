@@ -34,6 +34,8 @@ mode to build to single file inc. bundling frontend templates
 
 write readme, screenshots etc
 
-logging for login attempts, 404s, etc
+add sponsorblock column
+https://wiki.sponsor.ajay.app/w/API_Docs
+https://sponsor.ajay.app/api/skipSegments?videoID=OC7sNfNuTNU
 
-vtt parsing to handle &nbsp;
+extra data columns in general

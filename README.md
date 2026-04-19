@@ -28,7 +28,7 @@ JavaScript's reputation for frequent breaking changes mostly comes from people's
 
 Make sure you have node v24 or later.
 
-Have `yt-dlp` in your PATH, or provide `YT_DLP_PATH` as an environment variable.
+Have `yt-dlp` in your PATH, or provide `YT_DLP_PATH` as an environment variable. `YT_DLP_PATH` can include arguments such as `--js-runtimes node`.
 
 Have `ffmpeg` in your path for use by `yt-dlp`.
 
