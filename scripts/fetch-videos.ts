@@ -355,7 +355,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false, title: string
         if (!isVideoInDb(videoId) && getVideoUnavailableReason(videoId) == null) {
           newVideoIds.push(videoId);
         } else if (!all) {
-          if (verbose) console.log(`Found known video ${videoId} in ${channelDisplay(channelId, title)}. Stopping search.`);
+          if (verbose) console.log(`Found known video ${videoId}. Stopping search.`);
           break outer;
         }
       }
