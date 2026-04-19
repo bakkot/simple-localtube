@@ -125,9 +125,10 @@ async function subscribe(channelId: ChannelID, recentLimit: number | null, title
 
 async function updateExisting(channelId: ChannelID, title: string | null) {
   if (!isChannelInDb(channelId)) {
-    throw new Error(`${channelId} is marked as subscribed but is not present in the database`);
+    throw new Error(`${channelDisplay(channelId, title)} is marked as subscribed but is not present in the database`);
   }
   let newVids = 0;
+  if (verbose) console.log(`Checking for new videos from ${title == null ? channelId : title}`);
   const videoIds = await getLatestVideoUrls(channelId, false, title);
   for (const videoId of videoIds) {
     let added = await addVideoIfNotExists(channelId, videoId);
@@ -323,7 +324,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false, title: string
   const newVideoIds: VideoID[] = [];
   let startIndex = 1;
 
-  while (true) {
+  outer: while (true) {
     const endIndex = startIndex + YT_DLP_BATCH_SIZE - 1;
     const command = all
       ? `${YT_DLP_PATH} --flat-playlist --print webpage_url "${channelVideosUrl}"`
@@ -332,7 +333,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false, title: string
     if (verbose) console.log(`Executing: ${command}`);
 
     try {
-      const { stdout } = await spawnAsync(command, { print: verbose });
+      const { stdout } = await spawnAsync(command, { print: false });
 
       const batchUrls = stdout
         .split('\n')
@@ -355,7 +356,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false, title: string
           newVideoIds.push(videoId);
         } else if (!all) {
           if (verbose) console.log(`Found known video ${videoId} in ${channelDisplay(channelId, title)}. Stopping search.`);
-          break;
+          break outer;
         }
       }
 
