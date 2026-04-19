@@ -13,7 +13,6 @@ let insertStmt: StatementSync | null = null;
 let deleteStmt: StatementSync | null = null;
 let updateStatusStmt: StatementSync | null = null;
 let clearTitleStmt: StatementSync | null = null;
-let setTitleStmt: StatementSync | null = null;
 let clearRecentLimitStmt: StatementSync | null = null;
 let decrementRecentLimitStmt: StatementSync | null = null;
 
@@ -74,7 +73,6 @@ export function init(dbDir: string): void {
   deleteStmt = db.prepare('DELETE FROM channels WHERE channel_id = ?');
   updateStatusStmt = db.prepare('UPDATE channels SET status = ? WHERE channel_id = ?');
   clearTitleStmt = db.prepare('UPDATE channels SET title = NULL WHERE channel_id = ?');
-  setTitleStmt = db.prepare('UPDATE channels SET title = ? WHERE channel_id = ?');
   clearRecentLimitStmt = db.prepare('UPDATE channels SET recent_limit = NULL WHERE channel_id = ?');
   decrementRecentLimitStmt = db.prepare('UPDATE channels SET recent_limit = recent_limit - 1 WHERE channel_id = ? AND recent_limit IS NOT NULL');
 
@@ -144,11 +142,6 @@ export function removeSubscription(channelId: ChannelID): void {
 export function decrementRecentLimit(channelId: ChannelID): void {
   throwIfNotInit(decrementRecentLimitStmt);
   decrementRecentLimitStmt.run(channelId);
-}
-
-export function setSubscriptionTitle(channelId: ChannelID, title: string): void {
-  throwIfNotInit(setTitleStmt);
-  setTitleStmt.run(title, channelId);
 }
 
 export function markSubscribed(channelId: ChannelID): void {
