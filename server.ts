@@ -266,6 +266,11 @@ addGetRoute(app, '/subscriptions', (req, ctx, rawRes): void => {
     return;
   }
 
+  if (!ctx.permissions!.canSubscribe) {
+    send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
+    return;
+  }
+
   const subscriptions = subscriptionsDb.getSubscriptionData();
   send(rawRes, renderSubscriptionsPage(ctx.username!, ctx.permissions!, subscriptions));
 });
@@ -274,6 +279,11 @@ addGetRoute(app, '/add-video', (req, ctx, rawRes): void => {
   if (!subscriptionsDb) {
     rawRes.statusCode = 500;
     send(rawRes, 'Server was started without --enable-subscriptions');
+    return;
+  }
+
+  if (!ctx.permissions!.canSubscribe) {
+    send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
     return;
   }
 
