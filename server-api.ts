@@ -1,7 +1,7 @@
 import { addGetRoute, addPostRoute, getBodyJson, sendJson, type App } from './httplib.ts';
-import { addUser, areRequestedPermissionsAllowedByGranterPermissions, canCreateUsers, canViewChannel, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions, type Permissions } from './user-db.ts';
+import { addUser, applyUserChannelCount, areRequestedPermissionsAllowedByGranterPermissions, buildSearchScope, canCreateUsers, canViewChannel, channelAccess, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions, type Permissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
-import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForChannels, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
+import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForUser, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
 import { getJsonEnd } from './json-excise.ts';
 
@@ -284,6 +284,7 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
 
       await addUser(username, password, {
         allowedChannels: 'all',
+        allowedVideos: new Set(),
         createUser: 'yes',
         canSubscribe: true,
       }, null);
@@ -345,6 +346,7 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
 
       const requestedPermissions = {
         allowedChannels: channelPermissions,
+        allowedVideos: new Set<VideoID>(),
         createUser,
         canSubscribe,
       };
@@ -424,8 +426,10 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
         channelPermissions = new Set(allowedChannels);
       }
 
+      const existing = getUserPermissions(username);
       const requestedPermissions = {
         allowedChannels: channelPermissions,
+        allowedVideos: existing.allowedVideos,
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
         createUser: createUser as 'yes' | 'no' | 'limited',
         canSubscribe,
@@ -477,7 +481,7 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
 
-    const videos = getRecentVideosForChannels(ctx.permissions!.allowedChannels, limit, offset);
+    const videos = getRecentVideosForUser(ctx.permissions!.allowedChannels, ctx.permissions!.allowedVideos, limit, offset);
 
     sendJson(rawRes, videos);
   });
@@ -502,15 +506,15 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
     }
     const limit = parseInt(req.query.limit as string) || 30;
     const offset = parseInt(req.query.offset as string) || 0;
-    let allowedChannels = ctx.permissions!.allowedChannels;
     const channelId = req.query.channel;
+    let scopedChannelId: ChannelID | null = null;
     if (channelId) {
-      if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
+      if (channelAccess(ctx.permissions!, channelId as ChannelID) === 'none') {
         rawRes.statusCode = 403;
         sendJson(rawRes, { message: 'Access denied' });
         return;
       }
-      allowedChannels = new Set([channelId as ChannelID]);
+      scopedChannelId = channelId as ChannelID;
     }
     const prefix = req.query.prefix === '1' || req.query.prefix === 'true';
     const tier = req.query.tier as SearchTier;
@@ -519,7 +523,12 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       sendJson(rawRes, { message: 'tier parameter required: channels, title, description, or subtitles' });
       return;
     }
-    sendJson(rawRes, searchByTier(q, tier, allowedChannels, limit, offset, prefix));
+    const scope = buildSearchScope(ctx.permissions!, scopedChannelId);
+    let results = searchByTier(q, tier, scope, limit, offset, prefix);
+    if (tier === 'channels') {
+      results = (results as Channel[]).map(c => applyUserChannelCount(c, ctx.permissions!));
+    }
+    sendJson(rawRes, results);
   });
 
   addGetRoute(app, '/api/channel/:short_id/videos', (req, ctx, rawRes): void => {
@@ -530,7 +539,8 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       return;
     }
 
-    if (!canViewChannel(ctx.permissions!, channel.channel_id)) {
+    const access = channelAccess(ctx.permissions!, channel.channel_id);
+    if (access === 'none') {
       rawRes.statusCode = 403;
       sendJson(rawRes, { error: 'Access denied' });
       return;
@@ -538,7 +548,9 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
 
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
-    const videos = getVideosByChannel(channel.channel_id, limit, offset);
+    const videos = access === 'full'
+      ? getVideosByChannel(channel.channel_id, limit, offset)
+      : getVideosByChannel(channel.channel_id, limit, offset, ctx.permissions!.allowedVideos);
     sendJson(rawRes, videos);
   });
 

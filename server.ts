@@ -1,9 +1,9 @@
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 import { createApp, addGetRoute, withMiddleware, getCookies, listen, send, sendJson, redirect, sendFile, type Middleware } from './httplib.ts';
-import { init as initMediaDb, getRecentVideosForChannels, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
+import { init as initMediaDb, getRecentVideosForUser, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
-import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, getUserPermissions, addUser, hasAnyUsers, areRequestedPermissionsAllowedByGranterPermissions, getCreatedAccountsWithPermissions, canCreateUsers, type Permissions } from './user-db.ts';
+import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, canViewVideo, channelAccess, applyUserChannelCount, buildSearchScope, getUserPermissions, addUser, hasAnyUsers, areRequestedPermissionsAllowedByGranterPermissions, getCreatedAccountsWithPermissions, canCreateUsers, type Permissions } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderAddVideoPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
@@ -163,7 +163,7 @@ addGetRoute(app, '/login', (req, ctx, rawRes): void => {
 });
 
 addGetRoute(app, '/', (req, ctx, rawRes) => {
-  const videos = getRecentVideosForChannels(ctx.permissions!.allowedChannels, 30);
+  const videos = getRecentVideosForUser(ctx.permissions!.allowedChannels, ctx.permissions!.allowedVideos, 30);
 
   send(rawRes, renderHomePage(ctx.username!, ctx.permissions!, videos));
 });
@@ -171,10 +171,10 @@ addGetRoute(app, '/', (req, ctx, rawRes) => {
 addGetRoute(app, '/search', (req, ctx, rawRes) => {
   const q = (req.query.q as string || '').trim();
   const channelId = req.query.channel;
-  let allowedChannels = ctx.permissions!.allowedChannels;
   let channel: Channel | null = null;
+  let scopedChannelId: ChannelID | null = null;
   if (channelId) {
-    if (allowedChannels !== 'all' && !allowedChannels.has(channelId as ChannelID)) {
+    if (channelAccess(ctx.permissions!, channelId as ChannelID) === 'none') {
       send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
       return;
     }
@@ -184,9 +184,11 @@ addGetRoute(app, '/search', (req, ctx, rawRes) => {
       send(rawRes, 'Channel not found');
       return;
     }
-    allowedChannels = new Set([channelId as ChannelID]);
+    scopedChannelId = channelId as ChannelID;
   }
-  const results = search(q, allowedChannels, 30, false, !!channelId);
+  const scope = buildSearchScope(ctx.permissions!, scopedChannelId);
+  const results = search(q, scope, 30, false, !!channelId);
+  results.channels = results.channels.map(c => applyUserChannelCount(c, ctx.permissions!));
   send(rawRes, renderSearchPage(ctx.username!, ctx.permissions!, q, results, channel));
 });
 
@@ -204,7 +206,7 @@ addGetRoute(app, '/v/:video_id', (req, ctx, rawRes): void => {
     return;
   }
 
-  if (!canViewChannel(ctx.permissions!, video.channel_id)) {
+  if (!canViewVideo(ctx.permissions!, video)) {
     send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
     return;
   }
@@ -221,12 +223,15 @@ addGetRoute(app, '/c/:short_id', (req, ctx, rawRes): void => {
     return;
   }
 
-  if (!canViewChannel(ctx.permissions!, channel.channel_id)) {
+  const access = channelAccess(ctx.permissions!, channel.channel_id);
+  if (access === 'none') {
     send(rawRes, renderNotAllowed(ctx.username!, ctx.permissions!));
     return;
   }
 
-  const videos = getVideosByChannel(channel.channel_id, 30);
+  const videos = access === 'full'
+    ? getVideosByChannel(channel.channel_id, 30)
+    : getVideosByChannel(channel.channel_id, 30, 0, ctx.permissions!.allowedVideos);
   const isSubscribed = subscriptionsDb?.isInSubscriptions(channel.channel_id) ?? false;
 
   send(rawRes, renderChannelPage(channel, videos, ctx.username!, ctx.permissions!, subscriptionsDb != null, isSubscribed));
@@ -299,7 +304,7 @@ addGetRoute(app, '/media/videos/:video_id', async (req, ctx, rawRes): Promise<vo
     send(rawRes, 'Video not found');
     return;
   }
-  if (!canViewChannel(ctx.permissions!, video.channel_id)) {
+  if (!canViewVideo(ctx.permissions!, video)) {
     rawRes.statusCode = 403;
     send(rawRes, 'Access denied');
     return;
@@ -315,7 +320,7 @@ addGetRoute(app, '/media/thumbs/:video_id', async (req, ctx, rawRes): Promise<vo
     send(rawRes, 'not found');
     return;
   }
-  if (!canViewChannel(ctx.permissions!, video.channel_id)) {
+  if (!canViewVideo(ctx.permissions!, video)) {
     rawRes.statusCode = 403;
     send(rawRes, 'Access denied');
     return;
@@ -331,7 +336,7 @@ addGetRoute(app, '/media/subtitles/:video_id/:lang', async (req, ctx, rawRes): P
     send(rawRes, 'not found');
     return;
   }
-  if (!canViewChannel(ctx.permissions!, video.channel_id)) {
+  if (!canViewVideo(ctx.permissions!, video)) {
     rawRes.statusCode = 403;
     send(rawRes, 'Access denied');
     return;
@@ -348,7 +353,7 @@ addGetRoute(app, '/media/avatars/:short_id', async (req, ctx, rawRes): Promise<v
     send(rawRes, 'not found');
     return;
   }
-  if (!canViewChannel(ctx.permissions!, channel.channel_id)) {
+  if (channelAccess(ctx.permissions!, channel.channel_id) === 'none') {
     rawRes.statusCode = 403;
     send(rawRes, 'Access denied');
     return;

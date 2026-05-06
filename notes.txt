@@ -47,3 +47,5 @@ sponsorblock
 extension
 
 unicode normalizing / lowcase username login info
+
+media-db should store when videos were added, not just the upload timestamp

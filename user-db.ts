@@ -3,8 +3,8 @@ import { scrypt, randomBytes, createHmac, timingSafeEqual, type ScryptOptions, t
 import { promisify } from 'node:util';
 import path from 'path';
 import fs from 'fs';
-import { isChannelInDb } from './media-db.ts';
-import type { ChannelID } from './util.ts';
+import { getChannelVideoCountsForVideos, getVideoById, isChannelInDb, isVideoInDb, type Channel, type SearchScope } from './media-db.ts';
+import type { ChannelID, VideoID } from './util.ts';
 import { LRUCache, throwIfNotInit } from './util.ts';
 
 type Scrypt = (password: BinaryLike, salt: BinaryLike, keylen: number, options: ScryptOptions) => Promise<Buffer>;
@@ -22,10 +22,17 @@ type User = {
   permissions: Permissions;
 }
 
-export type Permissions = {
+export type StoredPermissions = {
   allowedChannels: Set<ChannelID> | 'all';
+  allowedVideos: Set<VideoID>;
   createUser: 'yes' | 'no' | 'limited';
   canSubscribe: boolean;
+};
+
+export type Permissions = StoredPermissions & {
+  // derived; not serialized
+  partialChannels: Set<ChannelID>;
+  partialChannelCounts: Map<ChannelID, number>;
 };
 
 let db: DatabaseSync | null = null;
@@ -207,24 +214,39 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
 
 type SerializedPermissions = {
   allowedChannels: 'all' | ChannelID[];
+  allowedVideos?: VideoID[];
   createUser: 'yes' | 'no' | 'limited';
   canSubscribe: boolean;
 }
 function parsePermissions(permissionsString: string): Permissions {
-  let { allowedChannels, createUser, canSubscribe } = JSON.parse(permissionsString) as SerializedPermissions;
+  let { allowedChannels, allowedVideos, createUser, canSubscribe } = JSON.parse(permissionsString) as SerializedPermissions;
   if (allowedChannels !== 'all' && !Array.isArray(allowedChannels) || (createUser !== 'yes' && createUser !== 'no' && createUser !== 'limited')) {
     throw new Error('malformed permissions');
   }
+  let parsedChannels: Set<ChannelID> | 'all' = allowedChannels === 'all'
+    ? 'all'
+    : new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && isChannelInDb(c as ChannelID)));
+  let parsedVideos: Set<VideoID> = Array.isArray(allowedVideos)
+    ? new Set(allowedVideos.filter((v: unknown) => typeof v === 'string'))
+    : new Set();
+  let partialChannelCounts = parsedChannels === 'all' || parsedVideos.size === 0
+    ? new Map<ChannelID, number>()
+    : getChannelVideoCountsForVideos(parsedVideos);
+  let partialChannels = new Set(partialChannelCounts.keys());
   return {
-    allowedChannels: allowedChannels === 'all' ? 'all' : new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && isChannelInDb(c as ChannelID))),
+    allowedChannels: parsedChannels,
+    allowedVideos: parsedVideos,
     createUser,
     canSubscribe: typeof canSubscribe === 'boolean' ? canSubscribe : false,
+    partialChannels,
+    partialChannelCounts,
   };
 }
 
-function serializePermissions(permissions: Permissions): string {
+function serializePermissions(permissions: StoredPermissions): string {
   return JSON.stringify({
     allowedChannels: permissions.allowedChannels === 'all' ? 'all' : [...permissions.allowedChannels],
+    allowedVideos: [...permissions.allowedVideos],
     createUser: permissions.createUser,
     canSubscribe: permissions.canSubscribe,
   } satisfies SerializedPermissions);
@@ -233,7 +255,7 @@ function serializePermissions(permissions: Permissions): string {
 export async function addUser(
   username: string,
   password: string,
-  permissions: Permissions,
+  permissions: StoredPermissions,
   createdBy: string | null,
 ): Promise<void> {
   throwIfNotInit(getUserByUsernameStmt);
@@ -250,6 +272,11 @@ export async function addUser(
       if (!isChannelInDb(channelId)) {
         throw new Error(`Channel '${channelId}' does not exist`);
       }
+    }
+  }
+  for (const videoId of permissions.allowedVideos) {
+    if (!isVideoInDb(videoId)) {
+      throw new Error(`Video '${videoId}' does not exist`);
     }
   }
 
@@ -304,7 +331,7 @@ export function getCreatedAccountsWithPermissions(username: string): { username:
   }));
 }
 
-export function updateUserPermissions(username: string, permissions: Permissions): void {
+export function updateUserPermissions(username: string, permissions: StoredPermissions): void {
   throwIfNotInit(updatePermissionsStmt);
   userPermissionsCache.delete(username);
   updatePermissionsStmt.run({
@@ -317,9 +344,52 @@ export function canViewChannel(permissions: Permissions, channelId: ChannelID): 
   return permissions.allowedChannels === 'all' || permissions.allowedChannels.has(channelId);
 }
 
+export function canViewVideo(permissions: Permissions, video: { video_id: VideoID; channel_id: ChannelID }): boolean {
+  return canViewChannel(permissions, video.channel_id) || permissions.allowedVideos.has(video.video_id);
+}
+
+export type ChannelAccess = 'full' | 'partial' | 'none';
+export function channelAccess(permissions: Permissions, channelId: ChannelID): ChannelAccess {
+  if (canViewChannel(permissions, channelId)) return 'full';
+  if (permissions.partialChannels.has(channelId)) return 'partial';
+  return 'none';
+}
+
+export function userVisibleVideoCount(channel: { channel_id: ChannelID; video_count: number }, permissions: Permissions): number {
+  if (canViewChannel(permissions, channel.channel_id)) return channel.video_count;
+  return permissions.partialChannelCounts.get(channel.channel_id) ?? 0;
+}
+
+export function applyUserChannelCount(channel: Channel, permissions: Permissions): Channel {
+  if (canViewChannel(permissions, channel.channel_id)) return channel;
+  return { ...channel, video_count: permissions.partialChannelCounts.get(channel.channel_id) ?? 0 };
+}
+
+export function buildSearchScope(permissions: Permissions, scopedChannelId: ChannelID | null): SearchScope {
+  if (permissions.allowedChannels === 'all') {
+    return { video: { kind: 'all' }, channel: { kind: 'all' } };
+  }
+  if (scopedChannelId == null) {
+    return {
+      video: { kind: 'union', channels: permissions.allowedChannels, videos: permissions.allowedVideos },
+      channel: { kind: 'allowed', channels: new Set([...permissions.allowedChannels, ...permissions.partialChannels]) },
+    };
+  }
+  if (permissions.allowedChannels.has(scopedChannelId)) {
+    return {
+      video: { kind: 'union', channels: new Set([scopedChannelId]), videos: new Set() },
+      channel: { kind: 'allowed', channels: new Set([scopedChannelId]) },
+    };
+  }
+  return {
+    video: { kind: 'channel-partial', channel: scopedChannelId, videos: permissions.allowedVideos },
+    channel: { kind: 'allowed', channels: new Set([scopedChannelId]) },
+  };
+}
+
 export function areRequestedPermissionsAllowedByGranterPermissions(
-  requestedPermissions: Permissions,
-  granterPermissions: Permissions
+  requestedPermissions: StoredPermissions,
+  granterPermissions: StoredPermissions
 ): boolean {
   if (requestedPermissions.createUser !== 'no') {
     // NB limited cannot create limited
@@ -348,6 +418,12 @@ export function areRequestedPermissionsAllowedByGranterPermissions(
     if (!granterPermissions.allowedChannels.has(channelId)) {
       return false;
     }
+  }
+
+  for (const videoId of requestedPermissions.allowedVideos) {
+    if (granterPermissions.allowedVideos.has(videoId)) continue;
+    let v = getVideoById(videoId);
+    if (v == null || !granterPermissions.allowedChannels.has(v.channel_id)) return false;
   }
 
   return true;
