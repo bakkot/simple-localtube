@@ -39,3 +39,11 @@ https://wiki.sponsor.ajay.app/w/API_Docs
 https://sponsor.ajay.app/api/skipSegments?videoID=OC7sNfNuTNU
 
 extra data columns in general
+
+need a way to give access to specific videos to users?
+
+sponsorblock
+
+extension
+
+unicode normalizing / lowcase username login info
