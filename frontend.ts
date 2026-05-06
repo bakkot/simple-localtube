@@ -10,6 +10,24 @@ import { parse as parseTemplate, apply as applyTemplate } from './frontend/tinym
 
 const templates = path.join(import.meta.dirname, 'frontend');
 
+const htmlEntities: Record<string, string> = {
+  // @ts-expect-error https://github.com/microsoft/TypeScript/issues/38385
+  __proto__: null,
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"']/g, ch => htmlEntities[ch]);
+}
+
+// avoid `</script>` (and similar) terminating the surrounding script element
+function escapeJsonForScript(json: string): string {
+  return json.replace(/<\//g, '<\\/');
+}
+
 
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -28,18 +46,23 @@ function formatDate(timestamp: number): string {
 
 function renderVideoCard(video: VideoWithChannel, showChannel: boolean = true): string {
   const thumbExt = video.thumb_filename ? nameExt(video.thumb_filename).ext : 'png';
+  const id = escapeHtml(video.video_id);
+  const ext = escapeHtml(thumbExt);
+  const title = escapeHtml(video.title);
+  const shortId = escapeHtml(video.channel_short_id);
+  const channelTitle = escapeHtml(video.channel_title);
   // TODO fallback for missing thumbnails
   return `
     <div class="video-card">
-      <a href="/v/${video.video_id}">
+      <a href="/v/${id}">
         <div class="thumb-container">
-          <img class="thumb" src="/media/thumbs/${video.video_id}.${thumbExt}" alt="${video.title}">
+          <img class="thumb" src="/media/thumbs/${id}.${ext}" alt="${title}">
           <span class="duration">${formatDuration(video.duration_seconds || 0)}</span>
         </div>
       </a>
       <div class="video-info">
-        <a href="/v/${video.video_id}" class="video-title">${video.title}</a>
-        ${showChannel ? `<div><a href="/c/${video.channel_short_id}" class="channel-name">${video.channel_title}</a></div>` : ''}
+        <a href="/v/${id}" class="video-title">${title}</a>
+        ${showChannel ? `<div><a href="/c/${shortId}" class="channel-name">${channelTitle}</a></div>` : ''}
         <div class="upload-date">${formatDate(video.upload_timestamp)}</div>
       </div>
     </div>`;
@@ -47,6 +70,9 @@ function renderVideoCard(video: VideoWithChannel, showChannel: boolean = true): 
 
 const videoCardScript = `
 "use strict";
+
+const htmlEntities = ${JSON.stringify(htmlEntities)};
+${escapeHtml.toString()}
 
 ${formatDuration.toString()}
 
@@ -124,15 +150,17 @@ function formatLastUpdated(timestamp: number | null): string {
 
 function renderChannelCard(channel: Channel): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
+  const shortId = escapeHtml(channel.short_id);
+  const title = escapeHtml(channel.channel_title);
   const avatar = avatarExt
-    ? `<img class="channel-card-avatar" width=64 height=64 src="/media/avatars/${channel.short_id}.${avatarExt}" alt="${channel.channel_title}">`
-    : `<div class="channel-card-placeholder">${channel.channel_title[0] || '?'}</div>`;
+    ? `<img class="channel-card-avatar" width=64 height=64 src="/media/avatars/${shortId}.${escapeHtml(avatarExt)}" alt="${title}">`
+    : `<div class="channel-card-placeholder">${escapeHtml(channel.channel_title[0] || '?')}</div>`;
   const updated = channel.latest_upload_timestamp ? ` · ${formatLastUpdated(channel.latest_upload_timestamp)}` : '';
   return `
-    <a href="/c/${channel.short_id}" class="channel-card">
+    <a href="/c/${shortId}" class="channel-card">
       ${avatar}
       <div class="channel-card-info">
-        <div class="channel-card-title">${channel.channel_title}</div>
+        <div class="channel-card-title">${title}</div>
         <div class="channel-card-meta">${channel.video_count} video${channel.video_count === 1 ? '' : 's'}${updated}</div>
       </div>
     </a>`;
@@ -140,6 +168,9 @@ function renderChannelCard(channel: Channel): string {
 
 const channelCardScript = `
 "use strict";
+
+const htmlEntities = ${JSON.stringify(htmlEntities)};
+${escapeHtml.toString()}
 
 ${nameExt.toString()}
 
@@ -289,7 +320,7 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
           ${canCreateUsers(permissions) ? '<a href="/add-user">Add User</a><a href="/manage-users">Manage Users</a>' : ''}
         </div>
       </span>
-      <span class="username">${username}</span>
+      <span class="username">${escapeHtml(username)}</span>
       <a href="#" class="logout-link" onclick="logout(); return false;">Logout</a>
     </div>
     <script>
@@ -318,10 +349,10 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
 }
 
 function renderSearchBar(query: string = '', channelId?: ChannelID, channelTitle?: string) {
-  const escaped = query.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-  const channelInput = channelId ? `<input type="hidden" name="channel" value="${channelId}">` : '';
+  const escapedQuery = escapeHtml(query);
+  const channelInput = channelId ? `<input type="hidden" name="channel" value="${escapeHtml(channelId)}">` : '';
   const buttonText = channelId
-    ? (channelTitle ? `Search ${channelTitle}` : 'Search this channel')
+    ? (channelTitle ? `Search ${escapeHtml(channelTitle)}` : 'Search this channel')
     : 'Search';
   const placeholder = channelId ? 'Search this channel...' : 'Search...';
   const everywhereBtn = channelTitle
@@ -331,7 +362,7 @@ function renderSearchBar(query: string = '', channelId?: ChannelID, channelTitle
     <div class="search-bar">
       <form action="/search" method="get">
         ${channelInput}
-        <input type="text" name="q" placeholder="${placeholder}" value="${escaped}">
+        <input type="text" name="q" placeholder="${placeholder}" value="${escapedQuery}">
         <button type="submit">${buttonText}</button>
         ${everywhereBtn}
       </form>
@@ -394,15 +425,15 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
   return applyTemplate(videoTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
-    videoTitle: video.title,
-    videoDescription: video.description,
-    videoId: video.video_id,
+    videoTitle: escapeHtml(video.title),
+    videoDescription: escapeHtml(video.description),
+    videoId: escapeHtml(video.video_id),
     hasAvatar: video.avatar_filename != null,
-    videoExt,
-    avatarExt,
-    channelShortId: video.channel_short_id,
-    channel: video.channel_title,
-    subtitles: Object.keys(video.subtitles_files).map(k => ({ lang: k }))
+    videoExt: escapeHtml(videoExt),
+    avatarExt: avatarExt == null ? null : escapeHtml(avatarExt),
+    channelShortId: escapeHtml(video.channel_short_id),
+    channel: escapeHtml(video.channel_title),
+    subtitles: Object.keys(video.subtitles_files).map(k => ({ lang: escapeHtml(k) }))
   });
 }
 
@@ -417,12 +448,12 @@ export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], 
     videoCardScript,
     videos: videos.map(video => ({ html: renderVideoCard(video, false) })),
     hasAvatar: channel.avatar_filename != null,
-    shortId: channel.short_id,
-    channelTitle: channel.channel_title,
-    avatarExt,
+    shortId: escapeHtml(channel.short_id),
+    channelTitle: escapeHtml(channel.channel_title),
+    avatarExt: avatarExt == null ? null : escapeHtml(avatarExt),
     hasDescription: channel.description != null,
-    description: channel.description,
-    channelId: channel.channel_id,
+    description: channel.description == null ? null : escapeHtml(channel.description),
+    channelId: escapeHtml(channel.channel_id),
     canSubscribe: subscriptionsEnabled && permissions.canSubscribe,
     isSubscribed,
   });
@@ -436,7 +467,10 @@ export function renderAddUserPage(username: string, permissions: Permissions, av
     topRightBlock: renderTopRightBlock(username, permissions),
     hasAllChannelsPermission: permissions.allowedChannels === 'all',
     canGrantCreateUser: permissions.createUser === 'yes',
-    availableChannels,
+    availableChannels: availableChannels.map(c => ({
+      channel_id: escapeHtml(c.channel_id),
+      channel_title: escapeHtml(c.channel_title),
+    })),
   });
 }
 
@@ -453,15 +487,18 @@ export function renderManageUsersPage(
     topRightBlock: renderTopRightBlock(username, permissions),
     hasAllChannelsPermission: permissions.allowedChannels === 'all',
     canGrantCreateUser: permissions.createUser === 'yes',
-    availableChannels,
+    availableChannels: availableChannels.map(c => ({
+      channel_id: escapeHtml(c.channel_id),
+      channel_title: escapeHtml(c.channel_title),
+    })),
     noCreatedUsers: createdUsers.length === 0,
     createdUsers: createdUsers.map(u => ({
-      username: u.username,
-      permissionsJSON: JSON.stringify({
+      username: escapeHtml(u.username),
+      permissionsJSON: escapeHtml(JSON.stringify({
         allowedChannels: u.permissions.allowedChannels === 'all' ? 'all' : [...u.permissions.allowedChannels],
         createUser: u.permissions.createUser,
         canSubscribe: u.permissions.canSubscribe,
-      }).replace(/&/g, '&amp;').replace(/"/g, '&quot;'),
+      })),
     })),
   });
 }
@@ -538,14 +575,13 @@ export function renderSubscriptionsPage(username: string, permissions: Permissio
         avatarSrc = `data:${c.storedAvatar.mime};base64,${c.storedAvatar.data.toBase64()}`;
       }
       return {
-        title: c.channel_title,
-        id: c.channel_id,
-        escapedTitle: JSON.stringify(c.channel_title),
+        title: escapeHtml(c.channel_title),
+        id: escapeHtml(c.channel_id),
         hasShortId: c.short_id != null,
-        shortId: c.short_id,
+        shortId: c.short_id == null ? null : escapeHtml(c.short_id),
         hasAvatar: avatarSrc != null,
-        avatarSrc,
-        status: c.status,
+        avatarSrc: avatarSrc == null ? null : escapeHtml(avatarSrc),
+        status: escapeHtml(c.status),
         statusLabel: c.status === 'subscribed'
           ? 'subscribed'
           : (c.recentLimit == null ? 'subscribing: all' : `subscribing: most recent ${c.recentLimit}`),
@@ -563,9 +599,9 @@ export function renderAddVideoPage(username: string, permissions: Permissions, v
     canSubscribe: permissions.canSubscribe,
     videosIsEmpty: videoQueue.length === 0,
     videos: videoQueue.map(v => ({
-      id: v.video_id,
-      title: v.title,
-      channelName: v.channel_name,
+      id: escapeHtml(v.video_id),
+      title: v.title == null ? null : escapeHtml(v.title),
+      channelName: v.channel_name == null ? null : escapeHtml(v.channel_name),
       hasMetadata: v.title != null,
       thumbnail: v.thumbnail ? `data:image/jpeg;base64,${v.thumbnail.toBase64()}` : null,
       hasThumbnail: v.thumbnail != null,
@@ -575,6 +611,9 @@ export function renderAddVideoPage(username: string, permissions: Permissions, v
 
 const searchScript = `
 "use strict";
+
+const htmlEntities = ${JSON.stringify(htmlEntities)};
+${escapeHtml.toString()}
 
 ${formatDuration.toString()}
 
@@ -723,10 +762,10 @@ export function renderSearchPage(username: string, permissions: Permissions, que
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
     searchBar: renderSearchBar(query, channel?.channel_id, channel?.channel_title),
-    query,
+    query: escapeHtml(query),
     hasChannel: !!channel,
-    channelTitle: channel?.channel_title,
-    channelShortId: channel?.short_id,
+    channelTitle: channel == null ? null : escapeHtml(channel.channel_title),
+    channelShortId: channel == null ? null : escapeHtml(channel.short_id),
     hasChannels: results.channels.length > 0,
     channels: results.channels.map(ch => ({ html: renderChannelCard(ch) })),
     hasAnyVideos: videosHeadingShown,
@@ -737,7 +776,7 @@ export function renderSearchPage(username: string, permissions: Permissions, que
     hasSubsVideos: results.videosBySubtitles.length > 0,
     subsVideos: results.videosBySubtitles.map(video => ({ html: renderVideoCard(video, showChannel) })),
     noResults: results.channels.length === 0 && !videosHeadingShown,
-    searchState,
+    searchState: escapeJsonForScript(searchState),
     searchScript,
   });
 }
