@@ -62,7 +62,7 @@ export function throwIfNotInit<T>(value: T | null): void {
 }
 
 export function assertChannelId(thing: string): ChannelID {
-  if (/^UC[a-zA-Z0-9_-]+$/.test(thing)) {
+  if (/^UC[a-zA-Z0-9_-]{22}$/.test(thing)) {
     return thing as ChannelID;
   }
   throw new Error(`input ${JSON.stringify(thing)} does not appear to be a valid channel ID`);

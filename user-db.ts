@@ -184,9 +184,10 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
 
   const expectedSignature = createHmac('sha256', keys.hmacKey)
     .update(tokenData.payloadStr)
-    .digest('base64');
+    .digest()
+  const actualSignature = Uint8Array.fromBase64(tokenData.signature);
 
-  if (tokenData.signature !== expectedSignature) {
+  if (!timingSafeEqual(expectedSignature, actualSignature)) {
     throw new Error('Invalid token signature');
   }
 

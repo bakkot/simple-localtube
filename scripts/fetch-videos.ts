@@ -1,4 +1,4 @@
-import { fetchTo, getTemp, move, nameExt, ErrorWithStderr, spawnAsync, toVideoID, type ChannelDataJSON, type ChannelID, type ThumbnailJSON, type VideoID } from '../util.ts';
+import { fetchTo, getTemp, move, nameExt, ErrorWithStderr, spawnAsync, toVideoID, type ChannelDataJSON, type ChannelID, type ThumbnailJSON, type VideoID, assertChannelId } from '../util.ts';
 import { parseArgs } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -263,9 +263,8 @@ async function resolveChannelForVideo(videoId: VideoID): Promise<ChannelID> {
     { print: verbose },
   );
   const info = JSON.parse(result.stdout) as { channel_id?: string };
-  const channelId = info.channel_id as ChannelID;
-  if (!channelId) throw new Error(`no channel_id in yt-dlp info for video ${videoId}`);
-  return channelId;
+  if (!info.channel_id) throw new Error(`no channel_id in yt-dlp info for video ${videoId}`);
+  return assertChannelId(info.channel_id);
 }
 
 async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID) {

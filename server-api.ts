@@ -99,7 +99,8 @@ async function fetchChannelDetails(input: string): Promise<FetchedChannelDetails
   if (input.startsWith('http:') || input.startsWith('https:')) {
     try {
       const parsedUrl = new URL(input);
-      if (!parsedUrl.hostname.endsWith('youtube.com')) {
+      const host = parsedUrl.hostname;
+      if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
         throw new Error('Only YouTube URLs are supported');
       }
       url = input;
