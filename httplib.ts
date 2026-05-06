@@ -80,7 +80,7 @@ interface CompiledRoute<Ctx extends object = object> {
 
 export interface App<Ctx extends object = object> {
   routes: CompiledRoute<Ctx>[];
-  notFoundHandler: (req: HttpRequest, ctx: Ctx, rawRes: http.ServerResponse) => void | Promise<void>;
+  notFoundHandler: (req: HttpRequest, ctx: Ctx, rawRes: http.ServerResponse) => void;
   _wrapHandler: (inner: InternalHandlerWithCtx<Ctx>) => InternalHandler;
 }
 
