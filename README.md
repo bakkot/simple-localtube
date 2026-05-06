@@ -8,9 +8,7 @@ It is intended as an alternative to heavier tools like [TubeArchivist](https://w
 
 ## Threat model
 
-This project is designed to be secure against a reasonably bright 10-year-old. It is _not_ designed to be exposed to the open internet. In particular, while I am (to the best of my knowledge) following reasonable practices for password handling, there have been no security audits and _there is no rate-limiting on the login form_.
-
-It is also assumed that it's OK for anyone with access to the server (even without an account) to cause videos to be added to the UI as long as they're already on disk.
+This project is designed to be secure against a reasonably bright 10-year-old. Expose to the open internet at your own risk. I have been careful in the implementation but there has been no formal security audit. Also, there's no rate-limiting on the login form, so use good passwords.
 
 ## No breaking changes
 
@@ -33,4 +31,3 @@ Have `yt-dlp` in your PATH, or provide `YT_DLP_PATH` as an environment variable.
 Have `ffmpeg` in your path for use by `yt-dlp`.
 
 `npm ci` to install dependencies.
-
