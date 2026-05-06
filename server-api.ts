@@ -19,6 +19,75 @@ interface FetchedVideoDetails {
   thumbnailMime: string | null;
 }
 
+const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
+const allowedMediaMimes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
+
+function isAllowedMediaHost(host: string): boolean {
+  return host === 'ytimg.com' || host.endsWith('.ytimg.com')
+    || host === 'ggpht.com' || host.endsWith('.ggpht.com')
+    || host === 'googleusercontent.com' || host.endsWith('.googleusercontent.com');
+}
+
+// Fetch a YouTube-served avatar/thumbnail with strict allowlists on host, size, and content-type
+// to prevent the surrounding flow from being abused as an SSRF / memory-DoS / XSS-via-data-URI primitive.
+async function fetchMedia(url: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' || !isAllowedMediaHost(parsed.hostname)) {
+    return null;
+  }
+
+  let resp: Response;
+  try {
+    resp = await fetch(url, { redirect: 'error' });
+  } catch {
+    return null;
+  }
+  if (!resp.ok || !resp.body) return null;
+
+  const mime = (resp.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  if (!allowedMediaMimes.has(mime)) {
+    void resp.body.cancel();
+    return null;
+  }
+
+  const declared = resp.headers.get('content-length');
+  if (declared != null && Number(declared) > MAX_MEDIA_BYTES) {
+    void resp.body.cancel();
+    return null;
+  }
+
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_MEDIA_BYTES) {
+        void reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    bytes.set(c, offset);
+    offset += c.byteLength;
+  }
+  return { bytes, mime };
+}
+
 async function fetchVideoDetails(videoId: VideoID): Promise<FetchedVideoDetails | null> {
   try {
     const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
@@ -61,14 +130,10 @@ async function fetchVideoDetails(videoId: VideoID): Promise<FetchedVideoDetails 
     const thumbs = details.thumbnail?.thumbnails;
     if (thumbs && thumbs.length > 0) {
       const smallest = thumbs.reduce((a, b) => a.width * a.height <= b.width * b.height ? a : b);
-      try {
-        const thumbResp = await fetch(smallest.url);
-        if (thumbResp.ok) {
-          thumbnailBuf = new Uint8Array(await thumbResp.arrayBuffer());
-          thumbnailMime = thumbResp.headers.get('content-type') ?? 'image/jpeg';
-        }
-      } catch {
-        // thumbnail fetch failed, non-fatal
+      const fetched = await fetchMedia(smallest.url);
+      if (fetched) {
+        thumbnailBuf = fetched.bytes;
+        thumbnailMime = fetched.mime;
       }
     }
 
@@ -169,14 +234,10 @@ async function fetchChannelDetails(input: string): Promise<FetchedChannelDetails
         const sources = obj?.image?.sources;
         if (sources && sources.length > 0) {
           const smallest = sources.reduce((a, b) => a.width * a.height <= b.width * b.height ? a : b);
-          try {
-            const avatarResp = await fetch(smallest.url);
-            if (avatarResp.ok) {
-              avatarBuf = new Uint8Array(await avatarResp.arrayBuffer());
-              avatarMime = avatarResp.headers.get('content-type') ?? 'image/jpeg';
-            }
-          } catch {
-            // avatar fetch failed, non-fatal
+          const fetched = await fetchMedia(smallest.url);
+          if (fetched) {
+            avatarBuf = fetched.bytes;
+            avatarMime = fetched.mime;
           }
           break;
         }
