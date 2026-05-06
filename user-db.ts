@@ -22,9 +22,13 @@ type User = {
   permissions: Permissions;
 }
 
-export type StoredPermissions = {
-  allowedChannels: Set<ChannelID> | 'all';
+export type StoredPermissions = ({
+  allowedChannels: 'all';
+  allowedVideos: null;
+} | {
+  allowedChannels: Set<ChannelID>;
   allowedVideos: Set<VideoID>;
+}) & {
   createUser: 'yes' | 'no' | 'limited';
   canSubscribe: boolean;
 };
@@ -214,7 +218,7 @@ export function decodeBearerToken(tokenStr: string): { username: string; timesta
 
 type SerializedPermissions = {
   allowedChannels: 'all' | ChannelID[];
-  allowedVideos?: VideoID[];
+  allowedVideos: null | VideoID[];
   createUser: 'yes' | 'no' | 'limited';
   canSubscribe: boolean;
 }
@@ -223,13 +227,22 @@ function parsePermissions(permissionsString: string): Permissions {
   if (allowedChannels !== 'all' && !Array.isArray(allowedChannels) || (createUser !== 'yes' && createUser !== 'no' && createUser !== 'limited')) {
     throw new Error('malformed permissions');
   }
-  let parsedChannels: Set<ChannelID> | 'all' = allowedChannels === 'all'
-    ? 'all'
-    : new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && isChannelInDb(c as ChannelID)));
+  let parsedCanSubscribe = typeof canSubscribe === 'boolean' ? canSubscribe : false;
+  if (allowedChannels === 'all') {
+    return {
+      allowedChannels: 'all',
+      allowedVideos: null,
+      createUser,
+      canSubscribe: parsedCanSubscribe,
+      partialChannels: new Set(),
+      partialChannelCounts: new Map(),
+    };
+  }
+  let parsedChannels = new Set(allowedChannels.filter((c: unknown) => typeof c === 'string' && isChannelInDb(c as ChannelID)));
   let parsedVideos: Set<VideoID> = Array.isArray(allowedVideos)
     ? new Set(allowedVideos.filter((v: unknown) => typeof v === 'string'))
     : new Set();
-  let partialChannelCounts = parsedChannels === 'all' || parsedVideos.size === 0
+  let partialChannelCounts = parsedVideos.size === 0
     ? new Map<ChannelID, number>()
     : getChannelVideoCountsForVideos(parsedVideos);
   let partialChannels = new Set(partialChannelCounts.keys());
@@ -237,7 +250,7 @@ function parsePermissions(permissionsString: string): Permissions {
     allowedChannels: parsedChannels,
     allowedVideos: parsedVideos,
     createUser,
-    canSubscribe: typeof canSubscribe === 'boolean' ? canSubscribe : false,
+    canSubscribe: parsedCanSubscribe,
     partialChannels,
     partialChannelCounts,
   };
@@ -246,7 +259,7 @@ function parsePermissions(permissionsString: string): Permissions {
 function serializePermissions(permissions: StoredPermissions): string {
   return JSON.stringify({
     allowedChannels: permissions.allowedChannels === 'all' ? 'all' : [...permissions.allowedChannels],
-    allowedVideos: [...permissions.allowedVideos],
+    allowedVideos: permissions.allowedVideos === null ? null : [...permissions.allowedVideos],
     createUser: permissions.createUser,
     canSubscribe: permissions.canSubscribe,
   } satisfies SerializedPermissions);
@@ -273,10 +286,10 @@ export async function addUser(
         throw new Error(`Channel '${channelId}' does not exist`);
       }
     }
-  }
-  for (const videoId of permissions.allowedVideos) {
-    if (!isVideoInDb(videoId)) {
-      throw new Error(`Video '${videoId}' does not exist`);
+    for (const videoId of permissions.allowedVideos) {
+      if (!isVideoInDb(videoId)) {
+        throw new Error(`Video '${videoId}' does not exist`);
+      }
     }
   }
 
@@ -345,7 +358,7 @@ export function canViewChannel(permissions: Permissions, channelId: ChannelID): 
 }
 
 export function canViewVideo(permissions: Permissions, video: { video_id: VideoID; channel_id: ChannelID }): boolean {
-  return canViewChannel(permissions, video.channel_id) || permissions.allowedVideos.has(video.video_id);
+  return canViewChannel(permissions, video.channel_id) || (permissions.allowedVideos?.has(video.video_id) ?? false);
 }
 
 export type ChannelAccess = 'full' | 'partial' | 'none';

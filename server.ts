@@ -163,7 +163,7 @@ addGetRoute(app, '/login', (req, ctx, rawRes): void => {
 });
 
 addGetRoute(app, '/', (req, ctx, rawRes) => {
-  const videos = getRecentVideosForUser(ctx.permissions!.allowedChannels, ctx.permissions!.allowedVideos, 30);
+  const videos = getRecentVideosForUser(ctx.permissions!.allowedChannels, ctx.permissions!.allowedVideos ?? new Set(), 30);
 
   send(rawRes, renderHomePage(ctx.username!, ctx.permissions!, videos));
 });
