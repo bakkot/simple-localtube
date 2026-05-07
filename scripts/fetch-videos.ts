@@ -316,6 +316,7 @@ async function fetchMetaForChannel(mediaDir: string, channelId: ChannelID) {
   // console.log({ avatarName, bannerName, bannerUncroppedName });
 }
 
+// returns oldest-first
 async function getLatestVideoUrls(channelId: ChannelID, all=false, title: string | null = null): Promise<VideoID[]> {
   const channelVideosUrl = `https://www.youtube.com/channel/${channelId}/videos`;
   // console.log(`Fetching latest videos for ${channelVideosUrl}`);
@@ -381,7 +382,7 @@ async function getLatestVideoUrls(channelId: ChannelID, all=false, title: string
   }
 
   console.log(`Found ${newVideoIds.length} new videos for channel ${channelDisplay(channelId, title)}`);
-  return newVideoIds;
+  return newVideoIds.reverse();
 }
 
 let addedFromQueue = 0;
