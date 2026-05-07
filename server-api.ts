@@ -1,7 +1,7 @@
 import { addGetRoute, addPostRoute, getBodyJson, sendJson, type App } from './httplib.ts';
-import { addUser, applyUserChannelCount, areRequestedPermissionsAllowedByGranterPermissions, buildSearchScope, canCreateUsers, canViewChannel, channelAccess, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, updateUserPermissions, type Permissions, type StoredPermissions } from './user-db.ts';
+import { addAllowedVideoToUser, addUser, applyUserChannelCount, areRequestedPermissionsAllowedByGranterPermissions, buildSearchScope, canCreateUsers, canViewChannel, canViewVideo, channelAccess, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, removeAllowedVideoFromUser, updateUserPermissions, type Permissions, type StoredPermissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
-import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForUser, getVideosByChannel, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
+import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForUser, getVideoById, getVideosByChannel, getVideosByIds, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
 import { getJsonEnd } from './json-excise.ts';
 
@@ -444,6 +444,105 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       rawRes.statusCode = 500;
       sendJson(rawRes, { message: 'Internal server error' });
     }
+  });
+
+  addPostRoute(app, '/api/update-user-allowed-video', async (req, ctx, rawRes): Promise<void> => {
+    try {
+      if (!canCreateUsers(ctx.permissions!)) {
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Not authorized to manage users' });
+        return;
+      }
+
+      const { username, videoId, action } = await getBodyJson(req) as {
+        username: unknown; videoId: unknown; action: unknown;
+      };
+
+      if (typeof username !== 'string' || typeof videoId !== 'string' || (action !== 'add' && action !== 'remove')) {
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Invalid request body' });
+        return;
+      }
+
+      let createdBy: string | null;
+      try {
+        createdBy = getCreatedBy(username);
+      } catch {
+        rawRes.statusCode = 404;
+        sendJson(rawRes, { message: 'User not found' });
+        return;
+      }
+      if (createdBy !== ctx.username) {
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'You can only modify permissions of users you created' });
+        return;
+      }
+
+      const targetPerms = getUserPermissions(username);
+      if (targetPerms.allowedChannels === 'all') {
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'User already has access to all channels' });
+        return;
+      }
+
+      const video = getVideoById(videoId as VideoID);
+      if (!video) {
+        rawRes.statusCode = 404;
+        sendJson(rawRes, { message: 'Video not found' });
+        return;
+      }
+
+      if (action === 'add') {
+        if (!canViewVideo(ctx.permissions!, video)) {
+          rawRes.statusCode = 403;
+          sendJson(rawRes, { message: 'You cannot grant access to a video you cannot see' });
+          return;
+        }
+        addAllowedVideoToUser(username, video.video_id);
+      } else {
+        removeAllowedVideoFromUser(username, video.video_id);
+      }
+
+      sendJson(rawRes, { message: 'Updated successfully' });
+    } catch (error) {
+      console.error('Update user allowed video error:', error);
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Internal server error' });
+    }
+  });
+
+  addGetRoute(app, '/api/user-allowed-videos', (req, ctx, rawRes): void => {
+    if (!canCreateUsers(ctx.permissions!)) {
+      rawRes.statusCode = 403;
+      sendJson(rawRes, { message: 'Not authorized to manage users' });
+      return;
+    }
+    const username = req.query.username;
+    if (typeof username !== 'string' || !username) {
+      rawRes.statusCode = 400;
+      sendJson(rawRes, { message: 'username parameter required' });
+      return;
+    }
+    let createdBy: string | null;
+    try {
+      createdBy = getCreatedBy(username);
+    } catch {
+      rawRes.statusCode = 404;
+      sendJson(rawRes, { message: 'User not found' });
+      return;
+    }
+    if (createdBy !== ctx.username) {
+      rawRes.statusCode = 403;
+      sendJson(rawRes, { message: 'You can only view videos of users you created' });
+      return;
+    }
+    const targetPerms = getUserPermissions(username);
+    if (targetPerms.allowedChannels === 'all') {
+      sendJson(rawRes, []);
+      return;
+    }
+    const videos = getVideosByIds([...targetPerms.allowedVideos]);
+    sendJson(rawRes, videos);
   });
 
   addPostRoute(app, '/api/change-password', async (req, ctx, rawRes): Promise<void> => {

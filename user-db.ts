@@ -368,6 +368,44 @@ export function channelAccess(permissions: Permissions, channelId: ChannelID): C
   return 'none';
 }
 
+export type VideoVisibility = 'visible-channel' | 'visible' | 'hidden';
+export function videoVisibility(permissions: Permissions, video: { video_id: VideoID; channel_id: ChannelID }): VideoVisibility {
+  if (canViewChannel(permissions, video.channel_id)) return 'visible-channel';
+  if (permissions.allowedVideos?.has(video.video_id)) return 'visible';
+  return 'hidden';
+}
+
+export function addAllowedVideoToUser(username: string, videoId: VideoID): void {
+  const existing = getUserPermissions(username);
+  if (existing.allowedChannels === 'all') {
+    throw new Error('User has access to all channels; individual videos do not apply');
+  }
+  const newAllowed = new Set<VideoID>([videoId]);
+  for (const v of existing.allowedVideos) {
+    if (v !== videoId) newAllowed.add(v);
+  }
+  updateUserPermissions(username, {
+    allowedChannels: existing.allowedChannels,
+    allowedVideos: newAllowed,
+    createUser: existing.createUser,
+    canSubscribe: existing.canSubscribe,
+  });
+}
+
+export function removeAllowedVideoFromUser(username: string, videoId: VideoID): void {
+  const existing = getUserPermissions(username);
+  if (existing.allowedChannels === 'all') return;
+  if (!existing.allowedVideos.has(videoId)) return;
+  const newAllowed = new Set(existing.allowedVideos);
+  newAllowed.delete(videoId);
+  updateUserPermissions(username, {
+    allowedChannels: existing.allowedChannels,
+    allowedVideos: newAllowed,
+    createUser: existing.createUser,
+    canSubscribe: existing.canSubscribe,
+  });
+}
+
 export function userVisibleVideoCount(channel: { channel_id: ChannelID; video_count: number }, permissions: Permissions): number {
   if (canViewChannel(permissions, channel.channel_id)) return channel.video_count;
   return permissions.partialChannelCounts.get(channel.channel_id) ?? 0;

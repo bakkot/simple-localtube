@@ -20,6 +20,16 @@
     .video-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
     .channel-info { display: flex; align-items: center; margin-bottom: 15px; }
     .channel-avatar { border-radius: 50%; margin-right: 10px; }
+    .user-visibility-list { margin-bottom: 15px; padding: 12px 14px; background: #fafafa; border: 1px solid #eee; border-radius: 6px; }
+    .user-visibility-list h3 { margin: 0 0 8px; font-size: 14px; color: #555; font-weight: 600; }
+    .user-visibility-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
+    .user-visibility-row .vis-username { font-weight: bold; min-width: 120px; }
+    .user-visibility-row .vis-status { color: #666; flex: 1; }
+    .visibility-toggle { background: white; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; padding: 2px 10px; font-size: 16px; line-height: 1.2; min-width: 32px; }
+    .visibility-toggle:hover { background: #f0f0f0; }
+    .visibility-toggle:disabled { cursor: wait; opacity: 0.5; }
+    .visibility-toggle.add { color: #2e7d32; border-color: #2e7d32; }
+    .visibility-toggle.remove { color: #c62828; border-color: #c62828; }
   </style>
 </head>
 <body>
@@ -232,6 +242,117 @@
         </#if>
         <a href="/c/<# channelShortId>" class="channel-name"><# channel></a>
       </div>
+      <#if hasManageableUsers>
+        <div class="user-visibility-list" id="user-visibility-list">
+          <h3>Visibility for managed users</h3>
+          <#foreach mu of manageableUsers>
+            <div class="user-visibility-row" data-username="<# mu.username>" data-visibility="<# mu.visibilityClass>">
+              <span class="vis-username"><# mu.username></span>
+              <span class="vis-status"><# mu.visibilityLabel></span>
+              <#if mu.showAdd>
+                <button type="button" class="visibility-toggle add" data-action="add" title="Grant access">+</button>
+              </#if>
+              <#if mu.showRemove>
+                <button type="button" class="visibility-toggle remove" data-action="remove" title="Revoke access">&times;</button>
+              </#if>
+            </div>
+          </#foreach>
+        </div>
+        <script>
+          (function() {
+            const videoId = '<# videoId>';
+            const list = document.getElementById('user-visibility-list');
+
+            function confirmModal(message) {
+              return new Promise(resolve => {
+                const backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop';
+                const box = document.createElement('div');
+                box.className = 'modal-box';
+                const p = document.createElement('p');
+                p.textContent = message;
+                const actions = document.createElement('div');
+                actions.className = 'modal-actions';
+                const cancel = document.createElement('button');
+                cancel.className = 'modal-cancel';
+                cancel.textContent = 'Cancel';
+                const confirm = document.createElement('button');
+                confirm.className = 'modal-confirm';
+                confirm.textContent = 'Confirm';
+                actions.appendChild(cancel);
+                actions.appendChild(confirm);
+                box.appendChild(p);
+                box.appendChild(actions);
+                backdrop.appendChild(box);
+                document.body.appendChild(backdrop);
+                function done(v) {
+                  document.removeEventListener('keydown', onKey);
+                  backdrop.remove();
+                  resolve(v);
+                }
+                function onKey(e) {
+                  if (e.key === 'Escape') done(false);
+                  if (e.key === 'Enter') done(true);
+                }
+                cancel.addEventListener('click', () => done(false));
+                confirm.addEventListener('click', () => done(true));
+                backdrop.addEventListener('click', e => { if (e.target === backdrop) done(false); });
+                document.addEventListener('keydown', onKey);
+                confirm.focus();
+              });
+            }
+
+            list.addEventListener('click', async function(e) {
+              const btn = e.target.closest('.visibility-toggle');
+              if (!btn) return;
+              const row = btn.closest('.user-visibility-row');
+              const username = row.dataset.username;
+              const action = btn.dataset.action;
+              if (!e.shiftKey) {
+                const verb = action === 'add' ? 'Grant access for' : 'Revoke access for';
+                const ok = await confirmModal(verb + ' ' + username + '?');
+                if (!ok) return;
+              }
+              btn.disabled = true;
+              try {
+                const resp = await fetch('/api/update-user-allowed-video', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ username, videoId, action }),
+                });
+                if (!resp.ok) {
+                  let msg = 'Failed to update';
+                  try { msg = (await resp.json()).message || msg; } catch {}
+                  alert(msg);
+                  btn.disabled = false;
+                  return;
+                }
+                if (action === 'add') {
+                  row.dataset.visibility = 'visible';
+                  row.querySelector('.vis-status').textContent = 'visible';
+                  btn.dataset.action = 'remove';
+                  btn.title = 'Revoke access';
+                  btn.textContent = '×';
+                  btn.classList.remove('add');
+                  btn.classList.add('remove');
+                } else {
+                  row.dataset.visibility = 'hidden';
+                  row.querySelector('.vis-status').textContent = 'hidden';
+                  btn.dataset.action = 'add';
+                  btn.title = 'Grant access';
+                  btn.textContent = '+';
+                  btn.classList.remove('remove');
+                  btn.classList.add('add');
+                }
+                btn.disabled = false;
+              } catch {
+                alert('Network error');
+                btn.disabled = false;
+              }
+            });
+          })();
+        </script>
+      </#if>
       <div class="description"><# videoDescription></div>
     </div>
   </div>

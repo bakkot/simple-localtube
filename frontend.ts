@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Channel, VideoWithChannel, SearchResults } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
-import { canCreateUsers, type Permissions } from './user-db.ts';
+import { canCreateUsers, type Permissions, type VideoVisibility } from './user-db.ts';
 import { nameExt, type ChannelID } from './util.ts';
 import type { SubscriptionChannel } from './subscriptions-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -288,6 +288,14 @@ const commonCSS = `
   .search-bar button { padding: 6px 14px; background: #1976d2; color: white; border: 1px solid #1976d2; border-radius: 0 4px 4px 0; font-size: 14px; cursor: pointer; }
   .search-bar button:hover { background: #1565c0; }
   .search-bar button + button { border-radius: 4px; margin-left: 6px; }
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal-box { background: white; padding: 20px 24px; border-radius: 8px; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+  .modal-box p { margin: 0 0 20px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+  .modal-actions button { padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-size: 14px; }
+  .modal-actions .modal-confirm { background: #1976d2; color: white; border-color: #1976d2; }
+  .modal-actions .modal-confirm:hover { background: #1565c0; }
+  .modal-actions .modal-cancel:hover { background: #f0f0f0; }
 `;
 
 const formPageCSS = `
@@ -418,9 +426,15 @@ export function renderChannelsPage(username: string, permissions: Permissions, c
 }
 
 const videoTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'video.html'), 'utf8'));
-export function renderVideoPage(video: VideoWithChannel, username: string, permissions: Permissions): string {
+export function renderVideoPage(video: VideoWithChannel, username: string, permissions: Permissions, manageableUsers: { username: string; visibility: VideoVisibility }[]): string {
   const videoExt = nameExt(video.video_filename).ext;
   const avatarExt = video.avatar_filename == null ? null : nameExt(video.avatar_filename).ext;
+
+  const visibilityLabels: Record<VideoVisibility, string> = {
+    'visible-channel': 'visible (channel)',
+    'visible': 'visible',
+    'hidden': 'hidden',
+  };
 
   return applyTemplate(videoTemplate, {
     commonCSS,
@@ -433,7 +447,15 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
     avatarExt: avatarExt == null ? null : escapeHtml(avatarExt),
     channelShortId: escapeHtml(video.channel_short_id),
     channel: escapeHtml(video.channel_title),
-    subtitles: Object.keys(video.subtitles_files).map(k => ({ lang: escapeHtml(k) }))
+    subtitles: Object.keys(video.subtitles_files).map(k => ({ lang: escapeHtml(k) })),
+    hasManageableUsers: manageableUsers.length > 0,
+    manageableUsers: manageableUsers.map(u => ({
+      username: escapeHtml(u.username),
+      visibilityClass: escapeHtml(u.visibility),
+      visibilityLabel: visibilityLabels[u.visibility],
+      showAdd: u.visibility === 'hidden',
+      showRemove: u.visibility === 'visible',
+    })),
   });
 }
 
@@ -500,6 +522,7 @@ export function renderManageUsersPage(
         canSubscribe: u.permissions.canSubscribe,
       })),
     })),
+    videoCardScript,
   });
 }
 

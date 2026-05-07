@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { createApp, addGetRoute, withMiddleware, getCookies, listen, send, sendJson, redirect, sendFile, type Middleware } from './httplib.ts';
 import { init as initMediaDb, getRecentVideosForUser, getVideoById, getChannelByShortId, getVideosByChannel, getAllChannels, getChannelsForUser, getChannelsSorted, addVideo, addChannel, search, type Video, type Channel, type ChannelSort, isVideoInDb, getChannelById } from './media-db.ts';
 import { nameExt, channelIDFromCanonicalURL, lock, type VideoID, type ChannelID } from './util.ts';
-import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, canViewVideo, channelAccess, applyUserChannelCount, buildSearchScope, getUserPermissions, addUser, hasAnyUsers, areRequestedPermissionsAllowedByGranterPermissions, getCreatedAccountsWithPermissions, canCreateUsers, type Permissions } from './user-db.ts';
+import { init as initUserDb, checkUsernamePassword, decodeBearerToken, canViewChannel, canViewVideo, channelAccess, applyUserChannelCount, buildSearchScope, getUserPermissions, addUser, hasAnyUsers, areRequestedPermissionsAllowedByGranterPermissions, getCreatedAccountsWithPermissions, canCreateUsers, videoVisibility, type Permissions, type VideoVisibility } from './user-db.ts';
 import { renderSetupPage, renderLoginPage, renderHomePage, renderChannelsPage, renderVideoPage, renderChannelPage, renderAddUserPage, renderManageUsersPage, renderNotAllowed, renderSubscriptionsPage, renderAddVideoPage, renderSettingsPage, renderSearchPage } from './frontend.ts';
 import { addAPIs } from './server-api.ts';
 
@@ -211,7 +211,15 @@ addGetRoute(app, '/v/:video_id', (req, ctx, rawRes): void => {
     return;
   }
 
-  send(rawRes, renderVideoPage(video, ctx.username!, ctx.permissions!));
+  const manageableUsers: { username: string; visibility: VideoVisibility }[] = [];
+  if (canCreateUsers(ctx.permissions!)) {
+    for (const u of getCreatedAccountsWithPermissions(ctx.username!)) {
+      if (u.permissions.allowedChannels === 'all') continue;
+      manageableUsers.push({ username: u.username, visibility: videoVisibility(u.permissions, video) });
+    }
+  }
+
+  send(rawRes, renderVideoPage(video, ctx.username!, ctx.permissions!, manageableUsers));
 });
 
 // Channel page

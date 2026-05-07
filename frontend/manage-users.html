@@ -31,6 +31,14 @@
     .no-users { color: #666; font-style: italic; }
     .permissions-editor { display: none; }
     .permissions-editor.visible { display: block; }
+    .allowed-videos-section { margin-top: 30px; }
+    .allowed-videos-section h3 { color: #333; margin-bottom: 15px; }
+    .allowed-videos-section .video-grid { grid-template-columns: repeat(auto-fit, 240px); gap: 15px; }
+    .removable-card { position: relative; }
+    .remove-video-btn { position: absolute; bottom: 8px; right: 8px; background: rgba(255,255,255,0.95); border: 1px solid #c62828; border-radius: 4px; cursor: pointer; padding: 2px 10px; font-size: 16px; line-height: 1.2; color: #c62828; z-index: 1; }
+    .remove-video-btn:hover { background: #c62828; color: white; }
+    .remove-video-btn:disabled { cursor: wait; opacity: 0.5; }
+    .allowed-videos-empty { color: #666; font-style: italic; }
   </style>
 </head>
 <body>
@@ -145,14 +153,141 @@
           <button type="submit" class="form-button" id="saveButton">Save Permissions</button>
           <div id="message"></div>
         </form>
+
+        <div class="allowed-videos-section" id="allowedVideosSection" style="display:none;">
+          <h3>Individually granted videos</h3>
+          <div class="loading" id="allowedVideosLoading" style="display:none;">Loading...</div>
+          <p class="allowed-videos-empty" id="allowedVideosEmpty" style="display:none;">No individually granted videos.</p>
+          <div class="video-grid" id="allowedVideosGrid"></div>
+        </div>
       </div>
     </#if>
   </div>
 
+  <#if not noCreatedUsers>
+  <script>
+    <# videoCardScript>
+  </script>
+  </#if>
   <script>
     var selectedUsername = null;
     var userList = document.getElementById('userList');
     var editor = document.getElementById('permissionsEditor');
+
+    function confirmModal(message) {
+      return new Promise(function(resolve) {
+        var backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+        var box = document.createElement('div');
+        box.className = 'modal-box';
+        var p = document.createElement('p');
+        p.textContent = message;
+        var actions = document.createElement('div');
+        actions.className = 'modal-actions';
+        var cancel = document.createElement('button');
+        cancel.className = 'modal-cancel';
+        cancel.textContent = 'Cancel';
+        var confirm = document.createElement('button');
+        confirm.className = 'modal-confirm';
+        confirm.textContent = 'Confirm';
+        actions.appendChild(cancel);
+        actions.appendChild(confirm);
+        box.appendChild(p);
+        box.appendChild(actions);
+        backdrop.appendChild(box);
+        document.body.appendChild(backdrop);
+        function done(v) {
+          document.removeEventListener('keydown', onKey);
+          backdrop.remove();
+          resolve(v);
+        }
+        function onKey(e) {
+          if (e.key === 'Escape') done(false);
+          if (e.key === 'Enter') done(true);
+        }
+        cancel.addEventListener('click', function() { done(false); });
+        confirm.addEventListener('click', function() { done(true); });
+        backdrop.addEventListener('click', function(e) { if (e.target === backdrop) done(false); });
+        document.addEventListener('keydown', onKey);
+        confirm.focus();
+      });
+    }
+
+    function makeRemovableCard(video, username) {
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = renderVideoCard(video, true);
+      var card = wrapper.firstElementChild;
+      card.classList.add('removable-card');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'remove-video-btn';
+      btn.title = 'Revoke access';
+      btn.textContent = '×';
+      btn.addEventListener('click', async function(e) {
+        e.preventDefault();
+        if (!e.shiftKey) {
+          var ok = await confirmModal('Revoke access to "' + video.title + '" for ' + username + '?');
+          if (!ok) return;
+        }
+        btn.disabled = true;
+        try {
+          var resp = await fetch('/api/update-user-allowed-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, videoId: video.video_id, action: 'remove' }),
+          });
+          if (!resp.ok) {
+            var msg = 'Failed to revoke';
+            try { msg = (await resp.json()).message || msg; } catch (err) {}
+            alert(msg);
+            btn.disabled = false;
+            return;
+          }
+          card.remove();
+          var grid = document.getElementById('allowedVideosGrid');
+          if (grid.children.length === 0) {
+            document.getElementById('allowedVideosEmpty').style.display = 'block';
+          }
+        } catch (err) {
+          alert('Network error');
+          btn.disabled = false;
+        }
+      });
+      card.appendChild(btn);
+      return card;
+    }
+
+    async function loadAllowedVideos(username, hasAllChannels) {
+      var section = document.getElementById('allowedVideosSection');
+      var loading = document.getElementById('allowedVideosLoading');
+      var grid = document.getElementById('allowedVideosGrid');
+      var empty = document.getElementById('allowedVideosEmpty');
+      grid.innerHTML = '';
+      empty.style.display = 'none';
+      if (hasAllChannels) {
+        section.style.display = 'none';
+        return;
+      }
+      section.style.display = 'block';
+      loading.style.display = 'block';
+      loading.textContent = 'Loading...';
+      try {
+        var resp = await fetch('/api/user-allowed-videos?username=' + encodeURIComponent(username));
+        if (!resp.ok) {
+          loading.textContent = 'Failed to load';
+          return;
+        }
+        var videos = await resp.json();
+        loading.style.display = 'none';
+        if (videos.length === 0) {
+          empty.style.display = 'block';
+          return;
+        }
+        videos.forEach(function(v) { grid.appendChild(makeRemovableCard(v, username)); });
+      } catch (err) {
+        loading.textContent = 'Failed to load';
+      }
+    }
 
     if (userList) {
       userList.addEventListener('click', function(e) {
@@ -170,7 +305,8 @@
         if (createUserInput) createUserInput.checked = true;
         document.querySelector('input[name="canSubscribe"][value="' + perms.canSubscribe + '"]').checked = true;
 
-        if (perms.allowedChannels === 'all') {
+        var hasAllChannels = perms.allowedChannels === 'all';
+        if (hasAllChannels) {
           var allRadio = document.getElementById('perm-all');
           if (allRadio) allRadio.checked = true;
         } else {
@@ -188,6 +324,8 @@
         var msg = document.getElementById('message');
         msg.textContent = '';
         msg.className = '';
+
+        loadAllowedVideos(selectedUsername, hasAllChannels);
       });
     }
 
@@ -283,6 +421,7 @@
                 canSubscribe: canSubscribe,
               });
             }
+            loadAllowedVideos(selectedUsername, allowedChannels === 'all');
           } else {
             var error = await response.json();
             message.textContent = error.message || 'Failed to update permissions';

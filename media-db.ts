@@ -17,6 +17,7 @@ let getChannelByIdStmt: StatementSync | null = null;
 let getChannelByShortIdStmt: StatementSync | null = null;
 let getVideosByChannelStmt: StatementSync | null = null;
 let getVideosByChannelRestrictedStmt: StatementSync | null = null;
+let getVideosByIdsStmt: StatementSync | null = null;
 let channelExistsStmt: StatementSync | null = null;
 let getAllChannelsStmt: StatementSync | null = null;
 let searchVideosStmt: StatementSync | null = null;
@@ -311,6 +312,13 @@ export function init(dbDir: string): void {
     LIMIT ? OFFSET ?
   `);
 
+  getVideosByIdsStmt = db.prepare(`
+    SELECT v.*, c.channel_title, c.short_id as channel_short_id
+    FROM videos v
+    JOIN channels c ON v.channel_id = c.channel_id
+    WHERE v.video_id IN (SELECT value FROM json_each(?))
+  `);
+
   getChannelVideoCountsForVideosStmt = db.prepare(`
     SELECT v.channel_id, COUNT(*) as cnt
     FROM videos v
@@ -512,6 +520,19 @@ export function getChannelById(channelId: ChannelID): Channel | null {
 export function getChannelByShortId(shortId: string): Channel | null {
   throwIfNotInit(getChannelByShortIdStmt);
   return getChannelByShortIdStmt.get(shortId) as unknown as Channel | null;
+}
+
+export function getVideosByIds(videoIds: VideoID[]): VideoWithChannel[] {
+  if (videoIds.length === 0) return [];
+  throwIfNotInit(getVideosByIdsStmt);
+  const rows = getVideosByIdsStmt.all(JSON.stringify(videoIds)) as VideoWithChannelRow[];
+  const byId = new Map(rows.map(r => [r.video_id, parseSubtitles(r)]));
+  const result: VideoWithChannel[] = [];
+  for (const id of videoIds) {
+    const v = byId.get(id);
+    if (v) result.push(v);
+  }
+  return result;
 }
 
 export function getVideosByChannel(channelId: ChannelID, limit: number = 30, offset: number = 0, restrictToVideos: Set<VideoID> | null = null): VideoWithChannel[] {
