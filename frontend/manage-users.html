@@ -226,7 +226,7 @@
       btn.addEventListener('click', async function(e) {
         e.preventDefault();
         if (!e.shiftKey) {
-          var ok = await confirmModal('Revoke access to "' + video.title + '" for ' + username + '?');
+          var ok = await confirmModal('Revoke access to "' + video.title + '" for ' + username + '?\n\nTip: Hold Shift while clicking to bypass this confirmation.');
           if (!ok) return;
         }
         btn.disabled = true;

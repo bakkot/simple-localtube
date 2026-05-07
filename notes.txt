@@ -51,3 +51,4 @@ unicode normalizing / lowcase username login info
 media-db should store when videos were added, not just the upload timestamp
 
 replace created_by with a list I think (separate table)
+or, just stuff can_manage_users list in the permissions? we'll need it on every video probably

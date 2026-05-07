@@ -290,7 +290,7 @@ const commonCSS = `
   .search-bar button + button { border-radius: 4px; margin-left: 6px; }
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
   .modal-box { background: white; padding: 20px 24px; border-radius: 8px; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
-  .modal-box p { margin: 0 0 20px; }
+  .modal-box p { margin: 0 0 20px; white-space: pre-line; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
   .modal-actions button { padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-size: 14px; }
   .modal-actions .modal-confirm { background: #1976d2; color: white; border-color: #1976d2; }
