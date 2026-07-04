@@ -40,7 +40,7 @@ https://sponsor.ajay.app/api/skipSegments?videoID=OC7sNfNuTNU
 
 extra data columns in general
 
-need a way to give access to specific videos to users?
+CREATE TABLE STRICT
 
 sponsorblock
 
