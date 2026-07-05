@@ -31,6 +31,11 @@
     .add-button:hover { background: #1565c0; }
     .add-button:disabled { background: #ccc; cursor: not-allowed; }
     .message { margin-top: 10px; font-size: 14px; }
+    @media (max-width: 600px) {
+      .channel-item { flex-wrap: wrap; }
+      .channel-details { flex-basis: 60%; }
+      .form-row { flex-wrap: wrap; }
+    }
   </style>
 </head>
 <body>

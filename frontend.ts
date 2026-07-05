@@ -272,7 +272,7 @@ const commonCSS = `
   .video-grid { display: grid; grid-template-columns: repeat(auto-fit, 320px); gap: 20px; justify-content: center; }
   .video-card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
   .video-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
-  .thumb-container { position: relative; height: 180px; }
+  .thumb-container { position: relative; aspect-ratio: 16 / 9; }
   .thumb { width: 100%; height: 100%; object-fit: cover; object-position: center; }
   .duration { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
   .video-info { padding: 12px; }
@@ -296,6 +296,18 @@ const commonCSS = `
   .modal-actions .modal-confirm { background: #1976d2; color: white; border-color: #1976d2; }
   .modal-actions .modal-confirm:hover { background: #1565c0; }
   .modal-actions .modal-cancel:hover { background: #f0f0f0; }
+  @media (max-width: 800px) {
+    .header { display: flex; flex-wrap: wrap; align-items: center; row-gap: 10px; }
+    .topright-info { position: static; margin-left: auto; }
+    .search-bar { position: static; transform: none; order: 1; width: 100%; }
+    .search-bar form { flex-wrap: wrap; gap: 6px; }
+    .search-bar input[type="text"] { flex: 1 1 160px; width: auto; min-width: 0; font-size: 16px; border-radius: 4px; }
+    .search-bar button { border-radius: 4px; }
+    .search-bar button + button { margin-left: 0; }
+  }
+  @media (max-width: 600px) {
+    .video-grid { grid-template-columns: 1fr; }
+  }
 `;
 
 const formPageCSS = `
@@ -312,6 +324,9 @@ const formPageCSS = `
   .error { color: #d32f2f; font-size: 14px; margin-top: 10px; }
   .success { color: #388e3c; font-size: 14px; margin-top: 10px; }
   .form-info { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; line-height: 1.4; }
+  @media (max-width: 600px) {
+    .form-container { margin: 20px auto; padding: 20px; }
+  }
 `;
 
 function renderTopRightBlock(username: string, permissions: Permissions) {

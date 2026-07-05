@@ -18,6 +18,13 @@
     .subscribe-status.subscribed { color: #2e7d32; font-weight: 500; }
     .subscribe-status.subscribe-link { padding: 2px 10px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-weight: normal; text-decoration: none; color: inherit; }
     .subscribe-status.subscribe-link:hover { background: #f0f0f0; }
+    @media (max-width: 600px) {
+      .channel-header { padding: 14px; }
+      .channel-avatar { width: 56px; height: 56px; margin-right: 14px; }
+      .channel-details h1 { font-size: 22px; }
+      .channel-details .title-row { flex-wrap: wrap; gap: 6px 0; }
+      .subscribe-status { margin-left: 16px; }
+    }
   </style>
 </head>
 <body>
