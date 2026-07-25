@@ -39,10 +39,12 @@ export type Permissions = StoredPermissions & {
   partialChannelCounts: Map<ChannelID, number>;
 };
 
-// user-chosen (as opposed to granted) filtering of the channels they can see
-export type ChannelFilterMode = 'denylist' | 'allowlist';
+// user-chosen (as opposed to granted) filtering of the channels they can see.
+// each channel is explicitly shown, explicitly hidden, or neither, in which case
+// defaultChannelVisibility applies - which in practice means channels added in the future.
+export type DefaultChannelVisibility = 'shown' | 'hidden';
 export type Preferences = {
-  channelFilterMode: ChannelFilterMode;
+  defaultChannelVisibility: DefaultChannelVisibility;
   hiddenChannels: Set<ChannelID>;
   shownChannels: Set<ChannelID>;
 };
@@ -281,7 +283,7 @@ function serializePermissions(permissions: StoredPermissions): string {
 }
 
 type SerializedPreferences = {
-  channelFilterMode: ChannelFilterMode;
+  defaultChannelVisibility: DefaultChannelVisibility;
   hiddenChannels: ChannelID[];
   shownChannels: ChannelID[];
 }
@@ -291,9 +293,9 @@ function parseChannelList(value: unknown): Set<ChannelID> {
 }
 
 function parsePreferences(preferencesString: string): Preferences {
-  let { channelFilterMode, hiddenChannels, shownChannels } = JSON.parse(preferencesString) as SerializedPreferences;
+  let { defaultChannelVisibility, hiddenChannels, shownChannels } = JSON.parse(preferencesString) as SerializedPreferences;
   return {
-    channelFilterMode: channelFilterMode === 'allowlist' ? 'allowlist' : 'denylist',
+    defaultChannelVisibility: defaultChannelVisibility === 'hidden' ? 'hidden' : 'shown',
     hiddenChannels: parseChannelList(hiddenChannels),
     shownChannels: parseChannelList(shownChannels),
   };
@@ -301,7 +303,7 @@ function parsePreferences(preferencesString: string): Preferences {
 
 function serializePreferences(preferences: Preferences): string {
   return JSON.stringify({
-    channelFilterMode: preferences.channelFilterMode,
+    defaultChannelVisibility: preferences.defaultChannelVisibility,
     hiddenChannels: [...preferences.hiddenChannels],
     shownChannels: [...preferences.shownChannels],
   } satisfies SerializedPreferences);
@@ -335,8 +337,9 @@ export function updateUserPreferences(username: string, preferences: Preferences
 }
 
 export function isChannelHiddenByUser(preferences: Preferences, channelId: ChannelID): boolean {
+  if (preferences.shownChannels.has(channelId)) return false;
   if (preferences.hiddenChannels.has(channelId)) return true;
-  return preferences.channelFilterMode === 'allowlist' && !preferences.shownChannels.has(channelId);
+  return preferences.defaultChannelVisibility === 'hidden';
 }
 
 export function setChannelHiddenByUser(username: string, channelId: ChannelID, hidden: boolean): void {
@@ -350,7 +353,7 @@ export function setChannelHiddenByUser(username: string, channelId: ChannelID, h
     hiddenChannels.delete(channelId);
     shownChannels.add(channelId);
   }
-  updateUserPreferences(username, { channelFilterMode: existing.channelFilterMode, hiddenChannels, shownChannels });
+  updateUserPreferences(username, { defaultChannelVisibility: existing.defaultChannelVisibility, hiddenChannels, shownChannels });
 }
 
 export async function addUser(
@@ -511,21 +514,26 @@ export type VisibleChannels = {
   excluded: Set<ChannelID>;
 };
 export function visibleChannels(permissions: Permissions, preferences: Preferences): VisibleChannels {
-  if (preferences.channelFilterMode === 'allowlist') {
+  if (preferences.defaultChannelVisibility === 'hidden') {
+    // only the explicitly shown channels are visible
     const allowed = permissions.allowedChannels;
     const channels = allowed === 'all'
       ? new Set(preferences.shownChannels)
       : new Set([...preferences.shownChannels].filter(c => allowed.has(c)));
-    const excluded = new Set(preferences.hiddenChannels);
+    const excluded = new Set<ChannelID>();
     for (const c of permissions.partialChannels) {
       if (!preferences.shownChannels.has(c)) excluded.add(c);
     }
     return { channels, videos: permissions.allowedVideos ?? new Set(), excluded };
   }
+  const excluded = new Set<ChannelID>();
+  for (const c of preferences.hiddenChannels) {
+    if (!preferences.shownChannels.has(c)) excluded.add(c);
+  }
   return {
     channels: permissions.allowedChannels,
     videos: permissions.allowedVideos ?? new Set(),
-    excluded: new Set(preferences.hiddenChannels),
+    excluded,
   };
 }
 

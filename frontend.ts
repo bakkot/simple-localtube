@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Channel, VideoWithChannel, SearchResults } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
-import { canCreateUsers, type Permissions, type Preferences, type VideoVisibility } from './user-db.ts';
+import { canCreateUsers, isChannelHiddenByUser, type Permissions, type Preferences, type VideoVisibility } from './user-db.ts';
 import { nameExt, type ChannelID } from './util.ts';
 import type { SubscriptionChannel } from './subscriptions-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -371,9 +371,10 @@ function renderTopRightBlock(username: string, permissions: Permissions) {
     </script>`;
 }
 
-function renderSearchBar(query: string = '', channelId?: ChannelID, channelTitle?: string) {
+function renderSearchBar(query: string = '', channelId?: ChannelID, channelTitle?: string, includeHidden: boolean = false) {
   const escapedQuery = escapeHtml(query);
   const channelInput = channelId ? `<input type="hidden" name="channel" value="${escapeHtml(channelId)}">` : '';
+  const hiddenInput = includeHidden ? `<input type="hidden" name="hidden" value="1">` : '';
   const buttonText = channelId
     ? (channelTitle ? `Search ${escapeHtml(channelTitle)}` : 'Search this channel')
     : 'Search';
@@ -385,6 +386,7 @@ function renderSearchBar(query: string = '', channelId?: ChannelID, channelTitle
     <div class="search-bar">
       <form action="/search" method="get">
         ${channelInput}
+        ${hiddenInput}
         <input type="text" name="q" placeholder="${placeholder}" value="${escapedQuery}">
         <button type="submit">${buttonText}</button>
         ${everywhereBtn}
@@ -553,13 +555,12 @@ export function renderSettingsPage(
     commonCSS,
     formPageCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
-    usingAllowlist: preferences.channelFilterMode === 'allowlist',
+    newChannelsHidden: preferences.defaultChannelVisibility === 'hidden',
     noChannels: availableChannels.length === 0,
     channels: availableChannels.map(c => ({
       channel_id: escapeHtml(c.channel_id),
       channel_title: escapeHtml(c.channel_title),
-      isHidden: preferences.hiddenChannels.has(c.channel_id),
-      isShown: preferences.shownChannels.has(c.channel_id),
+      isVisible: !isChannelHiddenByUser(preferences, c.channel_id),
     })),
   });
 }
@@ -818,7 +819,7 @@ export function renderSearchPage(username: string, permissions: Permissions, que
   return applyTemplate(searchTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
-    searchBar: renderSearchBar(query, channel?.channel_id, channel?.channel_title),
+    searchBar: renderSearchBar(query, channel?.channel_id, channel?.channel_title, includeHidden),
     query: escapeHtml(query),
     hasChannel: !!channel,
     channelTitle: channel == null ? null : escapeHtml(channel.channel_title),

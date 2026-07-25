@@ -1,5 +1,5 @@
 import { addGetRoute, addPostRoute, getBodyJson, sendJson, type App } from './httplib.ts';
-import { addAllowedVideoToUser, addUser, applyUserChannelCount, areRequestedPermissionsAllowedByGranterPermissions, buildSearchScope, canCreateUsers, canViewChannel, canViewVideo, channelAccess, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, removeAllowedVideoFromUser, setChannelHiddenByUser, updateUserPermissions, updateUserPreferences, visibleChannels, type ChannelFilterMode, type Permissions, type Preferences, type StoredPermissions } from './user-db.ts';
+import { addAllowedVideoToUser, addUser, applyUserChannelCount, areRequestedPermissionsAllowedByGranterPermissions, buildSearchScope, canCreateUsers, canViewChannel, canViewVideo, channelAccess, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, removeAllowedVideoFromUser, setChannelHiddenByUser, updateUserPermissions, updateUserPreferences, visibleChannels, type DefaultChannelVisibility, type Permissions, type Preferences, type StoredPermissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForUser, getVideoById, getVideosByChannel, getVideosByIds, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -598,11 +598,11 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions;
 
   addPostRoute(app, '/api/update-channel-preferences', async (req, ctx, rawRes): Promise<void> => {
     try {
-      const { channelFilterMode, hiddenChannels, shownChannels } = await getBodyJson(req) as {
-        channelFilterMode: unknown; hiddenChannels: unknown; shownChannels: unknown;
+      const { defaultChannelVisibility, hiddenChannels, shownChannels } = await getBodyJson(req) as {
+        defaultChannelVisibility: unknown; hiddenChannels: unknown; shownChannels: unknown;
       };
 
-      if ((channelFilterMode !== 'denylist' && channelFilterMode !== 'allowlist') || !Array.isArray(hiddenChannels) || !Array.isArray(shownChannels)) {
+      if ((defaultChannelVisibility !== 'shown' && defaultChannelVisibility !== 'hidden') || !Array.isArray(hiddenChannels) || !Array.isArray(shownChannels)) {
         rawRes.statusCode = 400;
         sendJson(rawRes, { message: 'Invalid request body' });
         return;
@@ -619,7 +619,7 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions;
       };
 
       updateUserPreferences(ctx.username!, {
-        channelFilterMode: channelFilterMode as ChannelFilterMode,
+        defaultChannelVisibility: defaultChannelVisibility as DefaultChannelVisibility,
         hiddenChannels: channelSet(hiddenChannels),
         shownChannels: channelSet(shownChannels),
       });

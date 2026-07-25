@@ -14,8 +14,6 @@
     .radio-option { display: flex; align-items: center; gap: 8px; }
     .radio-option input[type="radio"] { margin: 0; }
     .radio-option label { font-weight: normal; }
-    .channels-section { display: none; }
-    .channels-section.visible { display: block; }
     .channel-controls { display: flex; gap: 10px; margin-bottom: 10px; }
     .channel-controls button { padding: 6px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
     .channel-controls button:hover { background: #f5f5f5; }
@@ -54,51 +52,32 @@
 
     <form class="page-form" id="channelPreferencesForm" style="margin-top: 40px;">
       <h3 style="margin: 0; color: #333;">Channel Visibility</h3>
-      <p class="section-note">Controls which channels show up on the home page.</p>
+      <p class="section-note">Unchecked channels are left out of the home page, and out of search results unless you ask for them there.</p>
       <#if noChannels>
         <p class="no-channels">You don't have access to any channels.</p>
       <#else>
+        <div class="channel-controls">
+          <button type="button" onclick="setAll(true)">Show All</button>
+          <button type="button" onclick="setAll(false)">Hide All</button>
+        </div>
+        <div class="channels-list">
+          <#foreach channel of channels>
+            <div class="channel-option">
+              <input type="checkbox" id="channel-<# channel.channel_id>" name="channels" value="<# channel.channel_id>" <#if channel.isVisible>checked</#if>>
+              <label for="channel-<# channel.channel_id>"><# channel.channel_title></label>
+            </div>
+          </#foreach>
+        </div>
+
+        <label style="margin-top: 10px;">Channels added later:</label>
         <div class="radio-group">
           <div class="radio-option">
-            <input type="radio" id="filter-denylist" name="channelFilterMode" value="denylist" <#if not usingAllowlist>checked</#if>>
-            <label for="filter-denylist">Show all channels except hidden ones</label>
+            <input type="radio" id="new-shown" name="defaultChannelVisibility" value="shown" <#if not newChannelsHidden>checked</#if>>
+            <label for="new-shown">Show automatically</label>
           </div>
           <div class="radio-option">
-            <input type="radio" id="filter-allowlist" name="channelFilterMode" value="allowlist" <#if usingAllowlist>checked</#if>>
-            <label for="filter-allowlist">Show only selected channels</label>
-          </div>
-        </div>
-
-        <div class="channels-section" id="hiddenSection">
-          <label>Hidden channels:</label>
-          <div class="channel-controls">
-            <button type="button" onclick="setAll('hiddenChannels', true)">Hide All</button>
-            <button type="button" onclick="setAll('hiddenChannels', false)">Hide None</button>
-          </div>
-          <div class="channels-list">
-            <#foreach channel of channels>
-              <div class="channel-option">
-                <input type="checkbox" id="hidden-<# channel.channel_id>" name="hiddenChannels" value="<# channel.channel_id>" <#if channel.isHidden>checked</#if>>
-                <label for="hidden-<# channel.channel_id>"><# channel.channel_title></label>
-              </div>
-            </#foreach>
-          </div>
-        </div>
-
-        <div class="channels-section" id="shownSection">
-          <label>Shown channels:</label>
-          <p class="section-note">Channels you have hidden stay hidden even if selected here.</p>
-          <div class="channel-controls">
-            <button type="button" onclick="setAll('shownChannels', true)">Show All</button>
-            <button type="button" onclick="setAll('shownChannels', false)">Show None</button>
-          </div>
-          <div class="channels-list">
-            <#foreach channel of channels>
-              <div class="channel-option">
-                <input type="checkbox" id="shown-<# channel.channel_id>" name="shownChannels" value="<# channel.channel_id>" <#if channel.isShown>checked</#if>>
-                <label for="shown-<# channel.channel_id>"><# channel.channel_title></label>
-              </div>
-            </#foreach>
+            <input type="radio" id="new-hidden" name="defaultChannelVisibility" value="hidden" <#if newChannelsHidden>checked</#if>>
+            <label for="new-hidden">Hide until I choose them</label>
           </div>
         </div>
 
@@ -156,32 +135,21 @@
       button.textContent = 'Change Password';
     });
 
-    function setAll(name, checked) {
-      document.querySelectorAll('input[name="' + name + '"]').forEach(function(cb) { cb.checked = checked; });
-    }
-
-    function checkedValues(name) {
-      return Array.from(document.querySelectorAll('input[name="' + name + '"]:checked')).map(function(cb) { return cb.value; });
+    function setAll(checked) {
+      document.querySelectorAll('input[name="channels"]').forEach(function(cb) { cb.checked = checked; });
     }
 
     const preferencesForm = document.getElementById('channelPreferencesForm');
-    const hiddenSection = document.getElementById('hiddenSection');
-    const shownSection = document.getElementById('shownSection');
 
-    function updateSectionVisibility() {
-      const mode = document.querySelector('input[name="channelFilterMode"]:checked').value;
-      hiddenSection.classList.add('visible');
-      shownSection.classList.toggle('visible', mode === 'allowlist');
-    }
-
-    if (shownSection) {
-      document.querySelectorAll('input[name="channelFilterMode"]').forEach(function(radio) {
-        radio.addEventListener('change', updateSectionVisibility);
-      });
-      updateSectionVisibility();
-
+    if (document.querySelector('input[name="channels"]')) {
       preferencesForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        const shownChannels = [];
+        const hiddenChannels = [];
+        document.querySelectorAll('input[name="channels"]').forEach(function(cb) {
+          (cb.checked ? shownChannels : hiddenChannels).push(cb.value);
+        });
 
         const saveButton = document.getElementById('savePreferencesButton');
         const preferencesMessage = document.getElementById('preferencesMessage');
@@ -195,9 +163,9 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              channelFilterMode: document.querySelector('input[name="channelFilterMode"]:checked').value,
-              hiddenChannels: checkedValues('hiddenChannels'),
-              shownChannels: checkedValues('shownChannels'),
+              defaultChannelVisibility: document.querySelector('input[name="defaultChannelVisibility"]:checked').value,
+              hiddenChannels: hiddenChannels,
+              shownChannels: shownChannels,
             })
           });
 
