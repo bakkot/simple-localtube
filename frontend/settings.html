@@ -23,6 +23,13 @@
     .channel-option label { font-weight: normal; }
     .section-note { color: #666; font-size: 14px; margin: 0; }
     .no-channels { color: #666; font-style: italic; }
+    .section-heading { display: flex; align-items: center; gap: 10px; }
+    .save-status { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: normal; opacity: 0; transition: opacity 0.4s; }
+    .save-status.visible { opacity: 1; transition: none; }
+    .save-status.saved { color: #2e7d32; }
+    .save-status.failed { color: #c62828; }
+    .spinner { width: 14px; height: 14px; border: 2px solid #ddd; border-top-color: #666; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -51,7 +58,10 @@
     </form>
 
     <form class="page-form" id="channelPreferencesForm" style="margin-top: 40px;">
-      <h3 style="margin: 0; color: #333;">Channel Visibility</h3>
+      <h3 style="margin: 0; color: #333;" class="section-heading">
+        Channel Visibility
+        <span class="save-status" id="saveStatus"></span>
+      </h3>
       <p class="section-note">Unchecked channels are left out of the home page, and out of search results unless you ask for them there.</p>
       <#if noChannels>
         <p class="no-channels">You don't have access to any channels.</p>
@@ -81,8 +91,6 @@
           </div>
         </div>
 
-        <button type="submit" class="form-button" id="savePreferencesButton">Save Channel Visibility</button>
-        <div id="preferencesMessage"></div>
       </#if>
     </form>
   </div>
@@ -135,15 +143,56 @@
       button.textContent = 'Change Password';
     });
 
+    // calls `fn` immediately if it hasn't run in the last `interval` ms, otherwise coalesces calls until the interval is up
+    function debounce(fn, interval) {
+      let pending = null;
+      let lastRun = -Infinity;
+      function run() {
+        pending = null;
+        lastRun = Date.now();
+        fn();
+      }
+      return function() {
+        if (pending != null) return;
+        const wait = lastRun + interval - Date.now();
+        if (wait <= 0) {
+          run();
+        } else {
+          pending = setTimeout(run, wait);
+        }
+      };
+    }
+
+    let queueSave = function() {};
+
     function setAll(checked) {
       document.querySelectorAll('input[name="channels"]').forEach(function(cb) { cb.checked = checked; });
+      queueSave();
     }
 
     const preferencesForm = document.getElementById('channelPreferencesForm');
 
     if (document.querySelector('input[name="channels"]')) {
-      preferencesForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+      const saveStatus = document.getElementById('saveStatus');
+      let latestRequest = 0;
+      let hideTimer = null;
+
+      function setStatus(state, text) {
+        clearTimeout(hideTimer);
+        saveStatus.className = 'save-status visible ' + state;
+        saveStatus.textContent = state === 'saved' ? '✓ ' + text : text;
+        if (state === 'saving') {
+          const spinner = document.createElement('span');
+          spinner.className = 'spinner';
+          saveStatus.prepend(spinner);
+        }
+        if (state === 'saved') {
+          hideTimer = setTimeout(function() { saveStatus.className = 'save-status ' + state; }, 1000);
+        }
+      }
+
+      async function savePreferences() {
+        setStatus('saving', 'Saving...');
 
         const shownChannels = [];
         const hiddenChannels = [];
@@ -151,13 +200,7 @@
           (cb.checked ? shownChannels : hiddenChannels).push(cb.value);
         });
 
-        const saveButton = document.getElementById('savePreferencesButton');
-        const preferencesMessage = document.getElementById('preferencesMessage');
-        saveButton.disabled = true;
-        saveButton.textContent = 'Saving...';
-        preferencesMessage.textContent = '';
-        preferencesMessage.className = '';
-
+        const requestId = ++latestRequest;
         try {
           const response = await fetch('/api/update-channel-preferences', {
             method: 'POST',
@@ -169,22 +212,24 @@
             })
           });
 
+          if (requestId !== latestRequest) return;
+
           if (response.ok) {
-            preferencesMessage.textContent = 'Channel visibility saved!';
-            preferencesMessage.className = 'success';
+            setStatus('saved', 'Saved');
           } else {
             const error = await response.json();
-            preferencesMessage.textContent = error.message || 'Failed to save';
-            preferencesMessage.className = 'error';
+            setStatus('failed', error.message || 'Failed to save');
           }
         } catch (err) {
-          preferencesMessage.textContent = 'Network error. Please try again.';
-          preferencesMessage.className = 'error';
+          if (requestId !== latestRequest) return;
+          setStatus('failed', 'Network error');
         }
+      }
 
-        saveButton.disabled = false;
-        saveButton.textContent = 'Save Channel Visibility';
-      });
+      queueSave = debounce(savePreferences, 400);
+
+      preferencesForm.addEventListener('submit', (e) => { e.preventDefault(); });
+      preferencesForm.addEventListener('change', queueSave);
     }
   </script>
 </body>
