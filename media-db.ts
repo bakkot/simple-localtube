@@ -10,8 +10,8 @@ let addVideoStmt: StatementSync | null = null;
 let isVideoInDbStmt: StatementSync | null = null;
 let resetVideos: StatementSync | null = null;
 let resetChannels: StatementSync | null = null;
-let getRecentVideosStmt: StatementSync | null = null;
-let getRecentVideosFilteredStmt: StatementSync | null = null;
+let getRecentVideosStmts: StmtVariants | null = null;
+let getRecentVideosFilteredStmts: StmtVariants | null = null;
 let getVideoByIdStmt: StatementSync | null = null;
 let getChannelByIdStmt: StatementSync | null = null;
 let getChannelByShortIdStmt: StatementSync | null = null;
@@ -20,12 +20,28 @@ let getVideosByChannelRestrictedStmt: StatementSync | null = null;
 let getVideosByIdsStmt: StatementSync | null = null;
 let channelExistsStmt: StatementSync | null = null;
 let getAllChannelsStmt: StatementSync | null = null;
-let searchVideosStmt: StatementSync | null = null;
-let searchVideosFilteredStmt: StatementSync | null = null;
+let searchVideosStmts: StmtVariants | null = null;
+let searchVideosFilteredStmts: StmtVariants | null = null;
 let searchVideosScopedPartialStmt: StatementSync | null = null;
-let searchChannelsStmt: StatementSync | null = null;
-let searchChannelsFilteredStmt: StatementSync | null = null;
+let searchChannelsStmts: StmtVariants | null = null;
+let searchChannelsFilteredStmts: StmtVariants | null = null;
 let getChannelVideoCountsForVideosStmt: StatementSync | null = null;
+
+// statements which come in two flavors: with and without a set of channels to exclude
+type StmtVariants = { plain: StatementSync; excluded: StatementSync };
+function prepareVariants(sqlFor: (excludeChannels: boolean) => string): StmtVariants {
+  throwIfNotInit(db);
+  return {
+    plain: db.prepare(sqlFor(false)),
+    excluded: db.prepare(sqlFor(true)),
+  };
+}
+function pickVariant(variants: StmtVariants, excludeChannels: Set<ChannelID>): StatementSync {
+  return excludeChannels.size === 0 ? variants.plain : variants.excluded;
+}
+function excludeArgs(excludeChannels: Set<ChannelID>): string[] {
+  return excludeChannels.size === 0 ? [] : [JSON.stringify([...excludeChannels])];
+}
 
 const channelSortOrders = {
   'recent': 'latest_upload_timestamp DESC',
@@ -260,20 +276,22 @@ export function init(dbDir: string): void {
     DELETE FROM channels;
   `);
 
-  getRecentVideosStmt = db.prepare(`
+  getRecentVideosStmts = prepareVariants(excluded => `
     SELECT v.*, c.channel_title, c.short_id as channel_short_id
     FROM videos v
     JOIN channels c ON v.channel_id = c.channel_id
+    ${excluded ? 'WHERE v.channel_id NOT IN (SELECT value FROM json_each(?))' : ''}
     ORDER BY v.upload_timestamp DESC
     LIMIT ? OFFSET ?
   `);
 
-  getRecentVideosFilteredStmt = db.prepare(`
+  getRecentVideosFilteredStmts = prepareVariants(excluded => `
     SELECT v.*, c.channel_title, c.short_id as channel_short_id
     FROM videos v
     JOIN channels c ON v.channel_id = c.channel_id
-    WHERE v.channel_id IN (SELECT value FROM json_each(?))
-       OR v.video_id IN (SELECT value FROM json_each(?))
+    WHERE (v.channel_id IN (SELECT value FROM json_each(?))
+       OR v.video_id IN (SELECT value FROM json_each(?)))
+    ${excluded ? 'AND v.channel_id NOT IN (SELECT value FROM json_each(?))' : ''}
     ORDER BY v.upload_timestamp DESC
     LIMIT ? OFFSET ?
   `);
@@ -341,17 +359,18 @@ export function init(dbDir: string): void {
     ])
   ) as Record<ChannelSort, StatementSync>;
 
-  searchVideosStmt = db.prepare(`
+  searchVideosStmts = prepareVariants(excluded => `
     SELECT v.*, c.channel_title, c.short_id as channel_short_id
     FROM videos_fts fts
     JOIN videos v ON v.rowid = fts.rowid
     JOIN channels c ON v.channel_id = c.channel_id
     WHERE videos_fts MATCH ?
+    ${excluded ? 'AND v.channel_id NOT IN (SELECT value FROM json_each(?))' : ''}
     ORDER BY bm25(videos_fts)
     LIMIT ? OFFSET ?
   `);
 
-  searchVideosFilteredStmt = db.prepare(`
+  searchVideosFilteredStmts = prepareVariants(excluded => `
     SELECT v.*, c.channel_title, c.short_id as channel_short_id
     FROM videos_fts fts
     JOIN videos v ON v.rowid = fts.rowid
@@ -359,6 +378,7 @@ export function init(dbDir: string): void {
     WHERE videos_fts MATCH ?
       AND (v.channel_id IN (SELECT value FROM json_each(?))
            OR v.video_id IN (SELECT value FROM json_each(?)))
+    ${excluded ? 'AND v.channel_id NOT IN (SELECT value FROM json_each(?))' : ''}
     ORDER BY bm25(videos_fts)
     LIMIT ? OFFSET ?
   `);
@@ -375,21 +395,23 @@ export function init(dbDir: string): void {
     LIMIT ? OFFSET ?
   `);
 
-  searchChannelsStmt = db.prepare(`
+  searchChannelsStmts = prepareVariants(excluded => `
     SELECT ch.*
     FROM channels_fts fts
     JOIN channels ch ON ch.rowid = fts.rowid
     WHERE channels_fts MATCH ?
+    ${excluded ? 'AND ch.channel_id NOT IN (SELECT value FROM json_each(?))' : ''}
     ORDER BY bm25(channels_fts)
     LIMIT ? OFFSET ?
   `);
 
-  searchChannelsFilteredStmt = db.prepare(`
+  searchChannelsFilteredStmts = prepareVariants(excluded => `
     SELECT ch.*
     FROM channels_fts fts
     JOIN channels ch ON ch.rowid = fts.rowid
     WHERE channels_fts MATCH ?
       AND ch.channel_id IN (SELECT value FROM json_each(?))
+    ${excluded ? 'AND ch.channel_id NOT IN (SELECT value FROM json_each(?))' : ''}
     ORDER BY bm25(channels_fts)
     LIMIT ? OFFSET ?
   `);
@@ -481,18 +503,22 @@ function parseSubtitles<T extends { subtitles_files: string }>(row: T): T & { su
   };
 }
 
-export function getRecentVideosForUser(channels: Set<ChannelID> | 'all', videos: Set<VideoID>, limit: number = 30, offset: number = 0): VideoWithChannel[] {
+export function getRecentVideosForUser(channels: Set<ChannelID> | 'all', videos: Set<VideoID>, limit: number = 30, offset: number = 0, excludeChannels: Set<ChannelID> = new Set()): VideoWithChannel[] {
   if (channels === 'all') {
-    throwIfNotInit(getRecentVideosStmt);
-    const rows = getRecentVideosStmt.all(limit, offset) as VideoWithChannelRow[];
+    throwIfNotInit(getRecentVideosStmts);
+    const rows = pickVariant(getRecentVideosStmts, excludeChannels).all(
+      ...excludeArgs(excludeChannels),
+      limit, offset,
+    ) as VideoWithChannelRow[];
     return rows.map(parseSubtitles);
   }
   if (channels.size === 0 && videos.size === 0) return [];
 
-  throwIfNotInit(getRecentVideosFilteredStmt);
-  const rows = getRecentVideosFilteredStmt.all(
+  throwIfNotInit(getRecentVideosFilteredStmts);
+  const rows = pickVariant(getRecentVideosFilteredStmts, excludeChannels).all(
     JSON.stringify([...channels]),
     JSON.stringify([...videos]),
+    ...excludeArgs(excludeChannels),
     limit, offset,
   ) as VideoWithChannelRow[];
   return rows.map(parseSubtitles);
@@ -601,7 +627,8 @@ export type ChannelSearchFilter =
   | { kind: 'all' }
   | { kind: 'allowed'; channels: Set<ChannelID> };
 
-export type SearchScope = { video: VideoSearchFilter; channel: ChannelSearchFilter };
+// `exclude` is applied on top of the other filters, for channels the user has chosen to hide
+export type SearchScope = { video: VideoSearchFilter; channel: ChannelSearchFilter; exclude: Set<ChannelID> };
 
 function isEmptyVideoFilter(f: VideoSearchFilter): boolean {
   if (f.kind === 'all') return false;
@@ -628,28 +655,34 @@ function buildFtsStr(query: string, prefix: boolean): string {
   }).join(' ');
 }
 
-function searchChannelResults(ftsStr: string, filter: ChannelSearchFilter, limit: number, offset: number): Channel[] {
+function searchChannelResults(ftsStr: string, filter: ChannelSearchFilter, exclude: Set<ChannelID>, limit: number, offset: number): Channel[] {
   let matchStr = `channel_title : ${ftsStr}`;
   if (filter.kind === 'all') {
-    throwIfNotInit(searchChannelsStmt);
-    return searchChannelsStmt.all(matchStr, limit, offset) as unknown as Channel[];
+    throwIfNotInit(searchChannelsStmts);
+    return pickVariant(searchChannelsStmts, exclude).all(matchStr, ...excludeArgs(exclude), limit, offset) as unknown as Channel[];
   }
-  throwIfNotInit(searchChannelsFilteredStmt);
-  return searchChannelsFilteredStmt.all(matchStr, JSON.stringify([...filter.channels]), limit, offset) as unknown as Channel[];
+  throwIfNotInit(searchChannelsFilteredStmts);
+  return pickVariant(searchChannelsFilteredStmts, exclude).all(
+    matchStr,
+    JSON.stringify([...filter.channels]),
+    ...excludeArgs(exclude),
+    limit, offset,
+  ) as unknown as Channel[];
 }
 
-function searchVideoResults(column: string, ftsStr: string, filter: VideoSearchFilter, limit: number, offset: number): VideoWithChannel[] {
+function searchVideoResults(column: string, ftsStr: string, filter: VideoSearchFilter, exclude: Set<ChannelID>, limit: number, offset: number): VideoWithChannel[] {
   let matchStr = `${column} : ${ftsStr}`;
   let rows: VideoWithChannelRow[];
   if (filter.kind === 'all') {
-    throwIfNotInit(searchVideosStmt);
-    rows = searchVideosStmt.all(matchStr, limit, offset) as VideoWithChannelRow[];
+    throwIfNotInit(searchVideosStmts);
+    rows = pickVariant(searchVideosStmts, exclude).all(matchStr, ...excludeArgs(exclude), limit, offset) as VideoWithChannelRow[];
   } else if (filter.kind === 'union') {
-    throwIfNotInit(searchVideosFilteredStmt);
-    rows = searchVideosFilteredStmt.all(
+    throwIfNotInit(searchVideosFilteredStmts);
+    rows = pickVariant(searchVideosFilteredStmts, exclude).all(
       matchStr,
       JSON.stringify([...filter.channels]),
       JSON.stringify([...filter.videos]),
+      ...excludeArgs(exclude),
       limit, offset,
     ) as VideoWithChannelRow[];
   } else {
@@ -669,10 +702,10 @@ export function searchByTier(query: string, tier: SearchTier, scope: SearchScope
   if (!ftsStr) return [];
   if (tier === 'channels') {
     if (isEmptyChannelFilter(scope.channel)) return [];
-    return searchChannelResults(ftsStr, scope.channel, limit, offset);
+    return searchChannelResults(ftsStr, scope.channel, scope.exclude, limit, offset);
   }
   if (isEmptyVideoFilter(scope.video)) return [];
-  return searchVideoResults(videoTierColumns[tier], ftsStr, scope.video, limit, offset);
+  return searchVideoResults(videoTierColumns[tier], ftsStr, scope.video, scope.exclude, limit, offset);
 }
 
 export interface SearchResults {
@@ -703,20 +736,20 @@ export function search(query: string, scope: SearchScope, limit: number = 30, pr
   let channels: Channel[] = [];
   let channelsExhausted = skipChannels || channelEmpty;
   if (!skipChannels && !channelEmpty) {
-    channels = searchChannelResults(ftsStr, scope.channel, remaining, 0);
+    channels = searchChannelResults(ftsStr, scope.channel, scope.exclude, remaining, 0);
     channelsExhausted = channels.length < remaining;
     remaining -= channels.length;
   }
 
   let titleRequested = remaining;
-  let videosByTitle = (!videoEmpty && titleRequested > 0) ? searchVideoResults('title', ftsStr, scope.video, titleRequested, 0) : [];
+  let videosByTitle = (!videoEmpty && titleRequested > 0) ? searchVideoResults('title', ftsStr, scope.video, scope.exclude, titleRequested, 0) : [];
   let titleExhausted = videoEmpty || (titleRequested > 0 && videosByTitle.length < titleRequested);
   remaining -= videosByTitle.length;
 
   let seenIds = new Set(videosByTitle.map(v => v.video_id));
 
   let descFetched = !videoEmpty && remaining > 0;
-  let descRaw = descFetched ? searchVideoResults('description', ftsStr, scope.video, limit, 0) : [];
+  let descRaw = descFetched ? searchVideoResults('description', ftsStr, scope.video, scope.exclude, limit, 0) : [];
   let videosByDescription: VideoWithChannel[] = [];
   let descOffset = 0;
   let descExhausted = false;
@@ -739,7 +772,7 @@ export function search(query: string, scope: SearchScope, limit: number = 30, pr
   }
 
   let subsFetched = !videoEmpty && remaining > 0;
-  let subsRaw = subsFetched ? searchVideoResults('subtitles_text', ftsStr, scope.video, limit, 0) : [];
+  let subsRaw = subsFetched ? searchVideoResults('subtitles_text', ftsStr, scope.video, scope.exclude, limit, 0) : [];
   let videosBySubtitles: VideoWithChannel[] = [];
   let subsOffset = 0;
   let subsExhausted = false;

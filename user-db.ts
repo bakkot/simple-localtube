@@ -39,10 +39,19 @@ export type Permissions = StoredPermissions & {
   partialChannelCounts: Map<ChannelID, number>;
 };
 
+// user-chosen (as opposed to granted) filtering of the channels they can see
+export type ChannelFilterMode = 'denylist' | 'allowlist';
+export type Preferences = {
+  channelFilterMode: ChannelFilterMode;
+  hiddenChannels: Set<ChannelID>;
+  shownChannels: Set<ChannelID>;
+};
+
 let db: DatabaseSync | null = null;
 let keys: Keys | null = null;
 
 const userPermissionsCache = new LRUCache<string, Permissions>(100);
+const userPreferencesCache = new LRUCache<string, Preferences>(100);
 
 let getUserByUsernameStmt: StatementSync | null = null;
 let addUserStmt: StatementSync | null = null;
@@ -50,6 +59,7 @@ let getCreatedAccountsStmt: StatementSync | null = null;
 let hasAnyUsersStmt: StatementSync | null = null;
 let updatePasswordStmt: StatementSync | null = null;
 let updatePermissionsStmt: StatementSync | null = null;
+let updatePreferencesStmt: StatementSync | null = null;
 
 export function init(dbDir: string): void {
   const USER_DB_PATH = path.join(dbDir, 'users.sqlite');
@@ -67,6 +77,7 @@ export function init(dbDir: string): void {
           hashed_password BLOB NOT NULL,
           salt BLOB NOT NULL,
           permissions TEXT NOT NULL, -- stored as JSON for future compat; we cache on user load anyway
+          preferences TEXT NOT NULL DEFAULT '{}', -- likewise JSON
           created_by TEXT REFERENCES users(username)
       ) STRICT;
     `);
@@ -120,6 +131,10 @@ export function init(dbDir: string): void {
 
   updatePermissionsStmt = db.prepare(`
     UPDATE users SET permissions = :permissions WHERE username = :username
+  `);
+
+  updatePreferencesStmt = db.prepare(`
+    UPDATE users SET preferences = :preferences WHERE username = :username
   `);
 }
 
@@ -263,6 +278,79 @@ function serializePermissions(permissions: StoredPermissions): string {
     createUser: permissions.createUser,
     canSubscribe: permissions.canSubscribe,
   } satisfies SerializedPermissions);
+}
+
+type SerializedPreferences = {
+  channelFilterMode: ChannelFilterMode;
+  hiddenChannels: ChannelID[];
+  shownChannels: ChannelID[];
+}
+function parseChannelList(value: unknown): Set<ChannelID> {
+  if (!Array.isArray(value)) return new Set();
+  return new Set((value as unknown[]).filter((c): c is ChannelID => typeof c === 'string' && isChannelInDb(c as ChannelID)));
+}
+
+function parsePreferences(preferencesString: string): Preferences {
+  let { channelFilterMode, hiddenChannels, shownChannels } = JSON.parse(preferencesString) as SerializedPreferences;
+  return {
+    channelFilterMode: channelFilterMode === 'allowlist' ? 'allowlist' : 'denylist',
+    hiddenChannels: parseChannelList(hiddenChannels),
+    shownChannels: parseChannelList(shownChannels),
+  };
+}
+
+function serializePreferences(preferences: Preferences): string {
+  return JSON.stringify({
+    channelFilterMode: preferences.channelFilterMode,
+    hiddenChannels: [...preferences.hiddenChannels],
+    shownChannels: [...preferences.shownChannels],
+  } satisfies SerializedPreferences);
+}
+
+export function getUserPreferences(username: string): Preferences {
+  throwIfNotInit(getUserByUsernameStmt);
+
+  const cached = userPreferencesCache.get(username);
+  if (cached) {
+    return cached;
+  }
+
+  const user = getUserByUsernameStmt.get(username) as { preferences: string } | undefined;
+  if (!user) {
+    throw new Error(`unrecognized user ${username}`);
+  }
+
+  let preferences = parsePreferences(user.preferences);
+  userPreferencesCache.set(username, preferences);
+  return preferences;
+}
+
+export function updateUserPreferences(username: string, preferences: Preferences): void {
+  throwIfNotInit(updatePreferencesStmt);
+  userPreferencesCache.delete(username);
+  updatePreferencesStmt.run({
+    ':preferences': serializePreferences(preferences),
+    ':username': username,
+  });
+}
+
+export function isChannelHiddenByUser(preferences: Preferences, channelId: ChannelID): boolean {
+  if (preferences.hiddenChannels.has(channelId)) return true;
+  return preferences.channelFilterMode === 'allowlist' && !preferences.shownChannels.has(channelId);
+}
+
+export function setChannelHiddenByUser(username: string, channelId: ChannelID, hidden: boolean): void {
+  const existing = getUserPreferences(username);
+  const hiddenChannels = new Set(existing.hiddenChannels);
+  const shownChannels = new Set(existing.shownChannels);
+  if (hidden) {
+    hiddenChannels.add(channelId);
+    shownChannels.delete(channelId);
+  } else {
+    hiddenChannels.delete(channelId);
+    shownChannels.add(channelId);
+  }
+  updateUserPreferences(username, { channelFilterMode: existing.channelFilterMode, hiddenChannels, shownChannels });
 }
 
 export async function addUser(
@@ -416,25 +504,59 @@ export function applyUserChannelCount(channel: Channel, permissions: Permissions
   return { ...channel, video_count: permissions.partialChannelCounts.get(channel.channel_id) ?? 0 };
 }
 
-export function buildSearchScope(permissions: Permissions, scopedChannelId: ChannelID | null): SearchScope {
-  if (permissions.allowedChannels === 'all') {
-    return { video: { kind: 'all' }, channel: { kind: 'all' } };
-  }
-  if (scopedChannelId == null) {
-    return {
-      video: { kind: 'union', channels: permissions.allowedChannels, videos: permissions.allowedVideos },
-      channel: { kind: 'allowed', channels: new Set([...permissions.allowedChannels, ...permissions.partialChannels]) },
-    };
-  }
-  if (permissions.allowedChannels.has(scopedChannelId)) {
-    return {
-      video: { kind: 'union', channels: new Set([scopedChannelId]), videos: new Set() },
-      channel: { kind: 'allowed', channels: new Set([scopedChannelId]) },
-    };
+// what the user can see, once their own channel-visibility preferences are applied on top of their permissions
+export type VisibleChannels = {
+  channels: Set<ChannelID> | 'all';
+  videos: Set<VideoID>;
+  excluded: Set<ChannelID>;
+};
+export function visibleChannels(permissions: Permissions, preferences: Preferences): VisibleChannels {
+  if (preferences.channelFilterMode === 'allowlist') {
+    const allowed = permissions.allowedChannels;
+    const channels = allowed === 'all'
+      ? new Set(preferences.shownChannels)
+      : new Set([...preferences.shownChannels].filter(c => allowed.has(c)));
+    const excluded = new Set(preferences.hiddenChannels);
+    for (const c of permissions.partialChannels) {
+      if (!preferences.shownChannels.has(c)) excluded.add(c);
+    }
+    return { channels, videos: permissions.allowedVideos ?? new Set(), excluded };
   }
   return {
-    video: { kind: 'channel-partial', channel: scopedChannelId, videos: permissions.allowedVideos },
-    channel: { kind: 'allowed', channels: new Set([scopedChannelId]) },
+    channels: permissions.allowedChannels,
+    videos: permissions.allowedVideos ?? new Set(),
+    excluded: new Set(preferences.hiddenChannels),
+  };
+}
+
+// preferences of `null` means to ignore the user's channel-visibility preferences
+export function buildSearchScope(permissions: Permissions, scopedChannelId: ChannelID | null, preferences: Preferences | null): SearchScope {
+  if (scopedChannelId != null) {
+    if (canViewChannel(permissions, scopedChannelId)) {
+      return {
+        video: { kind: 'union', channels: new Set([scopedChannelId]), videos: new Set() },
+        channel: { kind: 'allowed', channels: new Set([scopedChannelId]) },
+        exclude: new Set(),
+      };
+    }
+    return {
+      video: { kind: 'channel-partial', channel: scopedChannelId, videos: permissions.allowedVideos ?? new Set() },
+      channel: { kind: 'allowed', channels: new Set([scopedChannelId]) },
+      exclude: new Set(),
+    };
+  }
+
+  const visible = preferences == null
+    ? { channels: permissions.allowedChannels, videos: permissions.allowedVideos ?? new Set<VideoID>(), excluded: new Set<ChannelID>() }
+    : visibleChannels(permissions, preferences);
+
+  if (visible.channels === 'all') {
+    return { video: { kind: 'all' }, channel: { kind: 'all' }, exclude: visible.excluded };
+  }
+  return {
+    video: { kind: 'union', channels: visible.channels, videos: visible.videos },
+    channel: { kind: 'allowed', channels: new Set([...visible.channels, ...permissions.partialChannels]) },
+    exclude: visible.excluded,
   };
 }
 

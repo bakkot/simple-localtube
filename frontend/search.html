@@ -24,6 +24,8 @@
     .video-grid { margin-top: 0; }
     .video-title { margin-bottom: 8px; }
     .empty-state { text-align: center; color: #666; margin-top: 60px; font-size: 1.1em; }
+    .hidden-toggle { margin-left: 16px; font-size: 14px; padding: 2px 10px; border: 1px solid #ccc; border-radius: 4px; background: white; color: #333; }
+    .hidden-toggle:hover { background: #f0f0f0; }
     @media (max-width: 600px) {
       .channels-grid { grid-template-columns: 1fr; }
     }
@@ -37,6 +39,7 @@
     <#else>
       <a href="/" class="back-link back-link-inline">← Home</a>
     </#if>
+    <a href="<# toggleHiddenUrl>" class="hidden-toggle"><#if includeHidden>Exclude hidden channels<#else>Include hidden channels</#if></a>
     <# searchBar>
     <# topRightBlock>
   </div>

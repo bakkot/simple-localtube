@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Channel, VideoWithChannel, SearchResults } from './media-db.ts';
 import { getChannelById } from './media-db.ts';
-import { canCreateUsers, type Permissions, type VideoVisibility } from './user-db.ts';
+import { canCreateUsers, type Permissions, type Preferences, type VideoVisibility } from './user-db.ts';
 import { nameExt, type ChannelID } from './util.ts';
 import type { SubscriptionChannel } from './subscriptions-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -475,7 +475,7 @@ export function renderVideoPage(video: VideoWithChannel, username: string, permi
 }
 
 const channelTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'channel.html'), 'utf8'));
-export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], username: string, permissions: Permissions, subscriptionsEnabled: boolean, isSubscribed: boolean): string {
+export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], username: string, permissions: Permissions, subscriptionsEnabled: boolean, isSubscribed: boolean, isHidden: boolean): string {
   const avatarExt = channel.avatar_filename == null ? null : nameExt(channel.avatar_filename).ext;
 
   return applyTemplate(channelTemplate, {
@@ -493,6 +493,7 @@ export function renderChannelPage(channel: Channel, videos: VideoWithChannel[], 
     channelId: escapeHtml(channel.channel_id),
     canSubscribe: subscriptionsEnabled && permissions.canSubscribe,
     isSubscribed,
+    isHidden,
   });
 }
 
@@ -542,11 +543,24 @@ export function renderManageUsersPage(
 }
 
 const settingsTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'settings.html'), 'utf8'));
-export function renderSettingsPage(username: string, permissions: Permissions): string {
+export function renderSettingsPage(
+  username: string,
+  permissions: Permissions,
+  preferences: Preferences,
+  availableChannels: { channel_id: ChannelID; channel_title: string }[],
+): string {
   return applyTemplate(settingsTemplate, {
     commonCSS,
     formPageCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
+    usingAllowlist: preferences.channelFilterMode === 'allowlist',
+    noChannels: availableChannels.length === 0,
+    channels: availableChannels.map(c => ({
+      channel_id: escapeHtml(c.channel_id),
+      channel_title: escapeHtml(c.channel_title),
+      isHidden: preferences.hiddenChannels.has(c.channel_id),
+      isShown: preferences.shownChannels.has(c.channel_id),
+    })),
   });
 }
 
@@ -716,7 +730,8 @@ ${renderChannelCard.toString()}
 
         let url = '/api/search?q=' + encodeURIComponent(state.query) +
           '&tier=' + tier + '&offset=' + offsets[tier] + '&limit=30' +
-          (state.channelId ? '&channel=' + encodeURIComponent(state.channelId) : '');
+          (state.channelId ? '&channel=' + encodeURIComponent(state.channelId) : '') +
+          (state.includeHidden ? '&hidden=1' : '');
         let resp = await fetch(url);
         let items = await resp.json();
         offsets[tier] += items.length;
@@ -780,7 +795,7 @@ ${renderChannelCard.toString()}
 `;
 
 const searchTemplate = parseTemplate(fs.readFileSync(path.join(templates, 'search.html'), 'utf8'));
-export function renderSearchPage(username: string, permissions: Permissions, query: string, results: SearchResults, channel?: Channel | null): string {
+export function renderSearchPage(username: string, permissions: Permissions, query: string, results: SearchResults, channel: Channel | null, includeHidden: boolean): string {
   let allVideoIds = [
     ...results.videosByTitle.map(v => v.video_id),
     ...results.videosByDescription.map(v => v.video_id),
@@ -794,8 +809,12 @@ export function renderSearchPage(username: string, permissions: Permissions, que
     exhausted: results.exhausted,
     seenVideoIds: allVideoIds,
     videosHeadingShown,
+    includeHidden,
   });
   let showChannel = !channel;
+  let toggleHiddenParams = new URLSearchParams({ q: query });
+  if (channel) toggleHiddenParams.set('channel', channel.channel_id);
+  if (!includeHidden) toggleHiddenParams.set('hidden', '1');
   return applyTemplate(searchTemplate, {
     commonCSS,
     topRightBlock: renderTopRightBlock(username, permissions),
@@ -814,6 +833,8 @@ export function renderSearchPage(username: string, permissions: Permissions, que
     hasSubsVideos: results.videosBySubtitles.length > 0,
     subsVideos: results.videosBySubtitles.map(video => ({ html: renderVideoCard(video, showChannel) })),
     noResults: results.channels.length === 0 && !videosHeadingShown,
+    includeHidden,
+    toggleHiddenUrl: escapeHtml(`/search?${toggleHiddenParams}`),
     searchState: escapeJsonForScript(searchState),
     searchScript,
   });

@@ -1,5 +1,5 @@
 import { addGetRoute, addPostRoute, getBodyJson, sendJson, type App } from './httplib.ts';
-import { addAllowedVideoToUser, addUser, applyUserChannelCount, areRequestedPermissionsAllowedByGranterPermissions, buildSearchScope, canCreateUsers, canViewChannel, canViewVideo, channelAccess, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, removeAllowedVideoFromUser, updateUserPermissions, type Permissions, type StoredPermissions } from './user-db.ts';
+import { addAllowedVideoToUser, addUser, applyUserChannelCount, areRequestedPermissionsAllowedByGranterPermissions, buildSearchScope, canCreateUsers, canViewChannel, canViewVideo, channelAccess, changePassword, checkUsernamePassword, getCreatedAccounts, getCreatedBy, getUserPermissions, hasAnyUsers, removeAllowedVideoFromUser, setChannelHiddenByUser, updateUserPermissions, updateUserPreferences, visibleChannels, type ChannelFilterMode, type Permissions, type Preferences, type StoredPermissions } from './user-db.ts';
 import { channelIDFromCanonicalURL, toVideoID, type ChannelID, type VideoID, assertChannelId } from './util.ts';
 import { getChannelById, getChannelByShortId, getChannelsSorted, getRecentVideosForUser, getVideoById, getVideosByChannel, getVideosByIds, search, searchByTier, type Channel, type ChannelSort, type SearchTier, type Video } from './media-db.ts';
 import { subscriptionsDb } from './server.ts';
@@ -265,7 +265,7 @@ export type AddUserAPIRequest = {
   createUser: 'yes' | 'no' | 'limited';
   canSubscribe: boolean;
 }
-export function addAPIs(app: App<{ username?: string; permissions?: Permissions }>) {
+export function addAPIs(app: App<{ username?: string; permissions?: Permissions; preferences?: Preferences }>) {
   addPostRoute(app, '/api/setup', async (req, ctx, rawRes): Promise<void> => {
     try {
       if (hasAnyUsers()) {
@@ -571,11 +571,72 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
     }
   });
 
+  addPostRoute(app, '/api/update-channel-visibility', async (req, ctx, rawRes): Promise<void> => {
+    try {
+      const { channelId, hidden } = await getBodyJson(req) as { channelId: unknown; hidden: unknown };
+
+      if (typeof channelId !== 'string' || typeof hidden !== 'boolean') {
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Invalid request body' });
+        return;
+      }
+
+      if (channelAccess(ctx.permissions!, channelId as ChannelID) === 'none') {
+        rawRes.statusCode = 403;
+        sendJson(rawRes, { message: 'Access denied' });
+        return;
+      }
+
+      setChannelHiddenByUser(ctx.username!, channelId as ChannelID, hidden);
+      sendJson(rawRes, { message: hidden ? 'Channel hidden' : 'Channel unhidden' });
+    } catch (error) {
+      console.error('Update channel visibility error:', error);
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Internal server error' });
+    }
+  });
+
+  addPostRoute(app, '/api/update-channel-preferences', async (req, ctx, rawRes): Promise<void> => {
+    try {
+      const { channelFilterMode, hiddenChannels, shownChannels } = await getBodyJson(req) as {
+        channelFilterMode: unknown; hiddenChannels: unknown; shownChannels: unknown;
+      };
+
+      if ((channelFilterMode !== 'denylist' && channelFilterMode !== 'allowlist') || !Array.isArray(hiddenChannels) || !Array.isArray(shownChannels)) {
+        rawRes.statusCode = 400;
+        sendJson(rawRes, { message: 'Invalid request body' });
+        return;
+      }
+
+      const channelSet = (list: unknown[]): Set<ChannelID> => {
+        const result = new Set<ChannelID>();
+        for (const channelId of list) {
+          if (typeof channelId !== 'string') continue;
+          if (channelAccess(ctx.permissions!, channelId as ChannelID) === 'none') continue;
+          result.add(channelId as ChannelID);
+        }
+        return result;
+      };
+
+      updateUserPreferences(ctx.username!, {
+        channelFilterMode: channelFilterMode as ChannelFilterMode,
+        hiddenChannels: channelSet(hiddenChannels),
+        shownChannels: channelSet(shownChannels),
+      });
+      sendJson(rawRes, { message: 'Preferences updated successfully' });
+    } catch (error) {
+      console.error('Update channel preferences error:', error);
+      rawRes.statusCode = 500;
+      sendJson(rawRes, { message: 'Internal server error' });
+    }
+  });
+
   addGetRoute(app, '/api/videos', (req, ctx, rawRes): void => {
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = parseInt(req.query.limit as string) || 30;
 
-    const videos = getRecentVideosForUser(ctx.permissions!.allowedChannels, ctx.permissions!.allowedVideos ?? new Set(), limit, offset);
+    const visible = visibleChannels(ctx.permissions!, ctx.preferences!);
+    const videos = getRecentVideosForUser(visible.channels, visible.videos, limit, offset, visible.excluded);
 
     sendJson(rawRes, videos);
   });
@@ -617,7 +678,8 @@ export function addAPIs(app: App<{ username?: string; permissions?: Permissions 
       sendJson(rawRes, { message: 'tier parameter required: channels, title, description, or subtitles' });
       return;
     }
-    const scope = buildSearchScope(ctx.permissions!, scopedChannelId);
+    const includeHidden = req.query.hidden === '1';
+    const scope = buildSearchScope(ctx.permissions!, scopedChannelId, includeHidden ? null : ctx.preferences!);
     let results = searchByTier(q, tier, scope, limit, offset, prefix);
     if (tier === 'channels') {
       results = (results as Channel[]).map(c => applyUserChannelCount(c, ctx.permissions!));
