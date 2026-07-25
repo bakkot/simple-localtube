@@ -1,5 +1,13 @@
 clean up console.log
 
+WAL for dbs, probably
+extra data columns in general
+CREATE TABLE STRICT
+
+
+per-user "which channels are visible" setting, for yourself (does not prevent viewing channels)
+
+
 document a minimum node version
   tobase64
 
@@ -37,10 +45,6 @@ write readme, screenshots etc
 add sponsorblock column
 https://wiki.sponsor.ajay.app/w/API_Docs
 https://sponsor.ajay.app/api/skipSegments?videoID=OC7sNfNuTNU
-
-extra data columns in general
-
-CREATE TABLE STRICT
 
 sponsorblock
 
