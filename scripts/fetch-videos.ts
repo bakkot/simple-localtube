@@ -206,6 +206,11 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID): Prom
           console.error(`skipping age-gated ${videoId}`);
           markVideoUnavailable(videoId, 'age-gated');
           return false;
+        } else if (e.stderr.includes('Premieres in') || e.stderr.includes('live event will begin in')) {
+          // not yet available; retry on the next scan
+          console.error(`skipping not-yet-released ${videoId}`);
+          skipSet.add(videoId);
+          return false;
         }
       }
       throw e;
@@ -406,6 +411,7 @@ while ((queued = getOneQueuedVideo()) != null) {
   if (!fs.existsSync(channelDir)) fs.mkdirSync(channelDir);
   await addChannelIfNotExists(channelId);
   let added = await addVideoIfNotExists(channelId, videoId);
+  if (skipSet.has(videoId)) continue;
 
   // note that this can technically race if you're running multiple copies of the script at once
   // so, you know, don't
