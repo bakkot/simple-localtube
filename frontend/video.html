@@ -48,7 +48,7 @@
   </div>
   <div class="video-section">
     <video controls autoplay>
-      <source src="/media/videos/<# videoId>.<# videoExt>" type="video/<# videoExt>">
+      <source src="/media/videos/<# videoId>.<# videoExt>">
       <#foreach subtitle of subtitles>
         <track kind="subtitles" src="/media/subtitles/<# videoId>/<# subtitle.lang>" srclang="<# subtitle.lang>" label="<# subtitle.lang>">
       </#foreach>

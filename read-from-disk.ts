@@ -13,13 +13,13 @@ type VideoDataJSON = {
 export function videoFromDisk(mediaDir: string, channelId: ChannelID, videoId: VideoID): Video | null {
   let dir = path.join(mediaDir, channelId, videoId);
   let contents = fs.readdirSync(dir);
-  let vids = contents.filter(c => c === 'video.mp4' || c === 'video.webm');
+  let vids = contents.filter(c => c === 'video.mp4' || c === 'video.webm' || c === 'video.mkv');
   if (vids.length === 0) {
     console.error(`skipping ${channelId}/${videoId} because of missing video`);
     return null;
   }
   if (vids.length !== 1) {
-    throw new Error(`${channelId}/${videoId} contains both a .mp4 and a .webm?`);
+    throw new Error(`${channelId}/${videoId} contains multiple videos?`);
   }
   if (!contents.includes('data.json')) {
     console.error(`skipping ${channelId}/${videoId} because of missing data.json`);

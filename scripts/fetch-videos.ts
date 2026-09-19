@@ -160,7 +160,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID): Prom
   if (!fs.existsSync(videoDir)) {
     fs.mkdirSync(videoDir, { recursive: true });
   }
-  const videoFileExists = fs.existsSync(path.join(videoDir, 'video.mp4')) || fs.existsSync(path.join(videoDir, 'video.webm'));
+  const videoFileExists = fs.existsSync(path.join(videoDir, 'video.mp4')) || fs.existsSync(path.join(videoDir, 'video.webm')) || fs.existsSync(path.join(videoDir, 'video.mkv'));
   const metadataFile = path.join(videoDir, 'data.json');
   const metadataExists = fs.existsSync(metadataFile);
   if (metadataExists && !videoFileExists) {
@@ -177,10 +177,12 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID): Prom
         '--write-subs',
         '--sub-langs',
         'en.*',
-        '--format',
-        'b',
-        '--merge-output-format',
-        'mp4/webm',
+        // format b is often bad, sometimes broken, so usually to merge
+        // merging doesn't always work with mp4/webm containers, so we have to accept mkv
+        // '--format',
+        // 'b',
+        // '--merge-output-format',
+        // 'mp4/webm',
         // '--retry-sleep',
         // 'fragment:exp=1:20',
         '--sleep-requests',
@@ -224,7 +226,7 @@ async function addVideoIfNotExists(channelId: ChannelID, videoId: VideoID): Prom
     if (json.length !== 1) {
       throw new Error(`got not exactly 1 json file after download ${JSON.stringify(json)}`);
     }
-    const video = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4'));
+    const video = files.filter(f => f.endsWith('.webm') || f.endsWith('.mp4') || f.endsWith('.mkv'));
     if (videoFileExists) {
       if (files.length > 0) {
         throw new Error(`got video file despite --skip-download after downloading ${JSON.stringify(video)}`);

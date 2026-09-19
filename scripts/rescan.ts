@@ -29,7 +29,7 @@ some-channel-id/some-video-id/thumb.jpg
 some-channel-id/some-video-id/subs.en.vtt
 some-channel-id/some-video-id/video.mp4
 
-Only the data.json files and video.mp4 (or video.webm) are mandatory. data.json files should be in the format given by yt-dlp's --write-info-json.
+Only the data.json files and video.mp4 (or video.webm/.mkv) are mandatory. data.json files should be in the format given by yt-dlp's --write-info-json.
 `);
   process.exit(1);
 }
